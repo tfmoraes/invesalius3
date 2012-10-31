@@ -34,6 +34,7 @@ from wx.lib.pubsub import pub as Publisher
 class ThresholdHistoryNode(object):
     def __init__(self, mask):
         self.threshold = mask.threshold_range
+        self.descr = _(u'Set threshold')
         
         if mask.was_edited:
             self.array_file = tempfile.mktemp()
@@ -59,6 +60,7 @@ class EditionHistoryNode(object):
         self.filename = tempfile.mktemp(suffix='.npy')
         self.clean = clean
         self.threshold = threshold
+        self.descr = _(u'Edition at %s' % self.orientation)
 
         self._save_array(array)
 
@@ -96,8 +98,8 @@ class EditionHistory(object):
         self.index = -1
         self.size = size * 2
 
-        Publisher.sendMessage("Enable undo", False)
-        Publisher.sendMessage("Enable redo", False)
+        Publisher.sendMessage("Disable undo")
+        Publisher.sendMessage("Disable redo")
 
     def new_node(self, index, orientation, array, p_array, clean, threshold):
         # Saving the previous state, used to undo/redo correctly.
@@ -123,8 +125,8 @@ class EditionHistory(object):
         self.index += 1
 
         print "INDEX", self.index, len(self.history), self.history
-        Publisher.sendMessage("Enable undo", True)
-        Publisher.sendMessage("Enable redo", False)
+        Publisher.sendMessage("Enable undo", self.history[self.index - 1].descr)
+        Publisher.sendMessage("Disable redo")
 
     def undo(self, mask, actual_slices=None):
         h = self.history
@@ -143,14 +145,14 @@ class EditionHistory(object):
                         self.index -= 1
                         h[self.index].commit_history(mask)
                     self._reload_slice(self.index)
-                    Publisher.sendMessage("Enable redo", True)
+                    Publisher.sendMessage("Enable redo", h[self.index + 1].descr)
             else:
                 self.index -= 1
                 h[self.index].commit_history(mask)
-                Publisher.sendMessage("Enable redo", True)
+                Publisher.sendMessage("Enable redo", h[self.index + 1].descr)
         
         if self.index == 0:
-            Publisher.sendMessage("Enable undo", False)
+            Publisher.sendMessage("Disable undo")
         #print "AT", self.index, len(self.history), self.history[self.index].filename
 
     def redo(self, mask, actual_slices=None):
@@ -171,14 +173,14 @@ class EditionHistory(object):
                         self.index += 1
                         h[self.index].commit_history(mask)
                     self._reload_slice(self.index)
-                    Publisher.sendMessage("Enable undo", True)
+                    Publisher.sendMessage("Enable undo", h[self.index - 1].descr)
             else:
                 self.index += 1
                 h[self.index].commit_history(mask)
-                Publisher.sendMessage("Enable undo", True)
+                Publisher.sendMessage("Enable undo",  h[self.index - 1].descr)
         
         if self.index == len(h) - 1:
-            Publisher.sendMessage("Enable redo", False)
+            Publisher.sendMessage("Disable redo")
         #print "AT", self.index, len(h), h[self.index].filename
 
     def _reload_slice(self, index):
@@ -186,8 +188,8 @@ class EditionHistory(object):
                               self.history[index].index)
 
     def _config_undo_redo(self, visible):
-        v_undo = False
-        v_redo = False
+        v_undo = "Disable Undo"
+        v_redo = "Disable Redo"
 
         if self.history and visible:
             v_undo = True
@@ -197,14 +199,14 @@ class EditionHistory(object):
             elif self.index == len(self.history) - 1:
                 v_redo = False
             
-        Publisher.sendMessage("Enable undo", v_undo)
-        Publisher.sendMessage("Enable redo", v_redo)
+        Publisher.sendMessage(v_undo)
+        Publisher.sendMessage(v_redo)
 
     def clear_history(self):
         self.history = []
         self.index = -1
-        Publisher.sendMessage("Enable undo", False)
-        Publisher.sendMessage("Enable redo", False)
+        Publisher.sendMessage("Disable undo")
+        Publisher.sendMessage("Disable redo")
 
 
 class Mask():

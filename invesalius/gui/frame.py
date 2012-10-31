@@ -496,7 +496,9 @@ class MenuBar(wx.MenuBar):
         sub = Publisher.subscribe
         sub(self.OnEnableState, "Enable state project")
         sub(self.OnEnableUndo, "Enable undo")
+        sub(self.OnDisableUndo, "Disable undo")
         sub(self.OnEnableRedo, "Enable redo")
+        sub(self.OnDisableRedo, "Disable redo")
 
     def __init_items(self):
         """
@@ -546,8 +548,8 @@ class MenuBar(wx.MenuBar):
         file_edit = wx.Menu()
         file_edit.AppendMenu(wx.NewId(), _('Flip'), flip_menu)
         file_edit.AppendMenu(wx.NewId(), _('Swap axes'), swap_axes_menu)
-        file_edit.Append(wx.ID_UNDO, "Undo\tCtrl+Z").Enable(False)
-        file_edit.Append(wx.ID_REDO, "Redo\tCtrl+Y").Enable(False)
+        file_edit.Append(wx.ID_UNDO, _(u"Undo\tCtrl+Z")).Enable(False)
+        file_edit.Append(wx.ID_REDO, _(u"Redo\tCtrl+Y")).Enable(False)
         #app(const.ID_EDIT_LIST, "Show Undo List...")
         #################################################################
 
@@ -630,18 +632,22 @@ class MenuBar(wx.MenuBar):
             self.Enable(item, True)
 
     def OnEnableUndo(self, pubsub_evt):
-        value = pubsub_evt.data
-        if value:
-            self.FindItemById(wx.ID_UNDO).Enable(True)
-        else:
-            self.FindItemById(wx.ID_UNDO).Enable(False)
+        descr = pubsub_evt.data
+        self.FindItemById(wx.ID_UNDO).Enable(True)
+        self.FindItemById(wx.ID_UNDO).SetItemLabel(_(u"Undo: %s \tCtrl+Z" % descr))
+
+    def OnDisableUndo(self, pubsub_evt):
+        self.FindItemById(wx.ID_UNDO).Enable(False)
+        self.FindItemById(wx.ID_UNDO).SetItemLabel(_(u"Undo:\tCtrl+Z"))
 
     def OnEnableRedo(self, pubsub_evt):
-        value = pubsub_evt.data
-        if value:
-            self.FindItemById(wx.ID_REDO).Enable(True)
-        else:
-            self.FindItemById(wx.ID_REDO).Enable(False)
+        descr = pubsub_evt.data
+        self.FindItemById(wx.ID_REDO).Enable(True)
+        self.FindItemById(wx.ID_REDO).SetItemLabel(_(u"Redo: %s \tCtrl+Y" % descr))
+
+    def OnDisableRedo(self, pubsub_evt):
+        self.FindItemById(wx.ID_REDO).Enable(False)
+        self.FindItemById(wx.ID_REDO).SetItemLabel(_(u"Redo:\tCtrl+Y"))
 # ------------------------------------------------------------------
 # ------------------------------------------------------------------
 # ------------------------------------------------------------------
@@ -1464,7 +1470,10 @@ class HistoryToolBar(wx.ToolBar):
         #sub(self._SetLayoutWithTask, "Set layout button data only")
         #sub(self._SetLayoutWithoutTask, "Set layout button full")
         sub(self.OnEnableUndo, "Enable undo")
+        sub(self.OnDisableUndo, "Disable undo")
+
         sub(self.OnEnableRedo, "Enable redo")
+        sub(self.OnDisableRedo, "Disable redo")
 
     def __bind_events_wx(self):
         """
@@ -1582,14 +1591,14 @@ class HistoryToolBar(wx.ToolBar):
 
     def OnEnableUndo(self, pubsub_evt):
         value = pubsub_evt.data
-        if value:
-            self.EnableTool(wx.ID_UNDO, True)
-        else:
-            self.EnableTool(wx.ID_UNDO, False)
+        self.EnableTool(wx.ID_UNDO, True)
+
+    def OnDisableUndo(self, pubsub_evt):
+        self.EnableTool(wx.ID_UNDO, False)
 
     def OnEnableRedo(self, pubsub_evt):
         value = pubsub_evt.data
-        if value:
-            self.EnableTool(wx.ID_REDO, True)
-        else:
-            self.EnableTool(wx.ID_REDO, False)
+        self.EnableTool(wx.ID_REDO, True)
+
+    def OnDisableRedo(self, pubsub_evt):
+        self.EnableTool(wx.ID_REDO, False)
