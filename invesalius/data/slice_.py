@@ -117,6 +117,7 @@ class Slice(object):
                                 'Change mask colour')
         Publisher.subscribe(self.__set_mask_name, 'Change mask name')
         Publisher.subscribe(self.__show_mask, 'Show mask')
+        Publisher.subscribe(self.discard_buffer_mask, 'Discard buffer masks')
 
         Publisher.subscribe(self.__set_current_mask_threshold_limits,
                                         'Update threshold limits')
@@ -259,7 +260,11 @@ class Slice(object):
         threshold_range = evt_pubsub.data
         index = self.current_mask.index
         self.num_gradient += 1
+
+        self.current_mask.save_threshold_history(threshold_range)
+        
         self.current_mask.matrix[:] = 0
+        
         #self.current_mask.clear_history()
 
         # TODO: merge this code with apply_slice_buffer_to_mask
@@ -278,7 +283,6 @@ class Slice(object):
         self.current_mask.matrix[1:, 1:, n] = b_mask
         self.current_mask.matrix[0, 0, n] = 1
 
-        self.current_mask.save_threshold_history(threshold_range)
 
     def __set_current_mask_threshold_no_history(self, evt_pubsub):
         threshold_range = evt_pubsub.data
@@ -951,6 +955,11 @@ class Slice(object):
                 self.buffer_slices[o].discard_mask()
                 self.buffer_slices[o].discard_vtk_mask()
         Publisher.sendMessage('Reload actual slice')
+
+    def discard_buffer_mask(self, pubsub_evt):
+        for buffer_ in self.buffer_slices.values():
+            buffer_.discard_vtk_mask()
+            buffer_.discard_mask()
 
     def __undo_edition(self, pub_evt):
         buffer_slices = self.buffer_slices

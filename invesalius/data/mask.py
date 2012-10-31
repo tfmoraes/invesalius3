@@ -32,22 +32,33 @@ import imagedata_utils as iu
 from wx.lib.pubsub import pub as Publisher
 
 class ThresholdHistoryNode(object):
-    def __init__(self, threshold):
-        self.threshold = threshold
+    def __init__(self, mask):
+        self.threshold = mask.threshold_range
+        
+        if mask.was_edited:
+            self.array_file = tempfile.mktemp()
+            shutil.copyfile(mask.temp_file, self.array_file)
+        else:
+            self.array_file = ''
 
     def commit_history(self, mask):
         #Publisher.sendMessage('Changing threshold values', self.threshold)
         mask.threshold_range = self.threshold
-        Publisher.sendMessage('Set threshold values no history', self.threshold)
+        if self.array_file:
+            mask._open_mask(self.array_file, mask.matrix.shape)
+            Publisher.sendMessage('Discard buffer masks')
+        else:
+            Publisher.sendMessage('Set threshold values no history', self.threshold)
         Publisher.sendMessage('Reload actual slice')
 
 
 class EditionHistoryNode(object):
-    def __init__(self, index, orientation, array, clean=False):
+    def __init__(self, index, orientation, array, clean=False, threshold=(0,0)):
         self.index = index
         self.orientation = orientation
         self.filename = tempfile.mktemp(suffix='.npy')
         self.clean = clean
+        self.threshold = threshold
 
         self._save_array(array)
 
@@ -71,6 +82,7 @@ class EditionHistoryNode(object):
             if self.clean:
                 mvolume[0, 0, self.index+1] = 1
 
+        mask.threshold_range = self.threshold
         print "applying to", self.orientation, "at slice", self.index
 
     def __del__(self):
@@ -87,16 +99,17 @@ class EditionHistory(object):
         Publisher.sendMessage("Enable undo", False)
         Publisher.sendMessage("Enable redo", False)
 
-    def new_node(self, index, orientation, array, p_array, clean):
+    def new_node(self, index, orientation, array, p_array, clean, threshold):
         # Saving the previous state, used to undo/redo correctly.
-        p_node = EditionHistoryNode(index, orientation, p_array, clean)
+        p_node = EditionHistoryNode(index, orientation, p_array, clean,
+                                    threshold)
         self.add(p_node)
 
-        node = EditionHistoryNode(index, orientation, array, clean)
+        node = EditionHistoryNode(index, orientation, array, clean, threshold)
         self.add(node)
 
-    def new_theshold_node(self, threshold):
-        node = ThresholdHistoryNode(threshold)
+    def new_theshold_node(self, mask):
+        node = ThresholdHistoryNode(mask)
         self.add(node)
 
     def add(self, node):
@@ -116,7 +129,7 @@ class EditionHistory(object):
     def undo(self, mask, actual_slices=None):
         h = self.history
         if self.index > 0:
-            if isinstance(h[self.index], EditionHistoryNode):
+            if isinstance(h[self.index - 1], EditionHistoryNode):
                 #if self.index > 0 and h[self.index].clean:
                     ##self.index -= 1
                     ##h[self.index].commit_history(mvolume)
@@ -126,7 +139,7 @@ class EditionHistory(object):
                 else:
                     self.index -= 1
                     h[self.index].commit_history(mask)
-                    if actual_slices and self.index and actual_slices[h[self.index - 1].orientation] == h[self.index - 1].index:
+                    if actual_slices and self.index and isinstance(h[self.index - 1], EditionHistoryNode) and actual_slices[h[self.index - 1].orientation] == h[self.index - 1].index :
                         self.index -= 1
                         h[self.index].commit_history(mask)
                     self._reload_slice(self.index)
@@ -143,7 +156,7 @@ class EditionHistory(object):
     def redo(self, mask, actual_slices=None):
         h = self.history
         if self.index < len(h) - 1:
-            if isinstance(h[self.index], EditionHistoryNode):
+            if isinstance(h[self.index + 1], EditionHistoryNode):
                 #if self.index < len(h) - 1 and h[self.index].clean:
                     ##self.index += 1
                     ##h[self.index].commit_history(mvolume)
@@ -154,7 +167,7 @@ class EditionHistory(object):
                 else:
                     self.index += 1
                     h[self.index].commit_history(mask)
-                    if actual_slices and self.index < len(h) - 1 and actual_slices[h[self.index + 1].orientation] == h[self.index + 1].index:
+                    if actual_slices and self.index < len(h) - 1 and isinstance(h[self.index + 1], EditionHistoryNode) and actual_slices[h[self.index + 1].orientation] == h[self.index + 1].index:
                         self.index += 1
                         h[self.index].commit_history(mask)
                     self._reload_slice(self.index)
@@ -217,10 +230,11 @@ class Mask():
         Publisher.subscribe(self.OnSwapVolumeAxes, 'Swap volume axes')
 
     def save_edition_history(self, index, orientation, array, p_array, clean=False):
-        self.history.new_node(index, orientation, array, p_array, clean)
+        self.history.new_node(index, orientation, array, p_array, clean,
+                              self.threshold_range)
 
     def save_threshold_history(self, threshold):
-        self.history.new_theshold_node(threshold)
+        self.history.new_theshold_node(self)
 
     def undo_history(self, actual_slices):
         self.history.undo(self, actual_slices)
