@@ -109,6 +109,8 @@ class Slice(object):
                                  'Set edition threshold values')
         Publisher.subscribe(self.__set_current_mask_threshold,
                                  'Set threshold values')
+        Publisher.subscribe(self.__set_current_mask_threshold_no_history,
+                                 'Set threshold values no history')
         Publisher.subscribe(self.__set_current_mask_threshold_actual_slice,
                                  'Changing threshold values')
         Publisher.subscribe(self.__set_current_mask_colour,
@@ -277,6 +279,12 @@ class Slice(object):
         self.current_mask.matrix[0, 0, n] = 1
 
         self.current_mask.save_threshold_history(threshold_range)
+
+    def __set_current_mask_threshold_no_history(self, evt_pubsub):
+        threshold_range = evt_pubsub.data
+        index = self.current_mask.index
+        self.num_gradient += 1
+        self.current_mask.matrix[:] = 0
 
     def __set_current_mask_threshold_actual_slice(self, evt_pubsub):
         threshold_range = evt_pubsub.data
