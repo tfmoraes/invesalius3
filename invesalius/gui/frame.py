@@ -45,6 +45,8 @@ VIEW_TOOLS = [ID_LAYOUT, ID_TEXT] =\
 
 
 
+UNDO_TEXT = _(u'&Undo %s \tCtrl+Z')
+REDO_TEXT = _(u'&Redo %s \tCtrl+Y')
 
 
 
@@ -548,8 +550,8 @@ class MenuBar(wx.MenuBar):
         file_edit = wx.Menu()
         file_edit.AppendMenu(wx.NewId(), _('Flip'), flip_menu)
         file_edit.AppendMenu(wx.NewId(), _('Swap axes'), swap_axes_menu)
-        file_edit.Append(wx.ID_UNDO, _(u"Undo\tCtrl+Z")).Enable(False)
-        file_edit.Append(wx.ID_REDO, _(u"Redo\tCtrl+Y")).Enable(False)
+        file_edit.Append(wx.ID_UNDO, UNDO_TEXT % '').Enable(False)
+        file_edit.Append(wx.ID_REDO, REDO_TEXT % '').Enable(False)
         #app(const.ID_EDIT_LIST, "Show Undo List...")
         #################################################################
 
@@ -634,20 +636,20 @@ class MenuBar(wx.MenuBar):
     def OnEnableUndo(self, pubsub_evt):
         descr = pubsub_evt.data
         self.FindItemById(wx.ID_UNDO).Enable(True)
-        self.FindItemById(wx.ID_UNDO).SetItemLabel(_(u"Undo: %s \tCtrl+Z" % descr))
+        self.FindItemById(wx.ID_UNDO).SetItemLabel(UNDO_TEXT % descr)
 
     def OnDisableUndo(self, pubsub_evt):
         self.FindItemById(wx.ID_UNDO).Enable(False)
-        self.FindItemById(wx.ID_UNDO).SetItemLabel(_(u"Undo:\tCtrl+Z"))
+        self.FindItemById(wx.ID_UNDO).SetItemLabel(UNDO_TEXT % '')
 
     def OnEnableRedo(self, pubsub_evt):
         descr = pubsub_evt.data
         self.FindItemById(wx.ID_REDO).Enable(True)
-        self.FindItemById(wx.ID_REDO).SetItemLabel(_(u"Redo: %s \tCtrl+Y" % descr))
+        self.FindItemById(wx.ID_REDO).SetItemLabel(REDO_TEXT % descr)
 
     def OnDisableRedo(self, pubsub_evt):
         self.FindItemById(wx.ID_REDO).Enable(False)
-        self.FindItemById(wx.ID_REDO).SetItemLabel(_(u"Redo:\tCtrl+Y"))
+        self.FindItemById(wx.ID_REDO).SetItemLabel(REDO_TEXT % '')
 # ------------------------------------------------------------------
 # ------------------------------------------------------------------
 # ------------------------------------------------------------------
