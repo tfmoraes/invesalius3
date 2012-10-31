@@ -258,7 +258,7 @@ class Slice(object):
         index = self.current_mask.index
         self.num_gradient += 1
         self.current_mask.matrix[:] = 0
-        self.current_mask.clear_history()
+        #self.current_mask.clear_history()
 
         # TODO: merge this code with apply_slice_buffer_to_mask
         b_mask = self.buffer_slices["AXIAL"].mask
@@ -275,6 +275,8 @@ class Slice(object):
         n = self.buffer_slices["SAGITAL"].index + 1
         self.current_mask.matrix[1:, 1:, n] = b_mask
         self.current_mask.matrix[0, 0, n] = 1
+
+        self.current_mask.save_threshold_history(threshold_range)
 
     def __set_current_mask_threshold_actual_slice(self, evt_pubsub):
         threshold_range = evt_pubsub.data
@@ -908,7 +910,7 @@ class Slice(object):
         # TODO: Voltar a usar marcacao na mascara
         if orientation == 'AXIAL':
             #if self.current_mask.matrix[index+1, 0, 0] != 2:
-            #self.current_mask.save_history(index, orientation,
+            #self.current_mask.save_edition_history(index, orientation,
                                            #self.current_mask.matrix[index+1,1:,1:],
                                                #clean=True)
             p_mask = self.current_mask.matrix[index+1,1:,1:].copy()
@@ -917,7 +919,7 @@ class Slice(object):
 
         elif orientation == 'CORONAL':
             #if self.current_mask.matrix[0, index+1, 0] != 2:
-            #self.current_mask.save_history(index, orientation,
+            #self.current_mask.save_edition_history(index, orientation,
                                            #self.current_mask.matrix[1:, index+1, 1:],
                                            #clean=True)
             p_mask = self.current_mask.matrix[1:, index+1, 1:].copy()
@@ -926,14 +928,14 @@ class Slice(object):
 
         elif orientation == 'SAGITAL':
             #if self.current_mask.matrix[0, 0, index+1] != 2:
-            #self.current_mask.save_history(index, orientation,
+            #self.current_mask.save_edition_history(index, orientation,
                                            #self.current_mask.matrix[1:, 1:, index+1],
                                            #clean=True)
             p_mask = self.current_mask.matrix[1:, 1:, index+1].copy()
             self.current_mask.matrix[1:, 1:, index+1] = b_mask
             self.current_mask.matrix[0, 0, index+1] = 2
 
-        self.current_mask.save_history(index, orientation, b_mask, p_mask)
+        self.current_mask.save_edition_history(index, orientation, b_mask, p_mask)
         self.current_mask.was_edited = True
 
         for o in self.buffer_slices:

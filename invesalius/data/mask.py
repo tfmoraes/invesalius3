@@ -31,6 +31,16 @@ import imagedata_utils as iu
 
 from wx.lib.pubsub import pub as Publisher
 
+class ThresholdHistoryNode(object):
+    def __init__(self, threshold):
+        self.threshold = threshold
+
+    def commit_history(self, mask):
+        #Publisher.sendMessage('Changing threshold values', self.threshold)
+        mask.threshold_range = self.threshold
+        Publisher.sendMessage('Set threshold values no history', self.threshold)
+        Publisher.sendMessage('Reload actual slice')
+
 
 class EditionHistoryNode(object):
     def __init__(self, index, orientation, array, clean=False):
@@ -45,7 +55,8 @@ class EditionHistoryNode(object):
         numpy.save(self.filename, array)
         print "Saving history", self.index, self.orientation, self.filename, self.clean
 
-    def commit_history(self, mvolume):
+    def commit_history(self, mask):
+        mvolume = mask.matrix
         array = numpy.load(self.filename)
         if self.orientation == 'AXIAL':
             mvolume[self.index+1,1:,1:] = array
@@ -84,6 +95,10 @@ class EditionHistory(object):
         node = EditionHistoryNode(index, orientation, array, clean)
         self.add(node)
 
+    def new_theshold_node(self, threshold):
+        node = ThresholdHistoryNode(threshold)
+        self.add(node)
+
     def add(self, node):
         if self.index == self.size:
             self.history.pop(0)
@@ -98,50 +113,60 @@ class EditionHistory(object):
         Publisher.sendMessage("Enable undo", True)
         Publisher.sendMessage("Enable redo", False)
 
-    def undo(self, mvolume, actual_slices=None):
+    def undo(self, mask, actual_slices=None):
         h = self.history
         if self.index > 0:
-            #if self.index > 0 and h[self.index].clean:
-                ##self.index -= 1
-                ##h[self.index].commit_history(mvolume)
-                #self._reload_slice(self.index - 1)
-            if actual_slices and actual_slices[h[self.index - 1].orientation] != h[self.index - 1].index:
-                self._reload_slice(self.index - 1)
+            if isinstance(h[self.index], EditionHistoryNode):
+                #if self.index > 0 and h[self.index].clean:
+                    ##self.index -= 1
+                    ##h[self.index].commit_history(mvolume)
+                    #self._reload_slice(self.index - 1)
+                if actual_slices and actual_slices[h[self.index - 1].orientation] != h[self.index - 1].index:
+                    self._reload_slice(self.index - 1)
+                else:
+                    self.index -= 1
+                    h[self.index].commit_history(mask)
+                    if actual_slices and self.index and actual_slices[h[self.index - 1].orientation] == h[self.index - 1].index:
+                        self.index -= 1
+                        h[self.index].commit_history(mask)
+                    self._reload_slice(self.index)
+                    Publisher.sendMessage("Enable redo", True)
             else:
                 self.index -= 1
-                h[self.index].commit_history(mvolume)
-                if actual_slices and self.index and actual_slices[h[self.index - 1].orientation] == h[self.index - 1].index:
-                    self.index -= 1
-                    h[self.index].commit_history(mvolume)
-                self._reload_slice(self.index)
+                h[self.index].commit_history(mask)
                 Publisher.sendMessage("Enable redo", True)
         
         if self.index == 0:
             Publisher.sendMessage("Enable undo", False)
-        print "AT", self.index, len(self.history), self.history[self.index].filename
+        #print "AT", self.index, len(self.history), self.history[self.index].filename
 
-    def redo(self, mvolume, actual_slices=None):
+    def redo(self, mask, actual_slices=None):
         h = self.history
         if self.index < len(h) - 1:
-            #if self.index < len(h) - 1 and h[self.index].clean:
-                ##self.index += 1
-                ##h[self.index].commit_history(mvolume)
-                #self._reload_slice(self.index + 1)
+            if isinstance(h[self.index], EditionHistoryNode):
+                #if self.index < len(h) - 1 and h[self.index].clean:
+                    ##self.index += 1
+                    ##h[self.index].commit_history(mvolume)
+                    #self._reload_slice(self.index + 1)
 
-            if actual_slices and actual_slices[h[self.index + 1].orientation] != h[self.index + 1].index:
-                self._reload_slice(self.index + 1)
+                if actual_slices and actual_slices[h[self.index + 1].orientation] != h[self.index + 1].index:
+                    self._reload_slice(self.index + 1)
+                else:
+                    self.index += 1
+                    h[self.index].commit_history(mask)
+                    if actual_slices and self.index < len(h) - 1 and actual_slices[h[self.index + 1].orientation] == h[self.index + 1].index:
+                        self.index += 1
+                        h[self.index].commit_history(mask)
+                    self._reload_slice(self.index)
+                    Publisher.sendMessage("Enable undo", True)
             else:
                 self.index += 1
-                h[self.index].commit_history(mvolume)
-                if actual_slices and self.index < len(h) - 1 and actual_slices[h[self.index + 1].orientation] == h[self.index + 1].index:
-                    self.index += 1
-                    h[self.index].commit_history(mvolume)
-                self._reload_slice(self.index)
+                h[self.index].commit_history(mask)
                 Publisher.sendMessage("Enable undo", True)
         
         if self.index == len(h) - 1:
             Publisher.sendMessage("Enable redo", False)
-        print "AT", self.index, len(h), h[self.index].filename
+        #print "AT", self.index, len(h), h[self.index].filename
 
     def _reload_slice(self, index):
         Publisher.sendMessage(('Set scroll position', self.history[index].orientation),
@@ -191,14 +216,17 @@ class Mask():
         Publisher.subscribe(self.OnFlipVolume, 'Flip volume')
         Publisher.subscribe(self.OnSwapVolumeAxes, 'Swap volume axes')
 
-    def save_history(self, index, orientation, array, p_array, clean=False):
+    def save_edition_history(self, index, orientation, array, p_array, clean=False):
         self.history.new_node(index, orientation, array, p_array, clean)
 
+    def save_threshold_history(self, threshold):
+        self.history.new_theshold_node(threshold)
+
     def undo_history(self, actual_slices):
-        self.history.undo(self.matrix, actual_slices)
+        self.history.undo(self, actual_slices)
 
     def redo_history(self, actual_slices):
-        self.history.redo(self.matrix, actual_slices)
+        self.history.redo(self, actual_slices)
 
     def on_show(self):
         self.history._config_undo_redo(self.is_shown)
