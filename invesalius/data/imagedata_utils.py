@@ -480,7 +480,7 @@ def dcm2memmap(files, slice_size, orientation, resolution_percentage):
             # TODO: Verify if it's necessary to add the slices swapped only in
             # sagittal rmi or only in # Rasiane's case or is necessary in all
             # sagittal cases.
-            matrix[:, :, n] = array
+            matrix[:, :,-n-1] = array[:, ::-1]
         else:
             print array.shape, matrix.shape
             array.shape = matrix.shape[1], matrix.shape[2]
