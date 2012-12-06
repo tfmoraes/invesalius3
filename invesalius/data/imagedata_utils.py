@@ -416,6 +416,40 @@ class ImageCreator:
 
         return imagedata
 
+
+def get_stacking_direction(files, orientation):
+    """
+    Returns the direction of stacking in the given orientation:
+
+    AXIAL:
+
+    CORONAL:
+
+    SAGITAL: +1 - Right -> Left
+             -1 - Left  -> Right
+    """
+    r1 = vtkgdcm.vtkGDCMImageReader()
+    r1.SetFileName(files[0])
+    r1.Update()
+    p1 = r1.GetImagePositionPatient()
+
+    r2 = vtkgdcm.vtkGDCMImageReader()
+    r2.SetFileName(files[1])
+    r2.Update()
+    p2 = r2.GetImagePositionPatient()
+
+    if orientation == 'SAGITTAL':
+        d = (p2[0] - p1[0])
+
+    elif orientation == 'CORONAL':
+        d = (p2[1] - p1[1])
+
+    else:
+        d = (p2[2] - p1[2])
+
+    return int(d / abs(d))
+
+
 def dcm2memmap(files, slice_size, orientation, resolution_percentage):
     """
     From a list of dicom files it creates memmap file in the temp folder and
@@ -452,6 +486,8 @@ def dcm2memmap(files, slice_size, orientation, resolution_percentage):
     max_scalar = None
     min_scalar = None
 
+    d = get_stacking_direction(files, orientation)
+
     for n, f in enumerate(files):
         dcm_reader.SetFileName(f)
         dcm_reader.Update()
@@ -477,10 +513,15 @@ def dcm2memmap(files, slice_size, orientation, resolution_percentage):
             matrix[:, -n-1, :] = array
         elif orientation == 'SAGITTAL':
             array.shape = matrix.shape[0], matrix.shape[1]
-            # TODO: Verify if it's necessary to add the slices swapped only in
-            # sagittal rmi or only in # Rasiane's case or is necessary in all
-            # sagittal cases.
-            matrix[:, :,-n-1] = array[:, ::-1]
+
+            print ">>>", d, dcm_reader.GetImagePositionPatient(), dcm_reader.GetDirectionCosines()
+
+            # stacking from right to left
+            if d == 1:
+                matrix[:, :,n] = array[:, ::-1]
+            # stacking from left to right
+            else:
+                matrix[:, :,-n-1] = array[:, ::-1]
         else:
             print array.shape, matrix.shape
             array.shape = matrix.shape[1], matrix.shape[2]
