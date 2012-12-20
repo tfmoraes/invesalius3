@@ -438,16 +438,48 @@ def get_stacking_direction(files, orientation):
     r2.Update()
     p2 = r2.GetImagePositionPatient()
 
+    dc = r1.GetMedicalImageProperties().GetDirectionCosine()
+    dc1 = numpy.array(dc[:3])
+    dc2 = numpy.array(dc[3:])
+    dc3 = numpy.cross(dc1, dc2)
+
+    distp = numpy.array(p2) - numpy.array(p1)
+    ndistp = distp / numpy.linalg.norm(distp)
+    distv = numpy.dot(dc3, ndistp)
+
     if orientation == 'SAGITTAL':
-        d = (p2[0] - p1[0])
+        
+        if dc3[0] < 0:
+            if distv > 0:
+                dirx = -1
+            else:
+                dirx = 1
+        else:
+            if distv < 0:
+                dirx = -1
+            else:
+                dirx = 1
+
+        ds = [ dirx,
+              -1 if dc1[1] < 0 else 1,
+              -1 if dc2[2] < 0 else 1,
+             ]
 
     elif orientation == 'CORONAL':
         d = (p2[1] - p1[1])
+        d = int(d / abs(d))
+        ds = []
 
     else:
         d = (p2[2] - p1[2])
+        d = int(d / abs(d))
+        ds = []
 
-    return int(d / abs(d))
+    print "==================================="
+    print dc1, dc2, dc3, ds, p2, p1, p2, distv
+    print "==================================="
+
+    return ds
 
 
 def dcm2memmap(files, slice_size, orientation, resolution_percentage):
@@ -514,14 +546,14 @@ def dcm2memmap(files, slice_size, orientation, resolution_percentage):
         elif orientation == 'SAGITTAL':
             array.shape = matrix.shape[0], matrix.shape[1]
 
-            print ">>>", d, dcm_reader.GetImagePositionPatient(), dcm_reader.GetDirectionCosines()
+            #print ">>>", d, dcm_reader.GetImagePositionPatient(), dcm_reader.GetMedicalImageProperties().GetDirectionCosine()
 
             # stacking from right to left
-            if d == 1:
-                matrix[:, :,n] = array[:, ::-1]
+            if d[0] == 1:
+                matrix[:, :, n] = array[::d[1], ::d[2]]
             # stacking from left to right
             else:
-                matrix[:, :,-n-1] = array[:, ::-1]
+                matrix[:, :, -n-1] = array[::d[1], ::d[2]]
         else:
             print array.shape, matrix.shape
             array.shape = matrix.shape[1], matrix.shape[2]
