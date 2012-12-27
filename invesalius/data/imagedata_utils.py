@@ -460,9 +460,9 @@ def get_stacking_direction(files, orientation):
             else:
                 dirx = 1
 
-        ds = [ dirx,
+        ds = [-1 if dc2[2] < 0 else 1,
               -1 if dc1[1] < 0 else 1,
-              -1 if dc2[2] < 0 else 1,
+              dirx,
              ]
 
     elif orientation == 'CORONAL':
@@ -471,6 +471,7 @@ def get_stacking_direction(files, orientation):
         ds = []
 
     else:
+        print p1, p2
         d = (p2[2] - p1[2])
         d = int(d / abs(d))
         ds = []
@@ -485,7 +486,10 @@ def get_stacking_direction(files, orientation):
 def dcm2memmap(files, slice_size, orientation, resolution_percentage):
     """
     From a list of dicom files it creates memmap file in the temp folder and
-    returns it and its related filename.
+    returns it and its related filename. The voxels are stored in the matrix in
+    the RPI order (R-L within P-A within I-S , see
+    http://www.grahamwideman.com/gw/brain/orientation/orientterms.htm), know as
+    Radiological order. 
     """
     message = _("Generating multiplanar visualization...")
     update_progress= vtk_utils.ShowProgress(len(files) - 1, dialog_type = "ProgressDialog")
@@ -513,7 +517,11 @@ def dcm2memmap(files, slice_size, orientation, resolution_percentage):
                                         math.ceil(slice_size[0]*resolution_percentage)
 
     matrix = numpy.memmap(temp_file, mode='w+', dtype='int16', shape=shape)
+
+    # 1)  VTK doesn't follow the convention that the first pixel in a image is the
+    #     top-left one. The first pixel pixel in VTK is the bottom-left one.
     dcm_reader = vtkgdcm.vtkGDCMImageReader()
+
     cont = 0
     max_scalar = None
     min_scalar = None
@@ -539,23 +547,35 @@ def dcm2memmap(files, slice_size, orientation, resolution_percentage):
         if max_scalar is None or max_aux > max_scalar:
             max_scalar = max_aux
 
+        # 2) Because the convention the VTK follows (1) when the conversion
+        #    from VTK to numpy is done the Y axis is flipped with respect to
+        #    DICOM slice.
         array = numpy_support.vtk_to_numpy(image.GetPointData().GetScalars())
         if orientation == 'CORONAL':
             array.shape = matrix.shape[0], matrix.shape[2]
             matrix[:, -n-1, :] = array
+
         elif orientation == 'SAGITTAL':
             array.shape = matrix.shape[0], matrix.shape[1]
 
-            #print ">>>", d, dcm_reader.GetImagePositionPatient(), dcm_reader.GetMedicalImageProperties().GetDirectionCosine()
+            # 3) The direction cosines from DICOM follows the RAI (Right,
+            #    Anterior and Inferior) convention whereas InVesalius is
+            #    following the RPI convention. The X axis is increasing from
+            #    Posterior (P) to Anterior (A) what is the opposite from DICOM
+            #    (A->P), so the direction cosine from the X axis from the Image
+            #    is inverted. The Y axis from numpy array is flipped with
+            #    respect to the DICOM slice, and is the direction cosine from
+            #    Y axis.
+            #
+            # TODO: Apply the same logic from SAGITTAL to Coronal and Axial.
 
-            # stacking from right to left
-            if d[0] == 1:
-                matrix[:, :, n] = array[::d[1], ::d[2]]
-            # stacking from left to right
-            else:
-                matrix[:, :, -n-1] = array[::d[1], ::d[2]]
+            if d[2] == 1: # stacking from right to left
+                matrix[:, :, n] = array[::-d[0], ::-d[1]]
+            
+            else: # stacking from left to right
+                matrix[:, :, -n-1] = array[::-d[0], ::-d[1]]
+
         else:
-            print array.shape, matrix.shape
             array.shape = matrix.shape[1], matrix.shape[2]
             matrix[n] = array
         update_progress(cont,message)
@@ -563,6 +583,11 @@ def dcm2memmap(files, slice_size, orientation, resolution_percentage):
 
     matrix.flush()
     scalar_range = min_scalar, max_scalar
+
+    import pylab
+    pylab.imshow(matrix[:, :, matrix.shape[2] / 2])
+    #pylab.imshow(matrix[matrix.shape[0] / 2])
+    pylab.show()
 
     return matrix, scalar_range, temp_file
 
