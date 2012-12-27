@@ -564,7 +564,7 @@ def dcm2memmap(files, slice_size, orientation, resolution_percentage):
             #    Posterior (P) to Anterior (A) what is the opposite from DICOM
             #    (A->P), so the direction cosine from the X axis from the Image
             #    is inverted. The Y axis from numpy array is flipped with
-            #    respect to the DICOM slice, and is the direction cosine from
+            #    respect to the DICOM slice, and so is the direction cosine from
             #    Y axis.
             #
             # TODO: Apply the same logic from SAGITTAL to Coronal and Axial.
@@ -584,12 +584,8 @@ def dcm2memmap(files, slice_size, orientation, resolution_percentage):
     matrix.flush()
     scalar_range = min_scalar, max_scalar
 
-    import pylab
-    pylab.imshow(matrix[:, :, matrix.shape[2] / 2])
-    #pylab.imshow(matrix[matrix.shape[0] / 2])
-    pylab.show()
-
     return matrix, scalar_range, temp_file
+
 
 def analyze2mmap(analyze):
     data = analyze.get_data()
