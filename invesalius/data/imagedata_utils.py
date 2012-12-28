@@ -471,10 +471,18 @@ def get_stacking_direction(files, orientation):
         ds = []
 
     else:
-        print p1, p2
-        d = (p2[2] - p1[2])
-        d = int(d / abs(d))
-        ds = []
+        if dc3[2] < 0:
+            if distv > 0:
+                dirz = -1
+            else:
+                dirz = +1
+        else:
+            if distv < 0:
+                dirz = -1
+            else:
+                dirz = +1
+
+        ds = [dirz, ]
 
     print "==================================="
     print dc1, dc2, dc3, ds, p2, p1, p2, distv
@@ -577,7 +585,11 @@ def dcm2memmap(files, slice_size, orientation, resolution_percentage):
 
         else:
             array.shape = matrix.shape[1], matrix.shape[2]
-            matrix[n] = array
+
+            if d[0] == 1: # Stacking from bottom to top
+                matrix[n] = array
+            else: # Stacking from top to bottom
+                matrix[-n-1] = array
         update_progress(cont,message)
         cont += 1
 
