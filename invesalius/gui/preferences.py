@@ -143,6 +143,7 @@ class Language(wx.Panel):
         
         self.lg = lg = ComboBoxLanguage(self)
         self.cmb_lang = cmb_lang = lg.GetComboBox()
+        self.cmb_lang.Bind(wx.EVT_COMBOBOX, self.OnCombo)
 
         box = wx.StaticBox(self, -1, _("Language"))
         bsizer = wx.StaticBoxSizer(box, wx.VERTICAL)
@@ -158,13 +159,21 @@ class Language(wx.Panel):
         border.Fit(self)
 
     def GetSelection(self):
-        selection = self.cmb_lang.GetSelection()
         locales = self.lg.GetLocalesKey()
-        options = {const.LANGUAGE:locales[selection]}
+        options = {const.LANGUAGE:locales[self.idx]}
         return options
 
     def LoadSelection(self, values):
         language = values[const.LANGUAGE]
         locales = self.lg.GetLocalesKey()
         selection = locales.index(language)
-        self.cmb_lang.SetSelection(int(selection))
+
+        if wx.VERSION > (2, 9):
+            self.cmb_lang.Select(int(selection))
+        else:
+            self.cmb_lang.SetSelection(int(selection))
+
+        self.idx = selection
+
+    def OnCombo(self, evt):
+        self.idx = evt.GetInt()
