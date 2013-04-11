@@ -24,6 +24,7 @@ import sys
 import wx
 from wx.lib.pubsub import pub as Publisher
 import constants as const
+import presets
 
 class SliceMenu(wx.Menu):
     def __init__(self):
@@ -56,6 +57,7 @@ class SliceMenu(wx.Menu):
                 self.ID_TO_TOOL_ITEM[new_id] = wl_item
 
 
+
         #----------- Sub menu of the save and load options ---------
         #submenu_wl.AppendSeparator()
         #options = [_("Save current values"),
@@ -84,6 +86,13 @@ class SliceMenu(wx.Menu):
                                     name, kind=wx.ITEM_RADIO)
                 submenu_pseudo_colours.AppendItem(color_item)
                 self.ID_TO_TOOL_ITEM[new_id] = color_item
+
+        self.plist_presets = presets.get_wwwl_presets()
+        for name in sorted(self.plist_presets):
+            new_id = wx.NewId()
+            color_item = wx.MenuItem(submenu_wl, new_id, name, kind=wx.ITEM_RADIO)
+            submenu_pseudo_colours.AppendItem(color_item)
+            self.ID_TO_TOOL_ITEM[new_id] = color_item
         
         flag_tiling = False
         #------------ Sub menu of the image tiling ---------------
@@ -158,6 +167,11 @@ class SliceMenu(wx.Menu):
             print "b"
             values = const.SLICE_COLOR_TABLE[key]
             Publisher.sendMessage('Change colour table from background image', values)
+            Publisher.sendMessage('Update slice viewer')
+
+        elif key in self.plist_presets:
+            values = presets.get_wwwl_preset_colours(self.plist_presets[key])
+            Publisher.sendMessage('Change colour table from background image from plist', values)
             Publisher.sendMessage('Update slice viewer')
 
         elif(key in const.IMAGE_TILING.keys()):

@@ -94,6 +94,8 @@ class Slice(object):
         self.num_gradient = 0
         self.interaction_style = st.StyleStateManager()
 
+        self.from_plist = False
+
         self.__bind_events()
 
     def __bind_events(self):
@@ -124,6 +126,9 @@ class Slice(object):
 
         Publisher.subscribe(self.UpdateColourTableBackground,\
                                  'Change colour table from background image')
+
+        Publisher.subscribe(self.UpdateColourTableBackgroundPlist,\
+                                 'Change colour table from background image from plist')
 
         Publisher.subscribe(self.InputImageWidget, 'Input Image in the widget')
 
@@ -702,10 +707,18 @@ class Slice(object):
 
     def UpdateColourTableBackground(self, pubsub_evt):
         values = pubsub_evt.data
+        self.from_plist = False
         self.number_of_colours= values[0]
         self.saturation_range = values[1]
         self.hue_range = values[2]
         self.value_range = values[3]
+        for buffer_ in self.buffer_slices.values():
+            buffer_.discard_vtk_image()
+        Publisher.sendMessage('Reload actual slice')
+
+    def UpdateColourTableBackgroundPlist(self, pubsub_evt):
+        self.values = pubsub_evt.data
+        self.from_plist = True
         for buffer_ in self.buffer_slices.values():
             buffer_.discard_vtk_image()
         Publisher.sendMessage('Reload actual slice')
@@ -816,12 +829,31 @@ class Slice(object):
         Publisher.sendMessage('Update slice viewer')
 
     def do_ww_wl(self, image):
-        colorer = vtk.vtkImageMapToWindowLevelColors()
-        colorer.SetInput(image)
-        colorer.SetWindow(self.window_width)
-        colorer.SetLevel(self.window_level)
-        colorer.SetOutputFormatToRGB()
-        colorer.Update()
+        if self.from_plist:
+            lut = vtk.vtkWindowLevelLookupTable()
+            lut.SetWindow(self.window_width)
+            lut.SetLevel(self.window_level)
+            lut.Build()
+
+            i = 0
+            for r, g, b in self.values:
+                lut.SetTableValue(i, r/255.0, g/255.0, b/255.0, 1.0)
+                i += 1
+
+                print i, r, g, b
+
+            colorer = vtk.vtkImageMapToColors()
+            colorer.SetInput(image)
+            colorer.SetLookupTable(lut)
+            colorer.SetOutputFormatToRGB()
+            colorer.Update()
+        else:
+            colorer = vtk.vtkImageMapToWindowLevelColors()
+            colorer.SetInput(image)
+            colorer.SetWindow(self.window_width)
+            colorer.SetLevel(self.window_level)
+            colorer.SetOutputFormatToRGB()
+            colorer.Update()
 
         return colorer.GetOutput()
 
@@ -837,22 +869,25 @@ class Slice(object):
         return m.astype('uint8')
 
     def do_colour_image(self, imagedata):
-        # map scalar values into colors
-        lut_bg = vtk.vtkLookupTable()
-        lut_bg.SetTableRange(imagedata.GetScalarRange())
-        lut_bg.SetSaturationRange(self.saturation_range)
-        lut_bg.SetHueRange(self.hue_range)
-        lut_bg.SetValueRange(self.value_range)
-        lut_bg.Build()
+        if self.from_plist:
+            return imagedata
+        else:
+            # map scalar values into colors
+            lut_bg = vtk.vtkLookupTable()
+            lut_bg.SetTableRange(imagedata.GetScalarRange())
+            lut_bg.SetSaturationRange(self.saturation_range)
+            lut_bg.SetHueRange(self.hue_range)
+            lut_bg.SetValueRange(self.value_range)
+            lut_bg.Build()
 
-        # map the input image through a lookup table
-        img_colours_bg = vtk.vtkImageMapToColors()
-        img_colours_bg.SetOutputFormatToRGB()
-        img_colours_bg.SetLookupTable(lut_bg)
-        img_colours_bg.SetInput(imagedata)
-        img_colours_bg.Update()
+            # map the input image through a lookup table
+            img_colours_bg = vtk.vtkImageMapToColors()
+            img_colours_bg.SetOutputFormatToRGB()
+            img_colours_bg.SetLookupTable(lut_bg)
+            img_colours_bg.SetInput(imagedata)
+            img_colours_bg.Update()
 
-        return img_colours_bg.GetOutput()
+            return img_colours_bg.GetOutput()
 
     def do_colour_mask(self, imagedata):
         scalar_range = int(imagedata.GetScalarRange()[1])
