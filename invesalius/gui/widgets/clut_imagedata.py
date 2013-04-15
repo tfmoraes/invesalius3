@@ -1,7 +1,4 @@
-import glob
 import math
-import os
-
 import wx
 
 HISTOGRAM_LINE_COLOUR = (128, 128, 128)
