@@ -34,6 +34,9 @@ import project as proj
 import session as ses
 import utils
 
+from gui.widgets import clut_imagedata
+
+import numpy as np
 
 class MaskEvent(wx.PyCommandEvent):
     def __init__(self , evtType, id, mask_index):
@@ -1274,9 +1277,32 @@ class SurfaceMethodPanel(wx.Panel):
         self.method_sizer.Layout()
 
 
+class ClutImagedataDialog(wx.Dialog):
+    def __init__(self):
+        pre = wx.PreDialog()
+        pre.Create(None, -1, style=wx.DEFAULT_DIALOG_STYLE)
+        self.PostCreate(pre)
 
+        self._init_gui()
+        self._bind_events_wx()
 
-    
+    def _init_gui(self):
+        self.clut_widget = clut_imagedata.CLUTImageDataWidget(self, -1,
+                                                              np.random.randint(0,
+                                                                               1000,
+                                                                               (1000,)),
+                                                              -1000, 1000,
+                                                             230, 255)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.clut_widget, 1, wx.EXPAND)
 
+        self.SetSizer(sizer)
+        self.Fit()
 
+    def _bind_events_wx(self):
+        self.clut_widget.Bind(clut_imagedata.EVT_CLUT_POINT_MOVE, self.OnClutChange)
+
+    def OnClutChange(self, evt):
+        Publisher.sendMessage('Change colour table from background image from widget',
+                             evt.GetNodes())
 

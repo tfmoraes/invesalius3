@@ -26,6 +26,8 @@ from wx.lib.pubsub import pub as Publisher
 import constants as const
 import presets
 
+from gui.dialogs import ClutImagedataDialog
+
 class SliceMenu(wx.Menu):
     def __init__(self):
         wx.Menu.__init__(self)
@@ -93,6 +95,11 @@ class SliceMenu(wx.Menu):
             color_item = wx.MenuItem(submenu_wl, new_id, name, kind=wx.ITEM_RADIO)
             submenu_pseudo_colours.AppendItem(color_item)
             self.ID_TO_TOOL_ITEM[new_id] = color_item
+
+        new_id = wx.NewId()
+        color_item = wx.MenuItem(submenu_wl, new_id, _('Custom'), kind=wx.ITEM_RADIO)
+        submenu_pseudo_colours.AppendItem(color_item)
+        self.ID_TO_TOOL_ITEM[new_id] = color_item
         
         flag_tiling = False
         #------------ Sub menu of the image tiling ---------------
@@ -179,6 +186,11 @@ class SliceMenu(wx.Menu):
             values = const.IMAGE_TILING[key]
             Publisher.sendMessage('Set slice viewer layout', values)
             Publisher.sendMessage('Update slice viewer')
+
+        elif key == _('Custom'):
+            cdialog = ClutImagedataDialog()
+            cdialog.Show()
+
 
         evt.Skip()
 

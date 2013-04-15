@@ -34,6 +34,11 @@ import utils
 from mask import Mask
 from project import Project
 
+OTHER=0
+PLIST=1
+WIDGET=2
+
+
 class SliceBuffer(object):
     """ 
     This class is used as buffer that mantains the vtkImageData and numpy array
@@ -66,9 +71,6 @@ class SliceBuffer(object):
         self.vtk_mask = None
 
 
-
-
-
 class Slice(object):
     __metaclass__= utils.Singleton
     # Only one slice will be initialized per time (despite several viewers
@@ -94,8 +96,7 @@ class Slice(object):
         self.num_gradient = 0
         self.interaction_style = st.StyleStateManager()
 
-        self.from_plist = False
-
+        self.from_ = OTHER
         self.__bind_events()
 
     def __bind_events(self):
@@ -129,6 +130,9 @@ class Slice(object):
 
         Publisher.subscribe(self.UpdateColourTableBackgroundPlist,\
                                  'Change colour table from background image from plist')
+
+        Publisher.subscribe(self.UpdateColourTableBackgroundWidget,\
+                                 'Change colour table from background image from widget')
 
         Publisher.subscribe(self.InputImageWidget, 'Input Image in the widget')
 
@@ -707,7 +711,7 @@ class Slice(object):
 
     def UpdateColourTableBackground(self, pubsub_evt):
         values = pubsub_evt.data
-        self.from_plist = False
+        self.from_= OTHER
         self.number_of_colours= values[0]
         self.saturation_range = values[1]
         self.hue_range = values[2]
@@ -718,7 +722,14 @@ class Slice(object):
 
     def UpdateColourTableBackgroundPlist(self, pubsub_evt):
         self.values = pubsub_evt.data
-        self.from_plist = True
+        self.from_= PLIST
+        for buffer_ in self.buffer_slices.values():
+            buffer_.discard_vtk_image()
+        Publisher.sendMessage('Reload actual slice')
+
+    def UpdateColourTableBackgroundWidget(self, pubsub_evt):
+        self.values = pubsub_evt.data
+        self.from_= WIDGET
         for buffer_ in self.buffer_slices.values():
             buffer_.discard_vtk_image()
         Publisher.sendMessage('Reload actual slice')
@@ -829,7 +840,7 @@ class Slice(object):
         Publisher.sendMessage('Update slice viewer')
 
     def do_ww_wl(self, image):
-        if self.from_plist:
+        if self.from_ == PLIST:
             lut = vtk.vtkWindowLevelLookupTable()
             lut.SetWindow(self.window_width)
             lut.SetLevel(self.window_level)
@@ -845,6 +856,20 @@ class Slice(object):
             colorer = vtk.vtkImageMapToColors()
             colorer.SetInput(image)
             colorer.SetLookupTable(lut)
+            colorer.SetOutputFormatToRGB()
+            colorer.Update()
+        elif self.from_ == WIDGET:
+            lut  = vtk.vtkColorTransferFunction()
+
+            for n in self.values:
+                r, g, b = n.colour
+                lut.AddRGBPoint(n.value, r/255.0, g/255.0, b/255.0)
+
+            lut.Build()
+
+            colorer = vtk.vtkImageMapToColors()
+            colorer.SetLookupTable(lut)
+            colorer.SetInput(image)
             colorer.SetOutputFormatToRGB()
             colorer.Update()
         else:
@@ -869,7 +894,7 @@ class Slice(object):
         return m.astype('uint8')
 
     def do_colour_image(self, imagedata):
-        if self.from_plist:
+        if self.from_ in (PLIST, WIDGET):
             return imagedata
         else:
             # map scalar values into colors
