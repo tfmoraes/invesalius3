@@ -23,7 +23,9 @@ import sys
 
 import wx
 from wx.lib.pubsub import pub as Publisher
+
 import constants as const
+import data.slice_ as sl
 import presets
 
 from gui.dialogs import ClutImagedataDialog
@@ -188,7 +190,14 @@ class SliceMenu(wx.Menu):
             Publisher.sendMessage('Update slice viewer')
 
         elif key == _('Custom'):
-            cdialog = ClutImagedataDialog()
+            slc = sl.Slice()
+            histogram = slc.histogram
+            init = slc.matrix.min()
+            end = slc.matrix.max()
+            wl = slc.window_level
+            ww = slc.window_width
+
+            cdialog = ClutImagedataDialog(histogram, init, end, wl, ww)
             cdialog.Show()
 
 

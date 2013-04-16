@@ -81,7 +81,8 @@ class Slice(object):
         self.imagedata = None
         self.current_mask = None
         self.blend_filter = None
-        self.matrix = None
+        self.histogram = None
+        self._matrix = None
         self.spacing = (1.0, 1.0, 1.0)
 
         self.number_of_colours = 256
@@ -98,6 +99,17 @@ class Slice(object):
 
         self.from_ = OTHER
         self.__bind_events()
+
+    @property
+    def matrix(self):
+        return self._matrix
+
+    @matrix.setter
+    def matrix(self, value):
+        self._matrix = value
+        i, e = value.min(), value.max()
+        r = e - i
+        self.histogram = numpy.histogram(self._matrix, r, (i, e))[0]
 
     def __bind_events(self):
         # General slice control

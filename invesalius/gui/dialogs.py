@@ -1278,21 +1278,26 @@ class SurfaceMethodPanel(wx.Panel):
 
 
 class ClutImagedataDialog(wx.Dialog):
-    def __init__(self):
+    def __init__(self, histogram, init, end, wl, ww):
         pre = wx.PreDialog()
         pre.Create(None, -1, style=wx.DEFAULT_DIALOG_STYLE)
         self.PostCreate(pre)
+
+        self.histogram = histogram
+        self.init = init
+        self.end = end
+        self.wl = wl
+        self.ww = ww
 
         self._init_gui()
         self._bind_events_wx()
 
     def _init_gui(self):
         self.clut_widget = clut_imagedata.CLUTImageDataWidget(self, -1,
-                                                              np.random.randint(0,
-                                                                               1000,
-                                                                               (1000,)),
-                                                              -1000, 1000,
-                                                             230, 255)
+                                                              self.histogram,
+                                                              self.init,
+                                                              self.end,
+                                                              self.wl, self.ww)
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(self.clut_widget, 1, wx.EXPAND)
 
