@@ -33,6 +33,7 @@ import data.volume as volume
 import gui.dialogs as dialog
 import project as prj
 import reader.analyze_reader as analyze
+import reader.vtk_reader as vtk_reader
 import reader.dicom_grouper as dg
 import reader.dicom_reader as dcm
 import session as ses
@@ -350,8 +351,12 @@ class Controller():
                 self.CreateAnalyzeProject(imagedata)
             # OPTION 3: Nothing...
             else:
-                utils.debug("No medical images found on given directory")
-                return
+                imagedata = vtk_reader.ReadDirectory(directory)
+                if imagedata:
+                    self.CreateVTKProject(imagedata)
+                else:
+                    utils.debug("No medical images found on given directory")
+                    return
         self.LoadProject()
         Publisher.sendMessage("Enable state project", True)
 
@@ -413,6 +418,44 @@ class Controller():
         Publisher.sendMessage(('Set scroll position', 'CORONAL'),proj.matrix_shape[2]/2)
         
         Publisher.sendMessage('End busy cursor')
+
+    def CreateVTKProject(self, imagedata):
+        proj = prj.Project()
+        proj.imagedata = None
+        proj.name = _("Untitled")
+        proj.SetAcquisitionModality("CT")
+        #TODO: Verify if all Analyse are in AXIAL orientation
+
+        # To get  Z, X, Y (used by InVesaliu), not X, Y, Z
+
+        proj.threshold_range = imagedata.GetScalarRange()
+        proj.window = proj.threshold_range[1] - proj.threshold_range[0]
+        proj.level =  (0.5 * (proj.threshold_range[1] + proj.threshold_range[0]))
+        proj.spacing = imagedata.GetSpacing()
+        proj.matrix_shape = imagedata.GetDimensions()[::-1]
+        proj.original_orientation =  const.AXIAL
+
+        matrix, matrix_filename = image_utils.vtk2mmap(imagedata)
+        proj.matrix_dtype = matrix.dtype.name
+        proj.matrix_filename = matrix_filename
+
+        self.Slice = sl.Slice()
+        self.Slice.matrix = matrix
+        self.Slice.matrix_filename = matrix_filename
+
+        self.Slice.window_level = proj.level
+        self.Slice.window_width = proj.window
+        self.Slice.spacing = proj.spacing
+
+        session = ses.Session()
+        filename = proj.name+".inv3"
+
+        filename = filename.replace("/", "") #Fix problem case other/Skull_DICOM
+
+        dirpath = session.CreateProject(filename)
+
+        Publisher.sendMessage('Update threshold limits list',
+                                   proj.threshold_range)
 
     def CreateAnalyzeProject(self, imagedata):
         header = imagedata.get_header()

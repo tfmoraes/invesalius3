@@ -493,6 +493,16 @@ def dcm2memmap(files, slice_size, orientation, resolution_percentage):
 
     return matrix, scalar_range, temp_file
 
+def vtk2mmap(imagedata):
+    temp_file = tempfile.mktemp()
+    shape = imagedata.GetDimensions()[::-1]
+    array = numpy_support.vtk_to_numpy(imagedata.GetPointData().GetScalars())
+    array.shape = shape
+    matrix = numpy.memmap(temp_file, mode='w+', dtype='int16', shape=shape)
+    matrix[:] = array
+    matrix.flush()
+    return matrix, temp_file
+
 def analyze2mmap(analyze):
     data = analyze.get_data()
     header = analyze.get_header()
