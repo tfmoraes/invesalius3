@@ -107,6 +107,9 @@ class Slice(object):
 
         self.from_ = OTHER
         self.__bind_events()
+        self.qblend = {'AXIAL': {},
+                       'CORONAL': {},
+                       'SAGITAL': {}}
 
     @property
     def matrix(self):
@@ -186,6 +189,11 @@ class Slice(object):
             return shape[1] - 1
         elif orientation == 'SAGITAL':
             return shape[2] - 1
+
+    def discard_all_buffers(self):
+        for buffer_ in self.buffer_slices.values():
+            buffer_.discard_vtk_mask()
+            buffer_.discard_mask()
 
     def OnRemoveMasks(self, pubsub_evt):
         selected_items = pubsub_evt.data
@@ -380,6 +388,12 @@ class Slice(object):
             value = False
             Publisher.sendMessage('Show mask', (index, value))
 
+    def create_temp_mask(self):
+        temp_file = tempfile.mktemp()
+        shape = self.matrix.shape
+        matrix = numpy.memmap(temp_file, mode='w+', dtype='int8', shape=shape)
+        return temp_file, matrix
+
     def edit_mask_pixel(self, operation, index, position, radius, orientation):
         mask = self.buffer_slices[orientation].mask
         image = self.buffer_slices[orientation].image
@@ -509,6 +523,11 @@ class Slice(object):
             self.buffer_slices[orientation].vtk_image = image
             self.buffer_slices[orientation].vtk_mask = mask
 
+        print self.qblend
+        if self.qblend[orientation].get(slice_number, None) is not None:
+            print "BLENDING"
+            final_image = self.do_blend(final_image,
+                                        self.qblend[orientation][slice_number])
         return final_image
 
     def get_image_slice(self, orientation, slice_number, number_slices=1,

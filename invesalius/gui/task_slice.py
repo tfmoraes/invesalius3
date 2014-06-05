@@ -252,6 +252,13 @@ class InnerFoldPanel(wx.Panel):
         self.__id_editor = item.GetId()
         self.last_panel_opened = None
 
+        # Fold 3 - Watershed
+        item = fold_panel.AddFoldPanel(_("Watershed"), collapsed=True)
+        fold_panel.ApplyCaptionStyle(item, style)
+        fold_panel.AddFoldPanelWindow(item, WatershedTool(item), Spacing= 0,
+                                      leftSpacing=0, rightSpacing=0)
+        self.__id_watershed = item.GetId()
+
         #fold_panel.Expand(fold_panel.GetFoldPanel(1))
 
         # Panel sizer to expand fold panel
@@ -284,8 +291,18 @@ class InnerFoldPanel(wx.Panel):
                 Publisher.sendMessage('Disable style', const.SLICE_STATE_EDITOR)
                 self.last_style = None
             else:
-                Publisher.sendMessage('Enable style', const.SLICE_STATE_EDITOR)
+                Publisher.sendMessage('Enable style',
+                                      const.SLICE_STATE_EDITOR)
                 self.last_style = const.SLICE_STATE_EDITOR
+        elif self.__id_watershed == id:
+            if closed:
+                Publisher.sendMessage('Disable style',
+                                      const.SLICE_STATE_WATERSHED)
+                self.last_style = None
+            else:
+                Publisher.sendMessage('Enable style', const.SLICE_STATE_WATERSHED)
+                Publisher.sendMessage('Show help message', 'Mark the object and the background')
+                self.last_style = const.SLICE_STATE_WATERSHED
         else:
             Publisher.sendMessage('Disable style', const.SLICE_STATE_EDITOR)
             self.last_style = None
@@ -686,5 +703,9 @@ class EditionTools(wx.Panel):
     def OnComboBrushOp(self, evt):
         brush_op_id = evt.GetSelection()
         Publisher.sendMessage('Set edition operation', brush_op_id)
+
+
+class WatershedTool(EditionTools):
+    pass
 
 
