@@ -30,12 +30,23 @@ import converters
 import numpy as np
 
 from scipy import ndimage
+from skimage.morphology import watershed
 
 ORIENTATIONS = {
         "AXIAL": const.AXIAL,
         "CORONAL": const.CORONAL,
         "SAGITAL": const.SAGITAL,
         }
+
+BRUSH_FOREGROUND=1
+BRUSH_BACKGROUND=2
+BRUSH_ERASE=3
+
+def get_LUT_value(data, window, level):
+    return np.piecewise(data, 
+                        [data <= (level - 0.5 - (window-1)/2),
+                         data > (level - 0.5 + (window-1)/2)],
+                        [0, 255, lambda data: ((data - (level - 0.5))/(window-1) + 0.5)*(255-0)])
 
 class BaseImageInteractorStyle(vtk.vtkInteractorStyleImage):
     def __init__(self, viewer):
@@ -668,6 +679,10 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         self.AddObserver("MouseMoveEvent", self.OnBrushMove)
 
     def SetUp(self):
+        mask = self.viewer.slice_.current_mask.matrix
+        mask[0] = 1
+        mask[:, 0, :] = 1
+        mask[:, :, 0] = 1
         self._create_mask()
 
     def CleanUp(self):
@@ -723,17 +738,40 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
             coord = slice_data.actor.GetInput().GetPoint(position)
 
         slice_data.cursor.SetPosition(coord)
+
         cursor = slice_data.cursor
+        position = slice_data.actor.GetInput().FindPoint(coord)
         radius = cursor.radius
 
         if position < 0:
             position = viewer.calculate_matrix_position(coord)
 
-        n = self.viewer.slice_data.number
-        self.edit_mask_pixel(viewer._brush_cursor_op, n, cursor.GetPixels(),
-                                    position, radius, viewer.orientation)
-        viewer._flush_buffer = True
+        if iren.GetControlKey():
+            operation = BRUSH_BACKGROUND
+        elif iren.GetShiftKey():
+            operation = BRUSH_ERASE
+        else:
+            operation = BRUSH_FOREGROUND
 
+        if operation == const.BRUSH_DRAW:
+            self.foreground = True
+
+        elif operation == const.BRUSH_ERASE:
+            self.foreground = True
+            
+        n = self.viewer.slice_data.number
+        self.edit_mask_pixel(operation, n, cursor.GetPixels(),
+                                    position, radius, self.orientation)
+        if self.orientation == 'AXIAL':
+            mask = self.matrix[n, :, :]
+        elif self.orientation == 'CORONAL':
+            mask = self.matrix[:, n, :]
+        elif self.orientation == 'SAGITAL':
+            mask = self.matrix[:, :, n]
+        spacing = self.viewer.slice_.spacing
+        vmask = converters.to_vtk(mask, spacing, n, self.orientation)
+        cvmask = do_colour_mask(vmask)
+        self.viewer.slice_.qblend[self.orientation][n] = cvmask
         # TODO: To create a new function to reload images to viewer.
         viewer.OnScrollBar()
 
@@ -763,14 +801,6 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
             
         coord = self.get_coordinate_cursor()
         position = viewer.slice_data.actor.GetInput().FindPoint(coord)
-        operations = [const.BRUSH_DRAW, const.BRUSH_ERASE]
-        operation = operations[iren.GetControlKey()]
-
-        if operation == const.BRUSH_DRAW:
-            self.foreground = True
-
-        elif operation == const.BRUSH_ERASE:
-            self.foreground = True
 
         # when position == -1 the cursos is not over the image, so is not
         # necessary to set the cursor position to world coordinate center of
@@ -787,6 +817,19 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
 
             if position < 0:
                 position = viewer.calculate_matrix_position(coord)
+
+            if iren.GetControlKey():
+                operation = BRUSH_BACKGROUND
+            elif iren.GetShiftKey():
+                operation = BRUSH_ERASE
+            else:
+                operation = BRUSH_FOREGROUND
+
+            if operation == const.BRUSH_DRAW:
+                self.foreground = True
+
+            elif operation == const.BRUSH_ERASE:
+                self.foreground = True
                 
             n = self.viewer.slice_data.number
             self.edit_mask_pixel(operation, n, cursor.GetPixels(),
@@ -825,9 +868,17 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
             mask = self.viewer.slice_.current_mask.matrix[1: , 1:, n+1]
             markers = self.matrix[:, :, n]
 
-        tmp_mask = ndimage.watershed_ift((image - image.min()).astype('uint16'), markers)
+
+        ww = self.viewer.slice_.window_width
+        wl = self.viewer.slice_.window_level
+
+        #tmp_image = get_LUT_value(image, ww, wl).astype('uint16')
+        tmp_image = ndimage.morphological_gradient((image - image.min()).astype('uint16'), 5)
+        print tmp_image.dtype, tmp_image.min(), tmp_image.max()
+        tmp_mask = watershed(tmp_image, markers)
         mask[:] = 0
         mask[tmp_mask == 1] = 255
+        self.viewer._flush_buffer = True
         self.viewer.OnScrollBar(update3D=False)
 
     def get_coordinate_cursor(self):
@@ -910,10 +961,12 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
 
         # Checking if roi_i has at least one element.
         if roi_m.size:
-            if operation == const.BRUSH_DRAW:
+            if operation == BRUSH_FOREGROUND:
                 roi_m[index] = 1
-            elif operation == const.BRUSH_ERASE:
+            elif operation == BRUSH_BACKGROUND:
                 roi_m[index] = 2
+            elif operation == BRUSH_ERASE:
+                roi_m[index] = 0
 
 
 def do_colour_mask(imagedata):
