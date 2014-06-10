@@ -674,11 +674,17 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         self.AddObserver("EnterEvent", self.OnEnterInteractor)
         self.AddObserver("LeaveEvent", self.OnLeaveInteractor)
 
+        self.RemoveObservers("MouseWheelForwardEvent")
+        self.RemoveObservers("MouseWheelBackwardEvent")
+        self.AddObserver("MouseWheelForwardEvent",self.WOnScrollForward)
+        self.AddObserver("MouseWheelBackwardEvent", self.WOnScrollBackward)
+
         self.AddObserver("LeftButtonPressEvent", self.OnBrushClick)
         self.AddObserver("LeftButtonReleaseEvent", self.OnBrushRelease)
         self.AddObserver("MouseMoveEvent", self.OnBrushMove)
 
     def SetUp(self):
+        self.viewer.slice_.do_threshold_to_all_slices()
         mask = self.viewer.slice_.current_mask.matrix
         mask[0] = 1
         mask[:, 0, :] = 1
@@ -687,6 +693,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
 
     def CleanUp(self):
         self._remove_mask()
+        self.viewer.slice_.qblend[self.orientation] = {}
 
     def _create_mask(self):
         if self.matrix is None:
@@ -710,6 +717,35 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         self.viewer.slice_data.cursor.Show(0)
         self.viewer.interactor.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
         self.viewer.interactor.Render()
+
+    def WOnScrollBackward(self, obj, evt):
+        viewer = self.viewer
+        iren = viewer.interactor
+        if iren.GetControlKey():
+            if viewer.slice_.opacity > 0:
+                viewer.slice_.opacity -= 0.1
+                self.viewer.slice_.buffer_slices['AXIAL'].discard_vtk_mask()
+                self.viewer.slice_.buffer_slices['CORONAL'].discard_vtk_mask()
+                self.viewer.slice_.buffer_slices['SAGITAL'].discard_vtk_mask()
+                viewer.OnScrollBar()
+        else:
+            self.OnScrollBackward(obj, evt)
+
+
+    def WOnScrollForward(self, obj, evt):
+        viewer = self.viewer
+        iren = viewer.interactor
+        print "AUIQ"
+        if iren.GetControlKey():
+            if viewer.slice_.opacity < 1:
+                viewer.slice_.opacity += 0.1
+                self.viewer.slice_.buffer_slices['AXIAL'].discard_vtk_mask()
+                self.viewer.slice_.buffer_slices['CORONAL'].discard_vtk_mask()
+                self.viewer.slice_.buffer_slices['SAGITAL'].discard_vtk_mask()
+                viewer.OnScrollBar()
+        else:
+            self.OnScrollForward(obj, evt)
+
 
     def OnBrushClick(self, obj, evt):
         if (self.viewer.slice_.buffer_slices[self.orientation].mask is None):
@@ -873,11 +909,17 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         wl = self.viewer.slice_.window_level
 
         #tmp_image = get_LUT_value(image, ww, wl).astype('uint16')
-        tmp_image = ndimage.morphological_gradient((image - image.min()).astype('uint16'), 5)
+        tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), 5)
         print tmp_image.dtype, tmp_image.min(), tmp_image.max()
         tmp_mask = watershed(tmp_image, markers)
-        mask[:] = 0
-        mask[tmp_mask == 1] = 255
+
+        if self.viewer.overwrite_mask:
+            mask[:] = 0
+            mask[tmp_mask == 1] = 253
+        else:
+            mask[(tmp_mask==2) & ((mask == 0) | (mask == 2) | (mask == 253))] = 2
+            mask[(tmp_mask==1) & ((mask == 0) | (mask == 2) | (mask == 253))] = 253
+
         self.viewer._flush_buffer = True
         self.viewer.OnScrollBar(update3D=False)
 
@@ -942,14 +984,14 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
             index = index[abs(yi):,:]
             yi = 0
         if yf > mask.shape[0]:
-            index = index[:index.shape[0]-(yf-image.shape[0]), :]
+            index = index[:index.shape[0]-(yf-mask.shape[0]), :]
             yf = mask.shape[0]
 
         if xi < 0:
             index = index[:,abs(xi):]
             xi = 0
         if xf > mask.shape[1]:
-            index = index[:,:index.shape[1]-(xf-image.shape[1])]
+            index = index[:,:index.shape[1]-(xf-mask.shape[1])]
             xf = mask.shape[1]
 
         # Verifying if the points is over the image array.

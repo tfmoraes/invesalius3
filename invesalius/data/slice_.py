@@ -107,6 +107,7 @@ class Slice(object):
 
         self.from_ = OTHER
         self.__bind_events()
+        self.opacity = 0.8
         self.qblend = {'AXIAL': {},
                        'CORONAL': {},
                        'SAGITAL': {}}
@@ -1181,6 +1182,19 @@ class Slice(object):
         m[mask == 254] = 254
         return m.astype('uint8')
 
+    def do_threshold_to_all_slices(self):
+        mask = self.current_mask
+
+        # This is very important. Do not use masks' imagedata. It would mess up
+        # surface quality event when using contour
+        #self.SetMaskThreshold(mask.index, threshold)
+        for n in xrange(1, mask.matrix.shape[0]):
+            if mask.matrix[n, 0, 0] == 0:
+                m = mask.matrix[n, 1:, 1:]
+                mask.matrix[n, 1:, 1:] = self.do_threshold_to_a_slice(self.matrix[n-1], m)
+
+        mask.matrix.flush()
+
     def do_colour_image(self, imagedata):
         if self.from_ in (PLIST, WIDGET):
             return imagedata
@@ -1216,8 +1230,10 @@ class Slice(object):
         lut_mask.SetNumberOfTableValues(256)
         lut_mask.SetTableValue(0, 0, 0, 0, 0.0)
         lut_mask.SetTableValue(1, 0, 0, 0, 0.0)
-        lut_mask.SetTableValue(254, r, g, b, 1.0)
-        lut_mask.SetTableValue(255, r, g, b, 1.0)
+        lut_mask.SetTableValue(2, 0, 0, 0, 0.0)
+        lut_mask.SetTableValue(253, r, g, b, self.opacity)
+        lut_mask.SetTableValue(254, r, g, b, self.opacity)
+        lut_mask.SetTableValue(255, r, g, b, self.opacity)
         lut_mask.SetRampToLinear()
         lut_mask.Build()
         # self.lut_mask = lut_mask

@@ -166,6 +166,8 @@ class Viewer(wx.Panel):
         self.last_position_mouse_move = ()
         self.state = const.STATE_DEFAULT
 
+        self.overwrite_mask = False
+
         # All renderers and image actors in this viewer
         self.slice_data_list = []
         self.slice_data = None
@@ -751,6 +753,8 @@ class Viewer(wx.Panel):
         Publisher.subscribe(self.OnSetMIPInvert, 'Set MIP Invert %s' % self.orientation)
         Publisher.subscribe(self.OnShowMIPInterface, 'Show MIP interface')
 
+        Publisher.subscribe(self.OnSetOverwriteMask, "Set overwrite mask")
+
     def SetDefaultCursor(self, pusub_evt):
         self.interactor.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
     
@@ -1247,7 +1251,10 @@ class Viewer(wx.Panel):
             self.mip_ctrls.Hide()
             self.GetSizer().Remove(self.mip_ctrls)
             self.Layout()
-
+    
+    def OnSetOverwriteMask(self, pubsub_evt):
+        value = pubsub_evt.data
+        self.overwrite_mask = value
 
     def set_slice_number(self, index):
         inverted = self.mip_ctrls.inverted.GetValue()

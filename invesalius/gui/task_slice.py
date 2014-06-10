@@ -228,7 +228,7 @@ class InnerFoldPanel(wx.Panel):
         # parent panel. Perhaps we need to insert the item into the sizer also...
         # Study this.
         fold_panel = fpb.FoldPanelBar(self, -1, wx.DefaultPosition,
-                                      (10, 190), 0,fpb.FPB_SINGLE_FOLD)
+                                      (10, 220), 0,fpb.FPB_SINGLE_FOLD)
 
         # Fold panel style
         style = fpb.CaptionBarStyle()
@@ -706,6 +706,156 @@ class EditionTools(wx.Panel):
 
 
 class WatershedTool(EditionTools):
-    pass
+    def __init__(self, parent):
+        wx.Panel.__init__(self, parent, size=(50,240))
+        default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+        self.SetBackgroundColour(default_colour)
+
+        ## LINE 1
+        text1 = wx.StaticText(self, -1, _("Choose brush type, size or operation:"))
+
+        ## LINE 2
+        menu = wx.Menu()
+
+        CIRCLE_BMP = wx.Bitmap("../icons/brush_circle.jpg", wx.BITMAP_TYPE_JPEG)
+        item = wx.MenuItem(menu, MENU_BRUSH_CIRCLE, _("Circle"))
+        item.SetBitmap(CIRCLE_BMP)
+
+        SQUARE_BMP = wx.Bitmap("../icons/brush_square.jpg", wx.BITMAP_TYPE_JPEG)
+        item2 = wx.MenuItem(menu, MENU_BRUSH_SQUARE, _("Square"))
+        item2.SetBitmap(SQUARE_BMP)
+
+        menu.AppendItem(item)
+        menu.AppendItem(item2)
+
+        bmp_brush_format = {const.BRUSH_CIRCLE: CIRCLE_BMP,
+                            const.BRUSH_SQUARE: SQUARE_BMP}
+        selected_bmp = bmp_brush_format[const.DEFAULT_BRUSH_FORMAT]
+
+        btn_brush_format = pbtn.PlateButton(self, wx.ID_ANY,"", selected_bmp,
+                                          style=pbtn.PB_STYLE_SQUARE)
+        btn_brush_format.SetMenu(menu)
+        self.btn_brush_format = btn_brush_format
+
+        spin_brush_size = wx.SpinCtrl(self, -1, "", (20, 50))
+        spin_brush_size.SetRange(1,100)
+        spin_brush_size.SetValue(const.BRUSH_SIZE)
+        spin_brush_size.Bind(wx.EVT_TEXT, self.OnBrushSize)
+        self.spin = spin_brush_size
+
+        combo_brush_op = wx.ComboBox(self, -1, "", size=(15,-1),
+                                     choices = const.BRUSH_OP_NAME,
+                                     style = wx.CB_DROPDOWN|wx.CB_READONLY)
+        combo_brush_op.SetSelection(const.DEFAULT_BRUSH_OP)
+        if sys.platform != 'win32':
+            combo_brush_op.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
+        self.combo_brush_op = combo_brush_op
+
+        # Sizer which represents the second line
+        line2 = wx.BoxSizer(wx.HORIZONTAL)
+        line2.Add(btn_brush_format, 0, wx.EXPAND|wx.GROW|wx.TOP|wx.RIGHT, 0)
+        line2.Add(spin_brush_size, 0, wx.RIGHT, 5)
+        line2.Add(combo_brush_op, 1, wx.EXPAND|wx.TOP|wx.RIGHT|wx.LEFT, 5)
+
+        ## LINE 3
+        text_thresh = wx.StaticText(self, -1, _("Brush threshold range:"))
+
+        ## LINE 4
+        gradient_thresh = grad.GradientCtrl(self, -1, 0, 5000, 0, 5000,
+                                       (0, 0, 255, 100))
+        self.gradient_thresh = gradient_thresh
+        self.bind_evt_gradient = True
+
+        # LINE 5
+        check_box = wx.CheckBox(self, -1, _("Overwrite mask"))
+        self.check_box = check_box
+
+        # Add lines into main sizer
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(text1, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
+        sizer.Add(line2, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
+        sizer.Add(text_thresh, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
+        sizer.Add(gradient_thresh, 0, wx.EXPAND|wx.TOP|wx.LEFT|wx.RIGHT|
+                  wx.BOTTOM, 6)
+        sizer.Add(check_box, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
+        sizer.Fit(self)
+
+        self.SetSizer(sizer)
+        self.Update()
+        self.SetAutoLayout(1)
+
+        self.__bind_events()
+        self.__bind_events_wx()
 
 
+    def __bind_events_wx(self):
+        self.Bind(wx.EVT_MENU, self.OnMenu)
+        self.Bind(grad.EVT_THRESHOLD_CHANGED, self.OnGradientChanged,
+                  self.gradient_thresh)
+        self.combo_brush_op.Bind(wx.EVT_COMBOBOX, self.OnComboBrushOp)
+        self.check_box.Bind(wx.EVT_CHECKBOX, self.OnCheckOverwriteMask)
+
+    def __bind_events(self):
+        Publisher.subscribe(self.SetThresholdBounds,
+                                        'Update threshold limits')
+        Publisher.subscribe(self.ChangeMaskColour, 'Change mask colour')
+        Publisher.subscribe(self.SetGradientColour, 'Add mask')
+
+    def ChangeMaskColour(self, pubsub_evt):
+        colour = pubsub_evt.data
+        self.gradient_thresh.SetColour(colour)
+
+    def SetGradientColour(self, pubsub_evt):
+        vtk_colour = pubsub_evt.data[3]
+        wx_colour = [c*255 for c in vtk_colour]
+        self.gradient_thresh.SetColour(wx_colour)
+
+    def SetThresholdValues(self, pubsub_evt):
+        thresh_min, thresh_max = pubsub_evt.data
+        self.bind_evt_gradient = False
+        self.gradient_thresh.SetMinValue(thresh_min)
+        self.gradient_thresh.SetMaxValue(thresh_max)
+        self.bind_evt_gradient = True
+
+    def SetThresholdBounds(self, pubsub_evt):
+        thresh_min = pubsub_evt.data[0]
+        thresh_max  = pubsub_evt.data[1]
+        self.gradient_thresh.SetMinRange(thresh_min)
+        self.gradient_thresh.SetMaxRange(thresh_max)
+        self.gradient_thresh.SetMinValue(thresh_min)
+        self.gradient_thresh.SetMaxValue(thresh_max)
+
+    def OnGradientChanged(self, evt):
+        thresh_min = self.gradient_thresh.GetMinValue()
+        thresh_max = self.gradient_thresh.GetMaxValue()
+        if self.bind_evt_gradient:
+            Publisher.sendMessage('Set edition threshold values',
+                                     (thresh_min, thresh_max))
+
+    def OnMenu(self, evt):
+        SQUARE_BMP = wx.Bitmap("../icons/brush_square.jpg", wx.BITMAP_TYPE_JPEG)
+        CIRCLE_BMP = wx.Bitmap("../icons/brush_circle.jpg", wx.BITMAP_TYPE_JPEG)
+
+        brush = {MENU_BRUSH_CIRCLE: const.BRUSH_CIRCLE,
+                 MENU_BRUSH_SQUARE: const.BRUSH_SQUARE}
+        bitmap = {MENU_BRUSH_CIRCLE: CIRCLE_BMP,
+                  MENU_BRUSH_SQUARE: SQUARE_BMP}
+
+        self.btn_brush_format.SetBitmap(bitmap[evt.GetId()])
+
+        Publisher.sendMessage('Set brush format', brush[evt.GetId()])
+
+    def OnBrushSize(self, evt):
+        """ """
+        # FIXME: Using wx.EVT_SPINCTRL in MacOS it doesnt capture changes only
+        # in the text ctrl - so we are capturing only changes on text
+        # Strangelly this is being called twice
+        Publisher.sendMessage('Set edition brush size',self.spin.GetValue())
+
+    def OnComboBrushOp(self, evt):
+        brush_op_id = evt.GetSelection()
+        Publisher.sendMessage('Set edition operation', brush_op_id)
+
+    def OnCheckOverwriteMask(self, evt):
+        value = self.check_box.GetValue()
+        Publisher.sendMessage('Set overwrite mask', value)
