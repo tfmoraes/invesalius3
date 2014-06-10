@@ -665,6 +665,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
 
         self.viewer = viewer
         self.orientation = self.viewer.orientation
+        self.matrix = None
 
         self.foreground = False
         self.background = False
@@ -694,13 +695,16 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         self._create_mask()
 
     def CleanUp(self):
-        self._remove_mask()
+        #self._remove_mask()
         self.viewer.slice_.qblend[self.orientation] = {}
 
     def _create_mask(self):
         if self.matrix is None:
-            self.temp_file, self.matrix = self.viewer.slice_.create_temp_mask()
-            print "created", self.temp_file
+            try:
+                self.matrix = self.viewer.slice_.aux_matrices['watershed']
+            except KeyError:
+                self.temp_file, self.matrix = self.viewer.slice_.create_temp_mask()
+                self.viewer.slice_.aux_matrices['watershed'] = self.matrix
 
     def _remove_mask(self):
         if self.matrix is not None:

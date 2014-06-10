@@ -84,6 +84,7 @@ class Slice(object):
         self.blend_filter = None
         self.histogram = None
         self._matrix = None
+        self.aux_matrices = {}
 
         self._type_projection = const.PROJECTION_NORMAL
         self.n_border = const.PROJECTION_BORDER_SIZE
