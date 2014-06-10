@@ -228,7 +228,7 @@ class InnerFoldPanel(wx.Panel):
         # parent panel. Perhaps we need to insert the item into the sizer also...
         # Study this.
         fold_panel = fpb.FoldPanelBar(self, -1, wx.DefaultPosition,
-                                      (10, 220), 0,fpb.FPB_SINGLE_FOLD)
+                                      (10, 240), 0,fpb.FPB_SINGLE_FOLD)
 
         # Fold panel style
         style = fpb.CaptionBarStyle()
@@ -707,7 +707,7 @@ class EditionTools(wx.Panel):
 
 class WatershedTool(EditionTools):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, size=(50,240))
+        wx.Panel.__init__(self, parent, size=(50,250))
         default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
         self.SetBackgroundColour(default_colour)
 
@@ -770,6 +770,9 @@ class WatershedTool(EditionTools):
         check_box = wx.CheckBox(self, -1, _("Overwrite mask"))
         self.check_box = check_box
 
+        # Line 6
+        self.btn_exp_watershed = wx.Button(self, -1, _('Expand watershed to 3D'))
+
         # Add lines into main sizer
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(text1, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
@@ -778,6 +781,7 @@ class WatershedTool(EditionTools):
         sizer.Add(gradient_thresh, 0, wx.EXPAND|wx.TOP|wx.LEFT|wx.RIGHT|
                   wx.BOTTOM, 6)
         sizer.Add(check_box, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
+        sizer.Add(self.btn_exp_watershed, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
         sizer.Fit(self)
 
         self.SetSizer(sizer)
@@ -794,6 +798,7 @@ class WatershedTool(EditionTools):
                   self.gradient_thresh)
         self.combo_brush_op.Bind(wx.EVT_COMBOBOX, self.OnComboBrushOp)
         self.check_box.Bind(wx.EVT_CHECKBOX, self.OnCheckOverwriteMask)
+        self.btn_exp_watershed.Bind(wx.EVT_BUTTON, self.OnExpandWatershed)
 
     def __bind_events(self):
         Publisher.subscribe(self.SetThresholdBounds,
@@ -859,3 +864,6 @@ class WatershedTool(EditionTools):
     def OnCheckOverwriteMask(self, evt):
         value = self.check_box.GetValue()
         Publisher.sendMessage('Set overwrite mask', value)
+
+    def OnExpandWatershed(self, evt):
+        Publisher.sendMessage('Expand watershed to 3D AXIAL')

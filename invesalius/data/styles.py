@@ -683,6 +683,8 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         self.AddObserver("LeftButtonReleaseEvent", self.OnBrushRelease)
         self.AddObserver("MouseMoveEvent", self.OnBrushMove)
 
+        Publisher.subscribe(self.expand_watershed, 'Expand watershed to 3D ' + self.orientation)
+
     def SetUp(self):
         self.viewer.slice_.do_threshold_to_all_slices()
         mask = self.viewer.slice_.current_mask.matrix
@@ -1009,6 +1011,26 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
                 roi_m[index] = 2
             elif operation == BRUSH_ERASE:
                 roi_m[index] = 0
+
+    def expand_watershed(self, pubsub_evt):
+        markers = self.matrix
+        image = self.viewer.slice_.matrix
+        mask = self.viewer.slice_.current_mask.matrix[1:, 1:, 1:]
+        ww = self.viewer.slice_.window_width
+        wl = self.viewer.slice_.window_level
+        tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), 5)
+        print tmp_image
+        tmp_mask = watershed(tmp_image, markers)
+
+        mask[:] = 0
+        mask[(tmp_mask==1)] = 253
+        mask[0] = 1
+        mask[:, 0, :] = 1
+        mask[:, :, 0] = 1
+
+        self.viewer._flush_buffer = True
+        self.viewer.slice_.discard_all_buffers()
+        self.viewer.OnScrollBar(update3D=False)
 
 
 def do_colour_mask(imagedata):
