@@ -30,7 +30,9 @@ import converters
 import numpy as np
 
 from scipy import ndimage
+from scipy.misc import imsave
 from skimage.morphology import watershed
+from skimage import filter
 
 ORIENTATIONS = {
         "AXIAL": const.AXIAL,
@@ -815,6 +817,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         cvmask = do_colour_mask(vmask)
         self.viewer.slice_.qblend[self.orientation][n] = cvmask
         # TODO: To create a new function to reload images to viewer.
+        viewer._flush_buffer = True
         viewer.OnScrollBar()
 
     def OnBrushMove(self, obj, evt):
@@ -898,16 +901,19 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         if self.orientation == 'AXIAL':
             image = self.viewer.slice_.matrix[n]
             mask = self.viewer.slice_.current_mask.matrix[n+1, 1:, 1:]
+            self.viewer.slice_.current_mask.matrix[n+1, 0, 0] = 1
             markers = self.matrix[n]
 
         elif self.orientation == 'CORONAL':
             image = self.viewer.slice_.matrix[:, n, :]
             mask = self.viewer.slice_.current_mask.matrix[1:, n+1, 1:]
+            self.viewer.slice_.current_mask.matrix[0, n+1, 0]
             markers = self.matrix[:, n, :]
 
         elif self.orientation == 'SAGITAL':
             image = self.viewer.slice_.matrix[:, :, n]
             mask = self.viewer.slice_.current_mask.matrix[1: , 1:, n+1]
+            self.viewer.slice_.current_mask.matrix[0 , 0, n+1]
             markers = self.matrix[:, :, n]
 
 
@@ -915,7 +921,8 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         wl = self.viewer.slice_.window_level
 
         #tmp_image = get_LUT_value(image, ww, wl).astype('uint16')
-        tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), 5)
+        tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), 3)
+        imsave('/tmp/manolo.png', tmp_image)
         print tmp_image.dtype, tmp_image.min(), tmp_image.max()
         tmp_mask = watershed(tmp_image, markers)
 
@@ -926,7 +933,9 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
             mask[(tmp_mask==2) & ((mask == 0) | (mask == 2) | (mask == 253))] = 2
             mask[(tmp_mask==1) & ((mask == 0) | (mask == 2) | (mask == 253))] = 253
 
-        self.viewer._flush_buffer = True
+
+        self.viewer.slice_.current_mask.was_edited = True
+        self.viewer._flush_buffer = False
         self.viewer.OnScrollBar(update3D=False)
 
     def get_coordinate_cursor(self):
@@ -1027,10 +1036,11 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         tmp_mask = watershed(tmp_image, markers)
 
         mask[:] = 0
-        mask[(tmp_mask==1)] = 253
-        mask[0] = 1
-        mask[:, 0, :] = 1
-        mask[:, :, 0] = 1
+        mask[(tmp_mask == 1)] = 253
+        #mask[:] = tmp_mask
+        self.viewer.slice_.current_mask.matrix[0] = 1
+        self.viewer.slice_.current_mask.matrix[:, 0, :] = 1
+        self.viewer.slice_.current_mask.matrix[:, :, 0] = 1
 
         self.viewer._flush_buffer = True
         self.viewer.slice_.discard_all_buffers()

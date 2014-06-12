@@ -525,9 +525,7 @@ class Slice(object):
             self.buffer_slices[orientation].vtk_image = image
             self.buffer_slices[orientation].vtk_mask = mask
 
-        print self.qblend
         if self.qblend[orientation].get(slice_number, None) is not None:
-            print "BLENDING"
             final_image = self.do_blend(final_image,
                                         self.qblend[orientation][slice_number])
         return final_image
