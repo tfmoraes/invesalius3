@@ -672,6 +672,8 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         self.foreground = False
         self.background = False
 
+        self.mg_size = 3
+
         self.picker = vtk.vtkWorldPointPicker()
 
         self.AddObserver("EnterEvent", self.OnEnterInteractor)
@@ -699,6 +701,8 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
     def CleanUp(self):
         #self._remove_mask()
         self.viewer.slice_.qblend[self.orientation] = {}
+        Publisher.unsubscribe(self.expand_watershed, 'Expand watershed to 3D ' + self.orientation)
+        self.RemoveAllObservers()
 
     def _create_mask(self):
         if self.matrix is None:
@@ -743,7 +747,6 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
     def WOnScrollForward(self, obj, evt):
         viewer = self.viewer
         iren = viewer.interactor
-        print "AUIQ"
         if iren.GetControlKey():
             if viewer.slice_.opacity < 1:
                 viewer.slice_.opacity += 0.1
@@ -921,8 +924,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         wl = self.viewer.slice_.window_level
 
         #tmp_image = get_LUT_value(image, ww, wl).astype('uint16')
-        tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), 3)
-        imsave('/tmp/manolo.png', tmp_image)
+        tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), self.mg_size)
         print tmp_image.dtype, tmp_image.min(), tmp_image.max()
         tmp_mask = watershed(tmp_image, markers)
 
@@ -1031,7 +1033,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         mask = self.viewer.slice_.current_mask.matrix[1:, 1:, 1:]
         ww = self.viewer.slice_.window_width
         wl = self.viewer.slice_.window_level
-        tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), 5)
+        tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), self.mg_size)
         print tmp_image
         tmp_mask = watershed(tmp_image, markers)
 
