@@ -722,12 +722,12 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         if (self.viewer.slice_.buffer_slices[self.orientation].mask is None):
             return
         self.viewer.slice_data.cursor.Show()
-        self.viewer.interactor.SetCursor(wx.StockCursor(wx.CURSOR_BLANK))
+        #self.viewer.interactor.SetCursor(wx.StockCursor(wx.CURSOR_BLANK))
         self.viewer.interactor.Render()
         
     def OnLeaveInteractor(self, obj, evt):
         self.viewer.slice_data.cursor.Show(0)
-        self.viewer.interactor.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
+        #self.viewer.interactor.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
         self.viewer.interactor.Render()
 
     def WOnScrollBackward(self, obj, evt):
