@@ -820,7 +820,6 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         cvmask = do_colour_mask(vmask)
         self.viewer.slice_.qblend[self.orientation][n] = cvmask
         # TODO: To create a new function to reload images to viewer.
-        viewer._flush_buffer = True
         viewer.OnScrollBar()
 
     def OnBrushMove(self, obj, evt):
@@ -937,7 +936,6 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
 
 
         self.viewer.slice_.current_mask.was_edited = True
-        self.viewer._flush_buffer = False
         self.viewer.OnScrollBar(update3D=False)
 
     def get_coordinate_cursor(self):
@@ -1044,7 +1042,6 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         self.viewer.slice_.current_mask.matrix[:, 0, :] = 1
         self.viewer.slice_.current_mask.matrix[:, :, 0] = 1
 
-        self.viewer._flush_buffer = True
         self.viewer.slice_.discard_all_buffers()
         self.viewer.OnScrollBar(update3D=False)
 
