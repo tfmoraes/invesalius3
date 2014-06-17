@@ -85,6 +85,7 @@ class Slice(object):
         self.histogram = None
         self._matrix = None
         self.aux_matrices = {}
+        self.state = const.STATE_DEFAULT
 
         self._type_projection = const.PROJECTION_NORMAL
         self.n_border = const.PROJECTION_BORDER_SIZE
@@ -238,6 +239,7 @@ class Slice(object):
         if (state in const.SLICE_STYLES):
             new_state = self.interaction_style.AddState(state)
             Publisher.sendMessage('Set slice interaction style', new_state)
+        self.state = state
 
     def OnDisableStyle(self, pubsub_evt):
         state = pubsub_evt.data
@@ -495,7 +497,7 @@ class Slice(object):
                     print "Do not getting from buffer"
                     n_mask = self.get_mask_slice(orientation, slice_number)
                     mask = converters.to_vtk(n_mask, self.spacing, slice_number, orientation)
-                    mask = self.do_colour_mask(mask)
+                    mask = self.do_colour_mask(mask, self.opacity)
                     self.buffer_slices[orientation].mask = n_mask
                 final_image = self.do_blend(image, mask)
                 self.buffer_slices[orientation].vtk_mask = mask
@@ -512,7 +514,7 @@ class Slice(object):
             if self.current_mask and self.current_mask.is_shown:
                 n_mask = self.get_mask_slice(orientation, slice_number)
                 mask = converters.to_vtk(n_mask, self.spacing, slice_number, orientation)
-                mask = self.do_colour_mask(mask)
+                mask = self.do_colour_mask(mask, self.opacity)
                 final_image = self.do_blend(image, mask)
             else:
                 n_mask = None
@@ -525,9 +527,13 @@ class Slice(object):
             self.buffer_slices[orientation].vtk_image = image
             self.buffer_slices[orientation].vtk_mask = mask
 
-        if self.qblend[orientation].get(slice_number, None) is not None:
-            final_image = self.do_blend(final_image,
-                                        self.qblend[orientation][slice_number])
+        if self.state == const.SLICE_STATE_WATERSHED:
+            m = self.get_aux_slice('watershed', orientation, slice_number)
+            tmp_vimage = converters.to_vtk(m, self.spacing, slice_number, orientation)
+            cimage = self.do_custom_colour(tmp_vimage, {0: (0.0, 0.0, 0.0, 0.0),
+                                                        1: (0.0, 1.0, 0.0, 1.0),
+                                                        2: (1.0, 0.0, 0.0, 1.0)})
+            final_image = self.do_blend(final_image, cimage)
         return final_image
 
     def get_image_slice(self, orientation, slice_number, number_slices=1,
@@ -719,6 +725,15 @@ class Slice(object):
                                 dtype=self.current_mask.matrix.dtype)
 
         return n_mask
+
+    def get_aux_slice(self, name, orientation, n):
+        m = self.aux_matrices[name]
+        if orientation == 'AXIAL':
+            return numpy.array(m[n])
+        elif orientation == 'CORONAL':
+            return numpy.array(m[:, n, :])
+        elif orientation == 'SAGITAL':
+            return numpy.array(m[:, :, n])
 
     def GetNumberOfSlices(self, orientation):
         if orientation == 'AXIAL':
@@ -1215,7 +1230,7 @@ class Slice(object):
 
             return img_colours_bg.GetOutput()
 
-    def do_colour_mask(self, imagedata):
+    def do_colour_mask(self, imagedata, opacity):
         scalar_range = int(imagedata.GetScalarRange()[1])
         r, g, b = self.current_mask.colour
 
@@ -1230,9 +1245,41 @@ class Slice(object):
         lut_mask.SetTableValue(0, 0, 0, 0, 0.0)
         lut_mask.SetTableValue(1, 0, 0, 0, 0.0)
         lut_mask.SetTableValue(2, 0, 0, 0, 0.0)
-        lut_mask.SetTableValue(253, r, g, b, self.opacity)
-        lut_mask.SetTableValue(254, r, g, b, self.opacity)
-        lut_mask.SetTableValue(255, r, g, b, self.opacity)
+        lut_mask.SetTableValue(253, r, g, b, opacity)
+        lut_mask.SetTableValue(254, r, g, b, opacity)
+        lut_mask.SetTableValue(255, r, g, b, opacity)
+        lut_mask.SetRampToLinear()
+        lut_mask.Build()
+        # self.lut_mask = lut_mask
+
+        # map the input image through a lookup table
+        img_colours_mask = vtk.vtkImageMapToColors()
+        img_colours_mask.SetLookupTable(lut_mask)
+        img_colours_mask.SetOutputFormatToRGBA()
+        img_colours_mask.SetInput(imagedata)
+        img_colours_mask.Update()
+        # self.img_colours_mask = img_colours_mask
+
+        return img_colours_mask.GetOutput()
+
+    def do_custom_colour(self, imagedata, map_colours):
+        # map scalar values into colors
+        minv = min(map_colours)
+        maxv = max(map_colours)
+        ncolours = maxv - minv + 1
+
+        lut_mask = vtk.vtkLookupTable()
+        lut_mask.SetNumberOfColors(ncolours)
+        lut_mask.SetHueRange(const.THRESHOLD_HUE_RANGE)
+        lut_mask.SetSaturationRange(1, 1)
+        lut_mask.SetValueRange(minv, maxv)
+        lut_mask.SetRange(minv, maxv)
+        lut_mask.SetNumberOfTableValues(ncolours)
+
+        for v in map_colours:
+            r,g, b,a = map_colours[v]
+            lut_mask.SetTableValue(v, r, g, b, a)
+
         lut_mask.SetRampToLinear()
         lut_mask.Build()
         # self.lut_mask = lut_mask

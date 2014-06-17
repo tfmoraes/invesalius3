@@ -700,7 +700,6 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
 
     def CleanUp(self):
         #self._remove_mask()
-        self.viewer.slice_.qblend[self.orientation] = {}
         Publisher.unsubscribe(self.expand_watershed, 'Expand watershed to 3D ' + self.orientation)
         self.RemoveAllObservers()
 
@@ -815,10 +814,6 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
             mask = self.matrix[:, n, :]
         elif self.orientation == 'SAGITAL':
             mask = self.matrix[:, :, n]
-        spacing = self.viewer.slice_.spacing
-        vmask = converters.to_vtk(mask, spacing, n, self.orientation)
-        cvmask = do_colour_mask(vmask)
-        self.viewer.slice_.qblend[self.orientation][n] = cvmask
         # TODO: To create a new function to reload images to viewer.
         viewer.OnScrollBar()
 
@@ -887,10 +882,6 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
                 mask = self.matrix[:, n, :]
             elif self.orientation == 'SAGITAL':
                 mask = self.matrix[:, :, n]
-            spacing = self.viewer.slice_.spacing
-            vmask = converters.to_vtk(mask, spacing, n, self.orientation)
-            cvmask = do_colour_mask(vmask)
-            self.viewer.slice_.qblend[self.orientation][n] = cvmask
             # TODO: To create a new function to reload images to viewer.
             viewer.OnScrollBar(update3D=False)
 
@@ -1044,37 +1035,6 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
 
         self.viewer.slice_.discard_all_buffers()
         self.viewer.OnScrollBar(update3D=False)
-
-
-def do_colour_mask(imagedata):
-    scalar_range = int(imagedata.GetScalarRange()[1])
-    r,g,b = 0, 1, 0
-
-    # map scalar values into colors
-    lut_mask = vtk.vtkLookupTable()
-    lut_mask.SetNumberOfColors(3)
-    lut_mask.SetHueRange(const.THRESHOLD_HUE_RANGE)
-    lut_mask.SetSaturationRange(1, 1)
-    lut_mask.SetValueRange(0, 2)
-    lut_mask.SetRange(0, 2)
-    lut_mask.SetNumberOfTableValues(3)
-    lut_mask.SetTableValue(0, 0, 0, 0, 0.0)
-    lut_mask.SetTableValue(1, 0, 1, 0, 1.0)
-    lut_mask.SetTableValue(2, 1, 0, 0, 1.0)
-    lut_mask.SetRampToLinear()
-    lut_mask.Build()
-    # self.lut_mask = lut_mask
-
-    # map the input image through a lookup table
-    img_colours_mask = vtk.vtkImageMapToColors()
-    img_colours_mask.SetLookupTable(lut_mask)
-    img_colours_mask.SetOutputFormatToRGBA()
-    img_colours_mask.SetInput(imagedata)
-    img_colours_mask.Update()
-    # self.img_colours_mask = img_colours_mask
-
-    return img_colours_mask.GetOutput()
-
 
 
 def get_style(style):
