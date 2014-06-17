@@ -110,9 +110,6 @@ class Slice(object):
         self.from_ = OTHER
         self.__bind_events()
         self.opacity = 0.8
-        self.qblend = {'AXIAL': {},
-                       'CORONAL': {},
-                       'SAGITAL': {}}
 
     @property
     def matrix(self):
