@@ -281,6 +281,7 @@ class InnerFoldPanel(wx.Panel):
     def __bind_pubsub_evt(self):
         Publisher.subscribe(self.OnRetrieveStyle, 'Retrieve task slice style')
         Publisher.subscribe(self.OnDisableStyle, 'Disable task slice style')
+        Publisher.subscribe(self.OnCloseProject, 'Close project data')
 
     def OnFoldPressCaption(self, evt):
         id = evt.GetTag().GetId()
@@ -316,6 +317,9 @@ class InnerFoldPanel(wx.Panel):
     def OnDisableStyle(self, pubsub_evt):
         if (self.last_style == const.SLICE_STATE_EDITOR):
             Publisher.sendMessage('Disable style', const.SLICE_STATE_EDITOR)
+
+    def OnCloseProject(self, pubsub_evt):
+        self.fold_panel.Expand(self.fold_panel.GetFoldPanel(0))
 
     def GetMaskSelected(self):
         x= self.mask_prop_panel.GetMaskSelected()
@@ -758,13 +762,8 @@ class WatershedTool(EditionTools):
         line2.Add(combo_brush_op, 1, wx.EXPAND|wx.TOP|wx.RIGHT|wx.LEFT, 5)
 
         ## LINE 3
-        text_thresh = wx.StaticText(self, -1, _("Brush threshold range:"))
 
         ## LINE 4
-        gradient_thresh = grad.GradientCtrl(self, -1, 0, 5000, 0, 5000,
-                                       (0, 0, 255, 100))
-        self.gradient_thresh = gradient_thresh
-        self.bind_evt_gradient = True
 
         # LINE 5
         check_box = wx.CheckBox(self, -1, _("Overwrite mask"))
@@ -777,9 +776,6 @@ class WatershedTool(EditionTools):
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(text1, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
         sizer.Add(line2, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
-        sizer.Add(text_thresh, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
-        sizer.Add(gradient_thresh, 0, wx.EXPAND|wx.TOP|wx.LEFT|wx.RIGHT|
-                  wx.BOTTOM, 6)
         sizer.Add(check_box, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
         sizer.Add(self.btn_exp_watershed, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
         sizer.Fit(self)
@@ -788,23 +784,14 @@ class WatershedTool(EditionTools):
         self.Update()
         self.SetAutoLayout(1)
 
-        self.__bind_events()
         self.__bind_events_wx()
 
 
     def __bind_events_wx(self):
         self.Bind(wx.EVT_MENU, self.OnMenu)
-        self.Bind(grad.EVT_THRESHOLD_CHANGED, self.OnGradientChanged,
-                  self.gradient_thresh)
         self.combo_brush_op.Bind(wx.EVT_COMBOBOX, self.OnComboBrushOp)
         self.check_box.Bind(wx.EVT_CHECKBOX, self.OnCheckOverwriteMask)
         self.btn_exp_watershed.Bind(wx.EVT_BUTTON, self.OnExpandWatershed)
-
-    def __bind_events(self):
-        Publisher.subscribe(self.SetThresholdBounds,
-                                        'Update threshold limits')
-        Publisher.subscribe(self.ChangeMaskColour, 'Change mask colour')
-        Publisher.subscribe(self.SetGradientColour, 'Add mask')
 
     def ChangeMaskColour(self, pubsub_evt):
         colour = pubsub_evt.data
@@ -829,13 +816,6 @@ class WatershedTool(EditionTools):
         self.gradient_thresh.SetMaxRange(thresh_max)
         self.gradient_thresh.SetMinValue(thresh_min)
         self.gradient_thresh.SetMaxValue(thresh_max)
-
-    def OnGradientChanged(self, evt):
-        thresh_min = self.gradient_thresh.GetMinValue()
-        thresh_max = self.gradient_thresh.GetMaxValue()
-        if self.bind_evt_gradient:
-            Publisher.sendMessage('Set edition threshold values',
-                                     (thresh_min, thresh_max))
 
     def OnMenu(self, evt):
         SQUARE_BMP = wx.Bitmap("../icons/brush_square.jpg", wx.BITMAP_TYPE_JPEG)

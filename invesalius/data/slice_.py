@@ -246,6 +246,7 @@ class Slice(object):
 
             if (state == const.SLICE_STATE_EDITOR):
                 Publisher.sendMessage('Set interactor default cursor')
+            self.state = new_state
 
     def OnCloseProject(self, pubsub_evt):
         self.CloseProject()
@@ -258,9 +259,18 @@ class Slice(object):
         os.remove(f)
         self.current_mask = None
 
+        for name in self.aux_matrices:
+            m = self.aux_matrices[name]
+            f = m.filename
+            m._mmap.close()
+            m = None
+            os.remove(f)
+        self.aux_matrices = {}
+
         self.values = None
         self.nodes = None
         self.from_= OTHER
+        self.state = const.STATE_DEFAULT
 
         self.number_of_colours = 256
         self.saturation_range = (0, 0)
@@ -392,7 +402,7 @@ class Slice(object):
     def create_temp_mask(self):
         temp_file = tempfile.mktemp()
         shape = self.matrix.shape
-        matrix = numpy.memmap(temp_file, mode='w+', dtype='int8', shape=shape)
+        matrix = numpy.memmap(temp_file, mode='w+', dtype='uint8', shape=shape)
         return temp_file, matrix
 
     def edit_mask_pixel(self, operation, index, position, radius, orientation):
