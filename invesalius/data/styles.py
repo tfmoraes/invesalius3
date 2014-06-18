@@ -42,7 +42,7 @@ ORIENTATIONS = {
 
 BRUSH_FOREGROUND=1
 BRUSH_BACKGROUND=2
-BRUSH_ERASE=3
+BRUSH_ERASE=0
 
 def get_LUT_value(data, window, level):
     return np.piecewise(data, 
@@ -1009,12 +1009,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
 
         # Checking if roi_i has at least one element.
         if roi_m.size:
-            if operation == BRUSH_FOREGROUND:
-                roi_m[index] = 1
-            elif operation == BRUSH_BACKGROUND:
-                roi_m[index] = 2
-            elif operation == BRUSH_ERASE:
-                roi_m[index] = 0
+            roi_m[index] = operation
 
     def expand_watershed(self, pubsub_evt):
         markers = self.matrix
