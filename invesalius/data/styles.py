@@ -912,21 +912,20 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
 
         ww = self.viewer.slice_.window_width
         wl = self.viewer.slice_.window_level
+        
+        if BRUSH_BACKGROUND in markers and BRUSH_FOREGROUND in markers:
+            tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), self.mg_size)
+            tmp_mask = watershed(tmp_image, markers)
 
-        #tmp_image = get_LUT_value(image, ww, wl).astype('uint16')
-        tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), self.mg_size)
-        print tmp_image.dtype, tmp_image.min(), tmp_image.max()
-        tmp_mask = watershed(tmp_image, markers)
-
-        if self.viewer.overwrite_mask:
-            mask[:] = 0
-            mask[tmp_mask == 1] = 253
-        else:
-            mask[(tmp_mask==2) & ((mask == 0) | (mask == 2) | (mask == 253))] = 2
-            mask[(tmp_mask==1) & ((mask == 0) | (mask == 2) | (mask == 253))] = 253
+            if self.viewer.overwrite_mask:
+                mask[:] = 0
+                mask[tmp_mask == 1] = 253
+            else:
+                mask[(tmp_mask==2) & ((mask == 0) | (mask == 2) | (mask == 253))] = 2
+                mask[(tmp_mask==1) & ((mask == 0) | (mask == 2) | (mask == 253))] = 253
 
 
-        self.viewer.slice_.current_mask.was_edited = True
+            self.viewer.slice_.current_mask.was_edited = True
         self.viewer.OnScrollBar(update3D=False)
 
     def get_coordinate_cursor(self):
@@ -1017,19 +1016,24 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         mask = self.viewer.slice_.current_mask.matrix[1:, 1:, 1:]
         ww = self.viewer.slice_.window_width
         wl = self.viewer.slice_.window_level
-        tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), self.mg_size)
-        print tmp_image
-        tmp_mask = watershed(tmp_image, markers)
+        if BRUSH_BACKGROUND in markers and BRUSH_FOREGROUND in markers:
+            tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), self.mg_size)
+            tmp_mask = watershed(tmp_image, markers)
 
-        mask[:] = 0
-        mask[(tmp_mask == 1)] = 253
-        #mask[:] = tmp_mask
-        self.viewer.slice_.current_mask.matrix[0] = 1
-        self.viewer.slice_.current_mask.matrix[:, 0, :] = 1
-        self.viewer.slice_.current_mask.matrix[:, :, 0] = 1
+            if self.viewer.overwrite_mask:
+                mask[:] = 0
+                mask[tmp_mask == 1] = 253
+            else:
+                mask[(tmp_mask==2) & ((mask == 0) | (mask == 2) | (mask == 253))] = 2
+                mask[(tmp_mask==1) & ((mask == 0) | (mask == 2) | (mask == 253))] = 253
 
-        self.viewer.slice_.discard_all_buffers()
-        self.viewer.OnScrollBar(update3D=False)
+            #mask[:] = tmp_mask
+            self.viewer.slice_.current_mask.matrix[0] = 1
+            self.viewer.slice_.current_mask.matrix[:, 0, :] = 1
+            self.viewer.slice_.current_mask.matrix[:, :, 0] = 1
+
+            self.viewer.slice_.discard_all_buffers()
+            self.viewer.OnScrollBar(update3D=False)
 
 
 def get_style(style):
