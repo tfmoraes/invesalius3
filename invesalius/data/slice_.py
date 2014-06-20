@@ -534,7 +534,7 @@ class Slice(object):
             self.buffer_slices[orientation].vtk_image = image
             self.buffer_slices[orientation].vtk_mask = mask
 
-        if self.state == const.SLICE_STATE_WATERSHED:
+        if self.state == const.SLICE_STATE_WATERSHED and self.current_mask.is_shown:
             m = self.get_aux_slice('watershed', orientation, slice_number)
             tmp_vimage = converters.to_vtk(m, self.spacing, slice_number, orientation)
             cimage = self.do_custom_colour(tmp_vimage, {0: (0.0, 0.0, 0.0, 0.0),
