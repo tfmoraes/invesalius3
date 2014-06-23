@@ -748,9 +748,11 @@ class WatershedTool(EditionTools):
         self.spin = spin_brush_size
 
         combo_brush_op = wx.ComboBox(self, -1, "", size=(15,-1),
-                                     choices = const.BRUSH_OP_NAME,
+                                     choices = (_("Foreground"),
+                                                _("Background"),
+                                                _("Erase")),
                                      style = wx.CB_DROPDOWN|wx.CB_READONLY)
-        combo_brush_op.SetSelection(const.DEFAULT_BRUSH_OP)
+        combo_brush_op.SetSelection(0)
         if sys.platform != 'win32':
             combo_brush_op.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
         self.combo_brush_op = combo_brush_op
@@ -838,8 +840,8 @@ class WatershedTool(EditionTools):
         Publisher.sendMessage('Set edition brush size',self.spin.GetValue())
 
     def OnComboBrushOp(self, evt):
-        brush_op_id = evt.GetSelection()
-        Publisher.sendMessage('Set edition operation', brush_op_id)
+        brush_op = self.combo_brush_op.GetValue()
+        Publisher.sendMessage('Set watershed operation', brush_op)
 
     def OnCheckOverwriteMask(self, evt):
         value = self.check_box.GetValue()

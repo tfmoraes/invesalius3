@@ -44,6 +44,10 @@ BRUSH_FOREGROUND=1
 BRUSH_BACKGROUND=2
 BRUSH_ERASE=0
 
+WATERSHED_OPERATIONS = {_("Erase"): BRUSH_ERASE,
+                        _("Foreground"): BRUSH_FOREGROUND,
+                        _("Background"): BRUSH_BACKGROUND,}
+
 def get_LUT_value(data, window, level):
     return np.piecewise(data, 
                         [data <= (level - 0.5 - (window-1)/2),
@@ -669,8 +673,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         self.orientation = self.viewer.orientation
         self.matrix = None
 
-        self.foreground = False
-        self.background = False
+        self.operation = BRUSH_FOREGROUND
 
         self.mg_size = 3
 
@@ -689,6 +692,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         self.AddObserver("MouseMoveEvent", self.OnBrushMove)
 
         Publisher.subscribe(self.expand_watershed, 'Expand watershed to 3D ' + self.orientation)
+        Publisher.subscribe(self.set_operation, 'Set watershed operation')
 
     def SetUp(self):
         self.viewer.slice_.do_threshold_to_all_slices()
@@ -703,6 +707,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
     def CleanUp(self):
         #self._remove_mask()
         Publisher.unsubscribe(self.expand_watershed, 'Expand watershed to 3D ' + self.orientation)
+        Publisher.unsubscribe(self.set_operation, 'Set watershed operation')
         self.RemoveAllObservers()
         self.viewer.slice_.to_show_aux = ''
         self.viewer.OnScrollBar()
@@ -720,6 +725,9 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
             self.matrix = None
             os.remove(self.temp_file)
             print "deleting", self.temp_file
+
+    def set_operation(self, pubsub_evt):
+        self.operation = WATERSHED_OPERATIONS[pubsub_evt.data]
 
     def OnEnterInteractor(self, obj, evt):
         if (self.viewer.slice_.buffer_slices[self.orientation].mask is None):
@@ -796,19 +804,19 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         if position < 0:
             position = viewer.calculate_matrix_position(coord)
 
-        if iren.GetControlKey():
-            operation = BRUSH_BACKGROUND
-        elif iren.GetShiftKey():
-            operation = BRUSH_ERASE
-        else:
-            operation = BRUSH_FOREGROUND
+        operation = self.operation
 
-        if operation == const.BRUSH_DRAW:
-            self.foreground = True
+        if operation == BRUSH_FOREGROUND:
+            if iren.GetControlKey():
+                operation = BRUSH_BACKGROUND
+            elif iren.GetShiftKey():
+                operation = BRUSH_ERASE
+        elif operation == BRUSH_BACKGROUND:
+            if iren.GetControlKey():
+                operation = BRUSH_FOREGROUND
+            elif iren.GetShiftKey():
+                operation = BRUSH_ERASE
 
-        elif operation == const.BRUSH_ERASE:
-            self.foreground = True
-            
         n = self.viewer.slice_data.number
         self.edit_mask_pixel(operation, n, cursor.GetPixels(),
                                     position, radius, self.orientation)
@@ -864,19 +872,19 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
             if position < 0:
                 position = viewer.calculate_matrix_position(coord)
 
-            if iren.GetControlKey():
-                operation = BRUSH_BACKGROUND
-            elif iren.GetShiftKey():
-                operation = BRUSH_ERASE
-            else:
-                operation = BRUSH_FOREGROUND
+            operation = self.operation
 
-            if operation == const.BRUSH_DRAW:
-                self.foreground = True
+            if operation == BRUSH_FOREGROUND:
+                if iren.GetControlKey():
+                    operation = BRUSH_BACKGROUND
+                elif iren.GetShiftKey():
+                    operation = BRUSH_ERASE
+            elif operation == BRUSH_BACKGROUND:
+                if iren.GetControlKey():
+                    operation = BRUSH_FOREGROUND
+                elif iren.GetShiftKey():
+                    operation = BRUSH_ERASE
 
-            elif operation == const.BRUSH_ERASE:
-                self.foreground = True
-                
             n = self.viewer.slice_data.number
             self.edit_mask_pixel(operation, n, cursor.GetPixels(),
                                         position, radius, self.orientation)
