@@ -926,7 +926,9 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
 
 
             self.viewer.slice_.current_mask.was_edited = True
-        self.viewer.OnScrollBar(update3D=False)
+            Publisher.sendMessage('Reload actual slice')
+        else:
+            self.viewer.OnScrollBar(update3D=False)
 
     def get_coordinate_cursor(self):
         # Find position
@@ -1033,7 +1035,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
             self.viewer.slice_.current_mask.matrix[:, :, 0] = 1
 
             self.viewer.slice_.discard_all_buffers()
-            self.viewer.OnScrollBar(update3D=False)
+            Publisher.sendMessage('Reload actual slice')
 
 
 def get_style(style):

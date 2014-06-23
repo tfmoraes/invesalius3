@@ -228,7 +228,7 @@ class InnerFoldPanel(wx.Panel):
         # parent panel. Perhaps we need to insert the item into the sizer also...
         # Study this.
         fold_panel = fpb.FoldPanelBar(self, -1, wx.DefaultPosition,
-                                      (10, 240), 0,fpb.FPB_SINGLE_FOLD)
+                                      (10, 220), 0,fpb.FPB_SINGLE_FOLD)
 
         # Fold panel style
         style = fpb.CaptionBarStyle()
@@ -711,12 +711,12 @@ class EditionTools(wx.Panel):
 
 class WatershedTool(EditionTools):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, size=(50,250))
+        wx.Panel.__init__(self, parent, size=(50,150))
         default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
         self.SetBackgroundColour(default_colour)
 
         ## LINE 1
-        text1 = wx.StaticText(self, -1, _("Choose brush type, size or operation:"))
+        text1 = wx.StaticText(self, -1, _("Choose brush type and size:"))
 
         ## LINE 2
         menu = wx.Menu()
