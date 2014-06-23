@@ -930,6 +930,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
 
 
             self.viewer.slice_.current_mask.was_edited = True
+            self.viewer.slice_.current_mask.clear_history()
             Publisher.sendMessage('Reload actual slice')
         else:
             self.viewer.OnScrollBar(update3D=False)
@@ -1039,6 +1040,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
             self.viewer.slice_.current_mask.matrix[:, :, 0] = 1
 
             self.viewer.slice_.discard_all_buffers()
+            self.viewer.slice_.current_mask.clear_history()
             Publisher.sendMessage('Reload actual slice')
 
 
