@@ -697,11 +697,15 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         mask[:, 0, :] = 1
         mask[:, :, 0] = 1
         self._create_mask()
+        self.viewer.slice_.to_show_aux = 'watershed'
+        self.viewer.OnScrollBar()
 
     def CleanUp(self):
         #self._remove_mask()
         Publisher.unsubscribe(self.expand_watershed, 'Expand watershed to 3D ' + self.orientation)
         self.RemoveAllObservers()
+        self.viewer.slice_.to_show_aux = ''
+        self.viewer.OnScrollBar()
 
     def _create_mask(self):
         if self.matrix is None:

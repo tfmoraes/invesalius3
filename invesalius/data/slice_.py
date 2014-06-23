@@ -87,6 +87,8 @@ class Slice(object):
         self.aux_matrices = {}
         self.state = const.STATE_DEFAULT
 
+        self.to_show_aux = ''
+
         self._type_projection = const.PROJECTION_NORMAL
         self.n_border = const.PROJECTION_BORDER_SIZE
 
@@ -534,7 +536,7 @@ class Slice(object):
             self.buffer_slices[orientation].vtk_image = image
             self.buffer_slices[orientation].vtk_mask = mask
 
-        if self.state == const.SLICE_STATE_WATERSHED and self.current_mask.is_shown:
+        if self.to_show_aux == 'watershed' and self.current_mask.is_shown:
             m = self.get_aux_slice('watershed', orientation, slice_number)
             tmp_vimage = converters.to_vtk(m, self.spacing, slice_number, orientation)
             cimage = self.do_custom_colour(tmp_vimage, {0: (0.0, 0.0, 0.0, 0.0),
