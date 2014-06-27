@@ -34,6 +34,8 @@ from scipy.misc import imsave
 from skimage.morphology import watershed
 from skimage import filter
 
+import utils
+
 ORIENTATIONS = {
         "AXIAL": const.AXIAL,
         "CORONAL": const.CORONAL,
@@ -734,6 +736,16 @@ class EditorInteractorStyle(DefaultInteractorStyle):
         return x, y, z
 
 
+class WatershedConfig(object):
+    __metaclass__= utils.Singleton
+    def __init__(self):
+        self.operation = BRUSH_FOREGROUND
+        Publisher.subscribe(self.set_operation, 'Set watershed operation')
+
+    def set_operation(self, pubsub_evt):
+        self.operation = WATERSHED_OPERATIONS[pubsub_evt.data]
+
+
 class WaterShedInteractorStyle(DefaultInteractorStyle):
     def __init__(self, viewer):
         DefaultInteractorStyle.__init__(self, viewer)
@@ -745,6 +757,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         self.operation = BRUSH_FOREGROUND
 
         self.mg_size = 3
+        self.config = WatershedConfig()
 
         self.picker = vtk.vtkWorldPointPicker()
 
@@ -869,7 +882,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         if position < 0:
             position = viewer.calculate_matrix_position(coord)
 
-        operation = self.operation
+        operation = self.config.operation
 
         if operation == BRUSH_FOREGROUND:
             if iren.GetControlKey():
@@ -937,7 +950,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
             if position < 0:
                 position = viewer.calculate_matrix_position(coord)
 
-            operation = self.operation
+            operation = self.config.operation
 
             if operation == BRUSH_FOREGROUND:
                 if iren.GetControlKey():
