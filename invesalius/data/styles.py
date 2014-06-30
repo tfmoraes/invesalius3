@@ -740,10 +740,16 @@ class WatershedConfig(object):
     __metaclass__= utils.Singleton
     def __init__(self):
         self.operation = BRUSH_FOREGROUND
+        self.use_ww_wl = True
+
         Publisher.subscribe(self.set_operation, 'Set watershed operation')
+        Publisher.subscribe(self.set_use_ww_wl, 'Set use ww wl')
 
     def set_operation(self, pubsub_evt):
         self.operation = WATERSHED_OPERATIONS[pubsub_evt.data]
+
+    def set_use_ww_wl(self, pubsub_evt):
+        self.use_ww_wl = pubsub_evt.data
 
 
 class WaterShedInteractorStyle(DefaultInteractorStyle):
@@ -1004,8 +1010,12 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         wl = self.viewer.slice_.window_level
         
         if BRUSH_BACKGROUND in markers and BRUSH_FOREGROUND in markers:
-            tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), self.mg_size)
-            tmp_mask = watershed(tmp_image, markers)
+            if self.config.use_ww_wl:
+                tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), self.mg_size)
+                tmp_mask = watershed(tmp_image, markers)
+            else:
+                tmp_image = ndimage.morphological_gradient(image, self.mg_size)
+                tmp_mask = watershed(tmp_image, markers)
 
             if self.viewer.overwrite_mask:
                 mask[:] = 0
@@ -1111,8 +1121,12 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         ww = self.viewer.slice_.window_width
         wl = self.viewer.slice_.window_level
         if BRUSH_BACKGROUND in markers and BRUSH_FOREGROUND in markers:
-            tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), self.mg_size)
-            tmp_mask = watershed(tmp_image, markers)
+            if self.config.use_ww_wl:
+                tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), self.mg_size)
+                tmp_mask = watershed(tmp_image, markers)
+            else:
+                tmp_image = ndimage.morphological_gradient(image, self.mg_size)
+                tmp_mask = watershed(tmp_image, markers)
 
             if self.viewer.overwrite_mask:
                 mask[:] = 0
