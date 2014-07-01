@@ -720,7 +720,7 @@ class WatershedTool(EditionTools):
         self.SetBackgroundColour(default_colour)
 
         ## LINE 1
-        text1 = wx.StaticText(self, -1, _("Choose brush type and size:"))
+        text1 = wx.StaticText(self, -1, _("Choose brush type, size or operation:"))
 
         ## LINE 2
         menu = wx.Menu()
