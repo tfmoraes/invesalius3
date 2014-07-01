@@ -27,6 +27,7 @@ from wx.lib.pubsub import pub as Publisher
 
 import constants as const
 import converters
+import cursor_actors as ca
 import numpy as np
 
 from scipy import ndimage
@@ -741,6 +742,8 @@ class WatershedConfig(object):
     def __init__(self):
         self.operation = BRUSH_FOREGROUND
         self.use_ww_wl = True
+        self.cursor_type = const.BRUSH_CIRCLE
+        self.cursor_size = const.BRUSH_SIZE
 
         Publisher.subscribe(self.set_operation, 'Set watershed operation')
         Publisher.subscribe(self.set_use_ww_wl, 'Set use ww wl')
@@ -781,6 +784,10 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
 
         Publisher.subscribe(self.expand_watershed, 'Expand watershed to 3D ' + self.orientation)
         Publisher.subscribe(self.set_operation, 'Set watershed operation')
+        Publisher.subscribe(self.set_bsize, 'Set watershed brush size')
+        Publisher.subscribe(self.set_bformat, 'Set watershed brush format')
+
+        self._set_cursor()
 
     def SetUp(self):
         mask = self.viewer.slice_.current_mask.matrix
@@ -810,8 +817,36 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
             os.remove(self.temp_file)
             print "deleting", self.temp_file
 
+    def _set_cursor(self):
+        if self.config.cursor_type == const.BRUSH_SQUARE:
+            cursor = ca.CursorRectangle()
+        elif self.config.cursor_type == const.BRUSH_CIRCLE:
+            cursor = ca.CursorCircle()
+
+        cursor.SetOrientation(self.orientation)
+        n = self.viewer.slice_data.number
+        coordinates = {"SAGITAL": [n, 0, 0],
+                       "CORONAL": [0, n, 0],
+                       "AXIAL": [0, 0, n]}
+        cursor.SetPosition(coordinates[self.orientation])
+        spacing = self.viewer.slice_.spacing
+        cursor.SetSpacing(spacing)
+        cursor.SetColour(self.viewer._brush_cursor_colour)
+        cursor.SetSize(self.config.cursor_size)
+        self.viewer.slice_data.SetCursor(cursor)
+        self.viewer.interactor.Render()
+
     def set_operation(self, pubsub_evt):
         self.operation = WATERSHED_OPERATIONS[pubsub_evt.data]
+
+    def set_bsize(self, pubsub_evt):
+        size = pubsub_evt.data
+        self.config.cursor_size = size
+        self.viewer.slice_data.cursor.SetSize(size)
+
+    def set_bformat(self, pubsub_evt):
+        self.config.cursor_type = pubsub_evt.data
+        self._set_cursor()
 
     def OnEnterInteractor(self, obj, evt):
         if (self.viewer.slice_.buffer_slices[self.orientation].mask is None):

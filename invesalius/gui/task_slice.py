@@ -839,14 +839,14 @@ class WatershedTool(EditionTools):
 
         self.btn_brush_format.SetBitmap(bitmap[evt.GetId()])
 
-        Publisher.sendMessage('Set brush format', brush[evt.GetId()])
+        Publisher.sendMessage('Set watershed brush format', brush[evt.GetId()])
 
     def OnBrushSize(self, evt):
         """ """
         # FIXME: Using wx.EVT_SPINCTRL in MacOS it doesnt capture changes only
         # in the text ctrl - so we are capturing only changes on text
         # Strangelly this is being called twice
-        Publisher.sendMessage('Set edition brush size',self.spin.GetValue())
+        Publisher.sendMessage('Set watershed brush size',self.spin.GetValue())
 
     def OnComboBrushOp(self, evt):
         brush_op = self.combo_brush_op.GetValue()
