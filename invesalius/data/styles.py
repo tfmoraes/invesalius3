@@ -798,6 +798,8 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
     def CleanUp(self):
         #self._remove_mask()
         Publisher.unsubscribe(self.expand_watershed, 'Expand watershed to 3D ' + self.orientation)
+        Publisher.unsubscribe(self.set_bformat, 'Set watershed brush format')
+        Publisher.unsubscribe(self.set_bsize, 'Set watershed brush size')
         Publisher.unsubscribe(self.set_operation, 'Set watershed operation')
         self.RemoveAllObservers()
         self.viewer.slice_.to_show_aux = ''
