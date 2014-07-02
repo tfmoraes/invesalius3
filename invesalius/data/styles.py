@@ -32,6 +32,7 @@ import numpy as np
 
 from scipy import ndimage
 from scipy.misc import imsave
+from scipy.ndimage import watershed_ift, generate_binary_structure
 from skimage.morphology import watershed
 from skimage import filter
 
@@ -740,13 +741,22 @@ class EditorInteractorStyle(DefaultInteractorStyle):
 class WatershedConfig(object):
     __metaclass__= utils.Singleton
     def __init__(self):
-        self.operation = BRUSH_FOREGROUND
+        self.algorithm = "Watershed"
+        self.con_2d = 4
+        self.con_3d = 18
+        self.mg_size = 3
         self.use_ww_wl = True
+        self.operation = BRUSH_FOREGROUND
         self.cursor_type = const.BRUSH_CIRCLE
         self.cursor_size = const.BRUSH_SIZE
 
         Publisher.subscribe(self.set_operation, 'Set watershed operation')
         Publisher.subscribe(self.set_use_ww_wl, 'Set use ww wl')
+
+        Publisher.subscribe(self.set_algorithm, "Set watershed algorithm")
+        Publisher.subscribe(self.set_2dcon, "Set watershed 2d con")
+        Publisher.subscribe(self.set_3dcon, "Set watershed 3d con")
+        Publisher.subscribe(self.set_gaussian_size, "Set watershed gaussian size")
 
     def set_operation(self, pubsub_evt):
         self.operation = WATERSHED_OPERATIONS[pubsub_evt.data]
@@ -754,6 +764,22 @@ class WatershedConfig(object):
     def set_use_ww_wl(self, pubsub_evt):
         self.use_ww_wl = pubsub_evt.data
 
+    def set_algorithm(self, pubsub_evt):
+        self.algorithm = pubsub_evt.data
+
+    def set_2dcon(self, pubsub_evt):
+        self.con_2d = pubsub_evt.data
+
+    def set_3dcon(self, pubsub_evt):
+        self.con_3d = pubsub_evt.data
+
+    def set_gaussian_size(self, pubsub_evt):
+        self.mg_size = pubsub_evt.data
+
+WALGORITHM = {"Watershed": watershed,
+             "Watershed IFT": watershed_ift}
+CON2D = {4: 1, 8: 2}
+CON3D = {6: 1, 18: 2, 26: 3}
 
 class WaterShedInteractorStyle(DefaultInteractorStyle):
     def __init__(self, viewer):
@@ -765,7 +791,6 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
 
         self.operation = BRUSH_FOREGROUND
 
-        self.mg_size = 3
         self.config = WatershedConfig()
 
         self.picker = vtk.vtkWorldPointPicker()
@@ -1047,12 +1072,17 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         wl = self.viewer.slice_.window_level
         
         if BRUSH_BACKGROUND in markers and BRUSH_FOREGROUND in markers:
+            w_algorithm = WALGORITHM[self.config.algorithm]
+            bstruct = generate_binary_structure(2, CON2D[self.config.con_2d])
             if self.config.use_ww_wl:
-                tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), self.mg_size)
-                tmp_mask = watershed(tmp_image, markers)
+                tmp_image = ndimage.morphological_gradient(
+                               get_LUT_value(image, ww, wl).astype('uint16'),
+                               self.config.mg_size)
+
+                tmp_mask = w_algorithm(tmp_image, markers.astype('int16'), bstruct)
             else:
-                tmp_image = ndimage.morphological_gradient(image, self.mg_size)
-                tmp_mask = watershed(tmp_image, markers)
+                tmp_image = ndimage.morphological_gradient(image, self.config.mg_size)
+                tmp_mask = w_algorithm(tmp_image, markers.astype('int16'), bstruct)
 
             if self.viewer.overwrite_mask:
                 mask[:] = 0
@@ -1158,12 +1188,16 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         ww = self.viewer.slice_.window_width
         wl = self.viewer.slice_.window_level
         if BRUSH_BACKGROUND in markers and BRUSH_FOREGROUND in markers:
+            w_algorithm = WALGORITHM[self.config.algorithm]
+            bstruct = generate_binary_structure(3, CON3D[self.config.con_3d])
             if self.config.use_ww_wl:
-                tmp_image = ndimage.morphological_gradient(get_LUT_value(image, ww, wl).astype('uint16'), self.mg_size)
-                tmp_mask = watershed(tmp_image, markers)
+                tmp_image = ndimage.morphological_gradient(
+                               get_LUT_value(image, ww, wl).astype('uint16'),
+                               self.config.mg_size)
+                tmp_mask = w_algorithm(tmp_image, markers.astype('int16'), bstruct)
             else:
-                tmp_image = ndimage.morphological_gradient(image, self.mg_size)
-                tmp_mask = watershed(tmp_image, markers)
+                tmp_image = ndimage.morphological_gradient(image, self.config.mg_size)
+                tmp_mask = w_algorithm(tmp_image, markers.astype('int16'), bstruct)
 
             if self.viewer.overwrite_mask:
                 mask[:] = 0

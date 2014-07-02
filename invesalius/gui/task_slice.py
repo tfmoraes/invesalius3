@@ -779,7 +779,12 @@ class WatershedTool(EditionTools):
         self.ww_wl_cbox = ww_wl_cbox
 
         # Line 6
+        self.btn_wconfig = wx.Button(self, -1, "C", size=(48, -1))
         self.btn_exp_watershed = wx.Button(self, -1, _('Expand watershed to 3D'))
+
+        sizer_btns = wx.BoxSizer(wx.HORIZONTAL)
+        sizer_btns.Add(self.btn_wconfig, 0, wx.ALIGN_LEFT | wx.LEFT | wx.TOP | wx.DOWN, 5)
+        sizer_btns.Add(self.btn_exp_watershed, 0, wx.GROW|wx.EXPAND| wx.ALL, 5)
 
         # Add lines into main sizer
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -787,7 +792,7 @@ class WatershedTool(EditionTools):
         sizer.Add(line2, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
         sizer.Add(check_box, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
         sizer.Add(ww_wl_cbox, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
-        sizer.Add(self.btn_exp_watershed, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
+        sizer.Add(sizer_btns, 0, wx.EXPAND)
         sizer.Fit(self)
 
         self.SetSizer(sizer)
@@ -803,6 +808,7 @@ class WatershedTool(EditionTools):
         self.check_box.Bind(wx.EVT_CHECKBOX, self.OnCheckOverwriteMask)
         self.ww_wl_cbox.Bind(wx.EVT_CHECKBOX, self.OnCheckWWWL)
         self.btn_exp_watershed.Bind(wx.EVT_BUTTON, self.OnExpandWatershed)
+        self.btn_wconfig.Bind(wx.EVT_BUTTON, self.OnConfig)
 
     def ChangeMaskColour(self, pubsub_evt):
         colour = pubsub_evt.data
@@ -859,6 +865,9 @@ class WatershedTool(EditionTools):
     def OnCheckWWWL(self, evt):
         value = self.ww_wl_cbox.GetValue()
         Publisher.sendMessage('Set use ww wl', value)
+
+    def OnConfig(self, evt):
+        dlg.WatershedOptionsDialog().Show()
 
     def OnExpandWatershed(self, evt):
         Publisher.sendMessage('Expand watershed to 3D AXIAL')
