@@ -789,8 +789,6 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         self.orientation = self.viewer.orientation
         self.matrix = None
 
-        self.operation = BRUSH_FOREGROUND
-
         self.config = WatershedConfig()
 
         self.picker = vtk.vtkWorldPointPicker()
@@ -808,7 +806,6 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         self.AddObserver("MouseMoveEvent", self.OnBrushMove)
 
         Publisher.subscribe(self.expand_watershed, 'Expand watershed to 3D ' + self.orientation)
-        Publisher.subscribe(self.set_operation, 'Set watershed operation')
         Publisher.subscribe(self.set_bsize, 'Set watershed brush size')
         Publisher.subscribe(self.set_bformat, 'Set watershed brush format')
 
@@ -825,7 +822,6 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         Publisher.unsubscribe(self.expand_watershed, 'Expand watershed to 3D ' + self.orientation)
         Publisher.unsubscribe(self.set_bformat, 'Set watershed brush format')
         Publisher.unsubscribe(self.set_bsize, 'Set watershed brush size')
-        Publisher.unsubscribe(self.set_operation, 'Set watershed operation')
         self.RemoveAllObservers()
         self.viewer.slice_.to_show_aux = ''
         self.viewer.OnScrollBar()
@@ -862,9 +858,6 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         cursor.SetSize(self.config.cursor_size)
         self.viewer.slice_data.SetCursor(cursor)
         self.viewer.interactor.Render()
-
-    def set_operation(self, pubsub_evt):
-        self.operation = WATERSHED_OPERATIONS[pubsub_evt.data]
 
     def set_bsize(self, pubsub_evt):
         size = pubsub_evt.data
@@ -1078,10 +1071,12 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
                 tmp_image = ndimage.morphological_gradient(
                                get_LUT_value(image, ww, wl).astype('uint16'),
                                self.config.mg_size)
+                #tmp_image = get_LUT_value(image, ww, wl).astype('uint16')
 
                 tmp_mask = w_algorithm(tmp_image, markers.astype('int16'), bstruct)
             else:
-                tmp_image = ndimage.morphological_gradient(image, self.config.mg_size)
+                tmp_image = ndimage.morphological_gradient((image - image.min()).astype('uint16'), self.config.mg_size)
+                #tmp_image = (image - image.min()).astype('uint16')
                 tmp_mask = w_algorithm(tmp_image, markers.astype('int16'), bstruct)
 
             if self.viewer.overwrite_mask:
@@ -1190,13 +1185,16 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         if BRUSH_BACKGROUND in markers and BRUSH_FOREGROUND in markers:
             w_algorithm = WALGORITHM[self.config.algorithm]
             bstruct = generate_binary_structure(3, CON3D[self.config.con_3d])
+            print bstruct
             if self.config.use_ww_wl:
                 tmp_image = ndimage.morphological_gradient(
                                get_LUT_value(image, ww, wl).astype('uint16'),
                                self.config.mg_size)
+                #tmp_image = get_LUT_value(image, ww, wl).astype('uint16')
                 tmp_mask = w_algorithm(tmp_image, markers.astype('int16'), bstruct)
             else:
-                tmp_image = ndimage.morphological_gradient(image, self.config.mg_size)
+                tmp_image = ndimage.morphological_gradient((image - image.min()).astype('uint16'), self.config.mg_size)
+                #tmp_image = (image - image.min()).astype('uint16')
                 tmp_mask = w_algorithm(tmp_image, markers.astype('int16'), bstruct)
 
             if self.viewer.overwrite_mask:
