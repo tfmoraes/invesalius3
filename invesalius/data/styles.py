@@ -751,7 +751,7 @@ class WatershedProgressWindow(wx.Frame):
 
     def _build_gui(self):
         self.gauge = wx.Gauge(self, -1, 100)
-        self.btn_cancel = wx.Button(self, -1, _("&Cancel"))
+        self.btn_cancel = wx.Button(self, wx.ID_CANCEL)
         
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(wx.StaticText(self, -1, _("Applying watershed")))
@@ -782,7 +782,7 @@ class WatershedConfig(object):
     def __init__(self):
         self.algorithm = "Watershed"
         self.con_2d = 4
-        self.con_3d = 18
+        self.con_3d = 6
         self.mg_size = 3
         self.use_ww_wl = True
         self.operation = BRUSH_FOREGROUND
