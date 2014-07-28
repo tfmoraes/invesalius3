@@ -862,7 +862,7 @@ class ProjectToolBar(wx.ToolBar):
         """
         # Load bitmaps
         d = const.ICON_DIR
-        if sys.platform == 'darwin':
+        if sys.platform == 'darwin' and wx.VERSION < (2, 9):
             path = os.path.join(d,"file_from_internet_original.png")
             BMP_NET = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
 
@@ -1002,7 +1002,7 @@ class ObjectToolBar(wx.ToolBar):
         Add tools into toolbar.
         """
         d = const.ICON_DIR
-        if sys.platform == 'darwin':
+        if sys.platform == 'darwin' and wx.VERSION < (2, 9):
             path = os.path.join(d, "tool_rotate_original.png")
             BMP_ROTATE = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
 
@@ -1213,7 +1213,7 @@ class SliceToolBar(wx.ToolBar):
         Add tools into toolbar.
         """
         d = const.ICON_DIR
-        if sys.platform == 'darwin':
+        if sys.platform == 'darwin' and wx.VERSION < (2, 9):
             path = os.path.join(d, "slice_original.png")
             BMP_SLICE = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
 
@@ -1356,7 +1356,7 @@ class LayoutToolBar(wx.ToolBar):
         Add tools into toolbar.
         """
         d = const.ICON_DIR
-        if sys.platform == 'darwin':
+        if sys.platform == 'darwin' and wx.VERSION < (2, 9):
             # Bitmaps for show/hide task panel item
             p = os.path.join(d, "layout_data_only_original.gif")
             self.BMP_WITH_MENU = wx.Bitmap(p, wx.BITMAP_TYPE_GIF)
@@ -1534,7 +1534,7 @@ class HistoryToolBar(wx.ToolBar):
         Add tools into toolbar.
         """
         d = const.ICON_DIR
-        if sys.platform == 'darwin':
+        if sys.platform == 'darwin' and wx.VERSION < (2, 9):
             # Bitmaps for show/hide task panel item
             p = os.path.join(d, "undo_original.png")
             self.BMP_UNDO = wx.Bitmap(p, wx.BITMAP_TYPE_PNG)
