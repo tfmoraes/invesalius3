@@ -75,6 +75,9 @@ ARTID_FNAME = {'tool_rotate': os.path.join(d, "tool_rotate_original.png"),
                'layout_full': os.path.join(d, "layout_full_original.png"),
                'text_inverted': os.path.join(d, "text_inverted_original.png"),
                'text': os.path.join(d, "text_original.png"),
+
+               'undo': os.path.join(d, "undo_original.png"),
+               'redo': os.path.join(d, "redo_original.png"),
               }
 
 
@@ -1504,21 +1507,18 @@ class HistoryToolBar(wx.ToolBar):
         Add tools into toolbar.
         """
         d = const.ICON_DIR
+        client = "wx.ART_TOOLBAR"
+        wx.ArtProvider.Push(MyArtProvider())
+
         if sys.platform == 'darwin' and wx.VERSION < (2, 9):
-            # Bitmaps for show/hide task panel item
-            p = os.path.join(d, "undo_original.png")
-            self.BMP_UNDO = wx.Bitmap(p, wx.BITMAP_TYPE_PNG)
-
-            p = os.path.join(d, "redo_original.png")
-            self.BMP_REDO = wx.Bitmap(p, wx.BITMAP_TYPE_PNG)
-
+            size = 48, 48
         else:
-            # Bitmaps for show/hide task panel item
-            p = os.path.join(d, "undo_small.png")
-            self.BMP_UNDO = wx.Bitmap(p, wx.BITMAP_TYPE_PNG)
+            size = 32, 32
 
-            p = os.path.join(d, "redo_small.png")
-            self.BMP_REDO = wx.Bitmap(p, wx.BITMAP_TYPE_PNG)
+        self.BMP_UNDO = wx.ArtProvider.GetBitmap('undo', client, size)
+        self.BMP_REDO = wx.ArtProvider.GetBitmap('redo', client, size)
+
+        wx.ArtProvider.Pop()
 
         self.AddLabelTool(wx.ID_UNDO,
                           "",
