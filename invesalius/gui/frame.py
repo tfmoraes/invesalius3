@@ -46,6 +46,48 @@ VIEW_TOOLS = [ID_LAYOUT, ID_TEXT] =\
                                 [wx.NewId() for number in range(2)]
 
 
+def scale_bitmap(bitmap, width, height):
+    image = wx.ImageFromBitmap(bitmap)
+    image = image.Scale(width, height, wx.IMAGE_QUALITY_HIGH)
+    result = wx.BitmapFromImage(image)
+    return result
+
+d = const.ICON_DIR
+ARTID_FNAME = {'tool_rotate': os.path.join(d, "tool_rotate_original.png"),
+               'tool_translate': os.path.join(d, "tool_translate_original.png"),
+               'tool_zoom': os.path.join(d, "tool_zoom_original.png"),
+               'tool_zoom_select': os.path.join(d, "tool_zoom_select_original.png"),
+               'tool_contraste' :os.path.join(d, "tool_contrast_original.png"),
+               'measure_linear': os.path.join(d, "measure_line_original.png"),
+               'measure_angle': os.path.join(d, "measure_angle_original.png"),
+
+               'slice': os.path.join(d, "slice_original.png"),
+               'cross': os.path.join(d, "cross_original.png"),
+
+               'file_from_internet': os.path.join(d,"file_from_internet_original.png"),
+               'file_import': os.path.join(d, "file_import_original.png"),
+               'file_open': os.path.join(d, "file_open_original.png"),
+               'file_save': os.path.join(d, "file_save_original.png"),
+               'print': os.path.join(d, "print_original.png"),
+               'tool_photo': os.path.join(d, "tool_photo_original.png"),
+
+               'layout_data_only': os.path.join(d, "layout_data_only_original.png"),
+               'layout_full': os.path.join(d, "layout_full_original.png"),
+               'text_inverted': os.path.join(d, "text_inverted_original.png"),
+               'text': os.path.join(d, "text_original.png"),
+              }
+
+
+class MyArtProvider(wx.ArtProvider):
+    def __init__(self):
+        wx.ArtProvider.__init__(self)
+
+    def CreateBitmap(self, artid, client, size):
+        path = ARTID_FNAME[artid]
+        tmp_bmp = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
+        #bmp = scale_bitmap(tmp_bmp, size.width, size.height)
+        return tmp_bmp
+
 
 class MessageWatershed(wx.PopupWindow):
     def __init__(self, prnt, msg):
@@ -862,42 +904,21 @@ class ProjectToolBar(wx.ToolBar):
         """
         # Load bitmaps
         d = const.ICON_DIR
+        client = "wx.ART_TOOLBAR"
+        wx.ArtProvider.Push(MyArtProvider())
         if sys.platform == 'darwin' and wx.VERSION < (2, 9):
-            path = os.path.join(d,"file_from_internet_original.png")
-            BMP_NET = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "file_import_original.png")
-            BMP_IMPORT = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "file_open_original.png")
-            BMP_OPEN = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "file_save_original.png")
-            BMP_SAVE = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "print_original.png")
-            BMP_PRINT = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "tool_photo_original.png")
-            BMP_PHOTO = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
+            size = 48, 48
         else:
-            path = os.path.join(d, "file_from_internet.png")
-            BMP_NET = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
+            size = 32, 32
 
-            path = os.path.join(d, "file_import.png")
-            BMP_IMPORT = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
+        BMP_NET = wx.ArtProvider.GetBitmap('file_from_internet', client, size)
+        BMP_IMPORT = wx.ArtProvider.GetBitmap('file_import', client, size)
+        BMP_OPEN = wx.ArtProvider.GetBitmap('file_open', client, size)
+        BMP_SAVE = wx.ArtProvider.GetBitmap('file_save', client, size)
+        BMP_PRINT = wx.ArtProvider.GetBitmap('print', client, size)
+        BMP_PHOTO = wx.ArtProvider.GetBitmap('tool_photo', client, size)
 
-            path = os.path.join(d, "file_open.png")
-            BMP_OPEN = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "file_save.png")
-            BMP_SAVE = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "print.png")
-            BMP_PRINT = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "tool_photo.png")
-            BMP_PHOTO = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
+        wx.ArtProvider.Pop()
 
         # Create tool items based on bitmaps
         self.AddLabelTool(const.ID_DICOM_IMPORT,
@@ -1002,55 +1023,22 @@ class ObjectToolBar(wx.ToolBar):
         Add tools into toolbar.
         """
         d = const.ICON_DIR
+        client = "wx.ART_TOOLBAR"
+        wx.ArtProvider.Push(MyArtProvider())
         if sys.platform == 'darwin' and wx.VERSION < (2, 9):
-            path = os.path.join(d, "tool_rotate_original.png")
-            BMP_ROTATE = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "tool_translate_original.png")
-            BMP_MOVE =wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "tool_zoom_original.png")
-            BMP_ZOOM = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "tool_zoom_select_original.png")
-            BMP_ZOOM_SELECT = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "tool_contrast_original.png")
-            BMP_CONTRAST = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "measure_line_original.png")
-            BMP_DISTANCE = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "measure_angle_original.png")
-            BMP_ANGLE = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            #path = os.path.join(d, "tool_annotation_original.png")
-            #BMP_ANNOTATE = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
+            size = 48, 48
         else:
-            path = os.path.join(d, "tool_rotate.png")
-            BMP_ROTATE = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
+            size = 32, 32
 
-            path = os.path.join(d, "tool_translate.png")
-            BMP_MOVE =wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
+        BMP_ROTATE = wx.ArtProvider.GetBitmap('tool_rotate', client, size)
+        BMP_MOVE = wx.ArtProvider.GetBitmap('tool_translate', client, size)
+        BMP_ZOOM = wx.ArtProvider.GetBitmap('tool_zoom', client, size)
+        BMP_ZOOM_SELECT = wx.ArtProvider.GetBitmap('tool_zoom_select', client, size)
+        BMP_CONTRAST = wx.ArtProvider.GetBitmap('tool_contraste', client, size)
+        BMP_DISTANCE = wx.ArtProvider.GetBitmap('measure_linear', client, size)
+        BMP_ANGLE = wx.ArtProvider.GetBitmap('measure_angle', client, size)
 
-            path = os.path.join(d, "tool_zoom.png")
-            BMP_ZOOM = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "tool_zoom_select.png")
-            BMP_ZOOM_SELECT = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "tool_contrast.png")
-            BMP_CONTRAST = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "measure_line.png")
-            BMP_DISTANCE = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d, "measure_angle.png")
-            BMP_ANGLE = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            #path = os.path.join(d, "tool_annotation.png")
-            #BMP_ANNOTATE = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
+        wx.ArtProvider.Pop()
 
         # Create tool items based on bitmaps
         self.AddLabelTool(const.STATE_ZOOM,
@@ -1212,19 +1200,18 @@ class SliceToolBar(wx.ToolBar):
         """
         Add tools into toolbar.
         """
-        d = const.ICON_DIR
+        client = "wx.ART_TOOLBAR"
+        wx.ArtProvider.Push(MyArtProvider())
+
         if sys.platform == 'darwin' and wx.VERSION < (2, 9):
-            path = os.path.join(d, "slice_original.png")
-            BMP_SLICE = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
-
-            path = os.path.join(d,"cross_original.png")
-            BMP_CROSS = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
+            size = 48, 48
         else:
-            path = os.path.join(d, "slice.png")
-            BMP_SLICE = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
+            size = 32, 32
 
-            path = os.path.join(d,"cross.png")
-            BMP_CROSS = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
+        BMP_SLICE = wx.ArtProvider.GetBitmap('slice', client, size)
+        BMP_CROSS = wx.ArtProvider.GetBitmap('cross', client, size)
+
+        wx.ArtProvider.Pop()
 
         self.AddCheckTool(const.SLICE_STATE_SCROLL,
                           BMP_SLICE,
@@ -1356,36 +1343,19 @@ class LayoutToolBar(wx.ToolBar):
         Add tools into toolbar.
         """
         d = const.ICON_DIR
+        client = "wx.ART_TOOLBAR"
+        wx.ArtProvider.Push(MyArtProvider())
         if sys.platform == 'darwin' and wx.VERSION < (2, 9):
-            # Bitmaps for show/hide task panel item
-            p = os.path.join(d, "layout_data_only_original.gif")
-            self.BMP_WITH_MENU = wx.Bitmap(p, wx.BITMAP_TYPE_GIF)
-
-            p = os.path.join(d, "layout_full_original.gif")
-            self.BMP_WITHOUT_MENU = wx.Bitmap(p, wx.BITMAP_TYPE_GIF)
-
-            # Bitmaps for show/hide task item
-            p = os.path.join(d, "text_inverted_original.png")
-            self.BMP_WITHOUT_TEXT = wx.Bitmap(p, wx.BITMAP_TYPE_PNG)
-
-            p = os.path.join(d, "text_original.png")
-            self.BMP_WITH_TEXT = wx.Bitmap(p, wx.BITMAP_TYPE_PNG)
-
+            size = 48, 48
         else:
-            # Bitmaps for show/hide task panel item
-            p = os.path.join(d, "layout_data_only.gif")
-            self.BMP_WITH_MENU = wx.Bitmap(p, wx.BITMAP_TYPE_GIF)
+            size = 32, 32
 
-            p = os.path.join(d, "layout_full.gif")
-            self.BMP_WITHOUT_MENU = wx.Bitmap(p, wx.BITMAP_TYPE_GIF)
+        self.BMP_WITHOUT_MENU = wx.ArtProvider.GetBitmap('layout_data_only', client, size)
+        self.BMP_WITH_MENU = wx.ArtProvider.GetBitmap('layout_full', client, size) 
+        self.BMP_WITH_TEXT = wx.ArtProvider.GetBitmap('text_inverted', client, size)
+        self.BMP_WITHOUT_TEXT = wx.ArtProvider.GetBitmap('text', client, size)
 
-            # Bitmaps for show/hide task item
-            p = os.path.join(d, "text_inverted.png")
-            self.BMP_WITHOUT_TEXT = wx.Bitmap(p, wx.BITMAP_TYPE_PNG)
-
-            p = os.path.join(d, "text.png")
-            self.BMP_WITH_TEXT = wx.Bitmap(p, wx.BITMAP_TYPE_PNG)
-
+        wx.ArtProvider.Pop()
         self.AddLabelTool(ID_LAYOUT,
                           "",
                           bitmap=self.BMP_WITHOUT_MENU,
