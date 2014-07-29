@@ -64,7 +64,7 @@ class TaskPanel(wx.Panel):
 
 class InnerTaskPanel(wx.Panel):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        wx.Panel.__init__(self, parent, size=(50, 240))
         self.SetBackgroundColour(wx.Colour(255,255,255))
         self.SetAutoLayout(1)
 
@@ -717,7 +717,7 @@ class EditionTools(wx.Panel):
 
 class WatershedTool(EditionTools):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, size=(50,150))
+        wx.Panel.__init__(self, parent, size=(50,220))
         default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
         self.SetBackgroundColour(default_colour)
 
