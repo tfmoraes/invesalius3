@@ -599,11 +599,16 @@ class EditionTools(wx.Panel):
         btn_brush_format.SetMenu(menu)
         self.btn_brush_format = btn_brush_format
 
-        spin_brush_size = wx.SpinCtrl(self, -1, "", (20, 50))
+        spin_brush_size = wx.SpinCtrl(self, -1, "", (20, -1))
         spin_brush_size.SetRange(1,100)
         spin_brush_size.SetValue(const.BRUSH_SIZE)
         spin_brush_size.Bind(wx.EVT_TEXT, self.OnBrushSize)
         self.spin = spin_brush_size
+
+        unities = ("mm", "px")
+        self.combo_brush_unity = wx.ComboBox(self, -1, unities[0],
+                                             size=(15, -1), choices=unities,
+                                             style=wx.CB_DROPDOWN | wx.CB_READONLY)
 
         combo_brush_op = wx.ComboBox(self, -1, "", size=(15,-1),
                                      choices = const.BRUSH_OP_NAME,
@@ -611,12 +616,14 @@ class EditionTools(wx.Panel):
         combo_brush_op.SetSelection(const.DEFAULT_BRUSH_OP)
         if sys.platform != 'win32':
             combo_brush_op.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
+            self.combo_brush_unity.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
         self.combo_brush_op = combo_brush_op
 
         # Sizer which represents the second line
         line2 = wx.BoxSizer(wx.HORIZONTAL)
         line2.Add(btn_brush_format, 0, wx.EXPAND|wx.GROW|wx.TOP|wx.RIGHT, 0)
-        line2.Add(spin_brush_size, 0, wx.RIGHT, 5)
+        line2.Add(spin_brush_size, 1, wx.RIGHT, 5)
+        line2.Add(self.combo_brush_unity, 1, wx.EXPAND| wx.RIGHT, 5)
         line2.Add(combo_brush_op, 1, wx.EXPAND|wx.TOP|wx.RIGHT|wx.LEFT, 5)
 
         ## LINE 3
@@ -706,7 +713,8 @@ class EditionTools(wx.Panel):
         # FIXME: Using wx.EVT_SPINCTRL in MacOS it doesnt capture changes only
         # in the text ctrl - so we are capturing only changes on text
         # Strangelly this is being called twice
-        Publisher.sendMessage('Set edition brush size',self.spin.GetValue())
+        Publisher.sendMessage('Set edition brush size', (self.spin.GetValue(),
+                                                         self.combo_brush_unity.GetValue()))
 
     def OnComboBrushOp(self, evt):
         brush_op_id = evt.GetSelection()

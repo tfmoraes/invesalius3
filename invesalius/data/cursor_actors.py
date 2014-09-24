@@ -78,6 +78,7 @@ class CursorBase(object):
         self.size = 15.0
         self.orientation = "AXIAL"
         self.spacing = (1, 1, 1)
+        self.unity = 'mm'
         if vtk.vtkVersion().GetVTKVersion() > '5.8.0':
             self.mapper = vtk.vtkImageSliceMapper()
             cursor_property = vtk.vtkImageProperty()
@@ -91,8 +92,9 @@ class CursorBase(object):
         self._build_actor()
         self._calculate_area_pixels()
 
-    def SetSize(self, diameter):
+    def SetSize(self, diameter, unity):
         self.radius = diameter/2.0
+        self.unity = unity
         self._build_actor()
         self._calculate_area_pixels()
         
@@ -241,7 +243,10 @@ class CursorCircle(CursorBase):
         """
         print "Building circle cursor", self.orientation
         r = self.radius
-        sx, sy, sz = self.spacing
+        if self.unity == 'mm':
+            sx, sy, sz = self.spacing
+        else:
+            sx, sy, sz = 1.0, 1.0, 1.0
         if self.orientation == 'AXIAL':
             xi = math.floor(-r/sx)
             xf = math.ceil(r/sx) + 1
@@ -293,15 +298,18 @@ class CursorCircle(CursorBase):
         Return the cursor's pixels.
         """
         r = self.radius
-        if self.orientation == 'AXIAL':
-            sx = self.spacing[0]
-            sy = self.spacing[1]
-        elif self.orientation == 'CORONAL':
-            sx = self.spacing[0]
-            sy = self.spacing[2]
-        elif self.orientation == 'SAGITAL':
-            sx = self.spacing[1]
-            sy = self.spacing[2]
+        if self.unity == 'mm':
+            if self.orientation == 'AXIAL':
+                sx = self.spacing[0]
+                sy = self.spacing[1]
+            elif self.orientation == 'CORONAL':
+                sx = self.spacing[0]
+                sy = self.spacing[2]
+            elif self.orientation == 'SAGITAL':
+                sx = self.spacing[1]
+                sy = self.spacing[2]
+        else:
+            sx, sy = 1.0, 1.0
 
         xi = math.floor(-r/sx)
         xf = math.ceil(r/sx) + 1
