@@ -131,15 +131,15 @@ class InnerTaskPanel(wx.Panel):
         link_export_surface.Bind(hl.EVT_HYPERLINK_LEFT,
                               self.OnLinkExportSurface)
 
-        #tooltip = wx.ToolTip(_("Export 3D mask (voxels)"))
-        #link_export_mask = hl.HyperLinkCtrl(self, -1,_("Export mask..."))
-        #link_export_mask.SetUnderlines(False, False, False)
-        #link_export_mask.SetColours("BLACK", "BLACK", "BLACK")
-        #link_export_mask.SetToolTip(tooltip)
-        #link_export_mask.AutoBrowse(False)
-        #link_export_mask.UpdateLink()
-        #link_export_mask.Bind(hl.EVT_HYPERLINK_LEFT,
-        #                      self.OnLinkExportMask)
+        tooltip = wx.ToolTip(_("Export 3D mask (voxels)"))
+        link_export_mask = hl.HyperLinkCtrl(self, -1,_("Export mask..."))
+        link_export_mask.SetUnderlines(False, False, False)
+        link_export_mask.SetColours("BLACK", "BLACK", "BLACK")
+        link_export_mask.SetToolTip(tooltip)
+        link_export_mask.AutoBrowse(False)
+        link_export_mask.UpdateLink()
+        link_export_mask.Bind(hl.EVT_HYPERLINK_LEFT,
+                              self.OnLinkExportMask)
 
 
         #tooltip = wx.ToolTip("Request rapid prototyping services")
@@ -172,19 +172,19 @@ class InnerTaskPanel(wx.Panel):
                                  wx.BITMAP_TYPE_PNG).ConvertToImage()\
                                           .Rescale(25, 25).ConvertToBitmap()
 
-            #BMP_EXPORT_MASK = wx.Bitmap("../icons/mask.png",
-            #                            wx.BITMAP_TYPE_PNG)
+            #  BMP_EXPORT_MASK = wx.Bitmap("../icons/mask.png",
+                                      #  wx.BITMAP_TYPE_PNG)
         else:
             BMP_EXPORT_SURFACE = wx.Bitmap("../icons/surface_export.png",
-                                        wx.BITMAP_TYPE_PNG).ConvertToImage()\
+                                           wx.BITMAP_TYPE_PNG).ConvertToImage()\
                                           .Rescale(25, 25).ConvertToBitmap()
 
             BMP_TAKE_PICTURE = wx.Bitmap("../icons/tool_photo.png",
-                                     wx.BITMAP_TYPE_PNG).ConvertToImage()\
+                                         wx.BITMAP_TYPE_PNG).ConvertToImage()\
                                           .Rescale(25, 25).ConvertToBitmap()
 
-            #BMP_EXPORT_MASK = wx.Bitmap("../icons/mask_small.png",
-            #                            wx.BITMAP_TYPE_PNG)
+            #  BMP_EXPORT_MASK = wx.Bitmap("../icons/mask_small.png",
+                                      #  wx.BITMAP_TYPE_PNG)
 
 
 
@@ -201,9 +201,9 @@ class InnerTaskPanel(wx.Panel):
                                                 BMP_EXPORT_SURFACE,
                                               style=button_style)
         button_surface.SetBackgroundColour(self.GetBackgroundColour())
-        #button_mask = pbtn.PlateButton(self, BTN_MASK, "",
-        #                                BMP_EXPORT_MASK,
-        #                                style=button_style)
+        #  button_mask = pbtn.PlateButton(self, BTN_MASK, "",
+                                      #  BMP_EXPORT_MASK,
+                                      #  style=button_style)
         #button_request_rp = pbtn.PlateButton(self, BTN_REQUEST_RP, "",
         #                                    BMP_IMPORT, style=button_style)
         #button_report = pbtn.PlateButton(self, BTN_REPORT, "",
@@ -222,13 +222,14 @@ class InnerTaskPanel(wx.Panel):
         fixed_sizer.AddMany([ (link_export_picture, 1, flag_link, 3),
                               (button_picture, 0, flag_button),
                               (link_export_surface, 1, flag_link, 3),
-                              (button_surface, 0, flag_button),])
+                              (button_surface, 0, flag_button),
                               #(link_export_mask, 1, flag_link, 3),
-                              #(button_mask, 0, flag_button)])
+                              #  (button_mask, 0, flag_button)])
                               #(link_report, 0, flag_link, 3),
                               #(button_report, 0, flag_button),
                               #(link_request_rp, 1, flag_link, 3),
                               #(button_request_rp, 0, flag_button)])
+                             ])
 
         # Add line sizers into main sizer
         main_sizer = wx.BoxSizer(wx.VERTICAL)

@@ -1376,9 +1376,14 @@ class Slice(object):
             buffer_.discard_buffer()
 
     def OnExportMask(self, pubsub_evt):
-        pass
-        ##imagedata = self.current_mask.imagedata
-        #imagedata = self.imagedata
-        #filename, filetype = pubsub_evt.data
-        #if (filetype == const.FILETYPE_IMAGEDATA):
-            #iu.Export(imagedata, filename)
+        mask = self.current_mask
+
+        for n in xrange(1, mask.matrix.shape[0]):
+            if mask.matrix[n, 0, 0] == 0:
+                m = mask.matrix[n, 1:, 1:]
+                mask.matrix[n, 1:, 1:] = self.do_threshold_to_a_slice(self.matrix[n-1], m)
+
+        imagedata = converters.to_vtk(mask.matrix, self.spacing, 0, "AXIAL")
+        filename, filetype = pubsub_evt.data
+        if (filetype == const.FILETYPE_IMAGEDATA):
+            iu.Export(imagedata, filename)

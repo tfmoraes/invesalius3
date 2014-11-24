@@ -175,8 +175,8 @@ def Export(imagedata, filename, bin=False):
         writer.SetDataModeToBinary()
     else:
         writer.SetDataModeToAscii()
-    #writer.SetInput(imagedata)
-    #writer.Write()
+    writer.SetInput(imagedata)
+    writer.Write()
 
 def Import(filename):
     reader = vtk.vtkXMLImageDataReader()
