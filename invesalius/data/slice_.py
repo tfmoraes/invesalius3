@@ -35,6 +35,8 @@ from mask import Mask
 from project import Project
 from data import mips
 
+from data import threshold
+
 OTHER=0
 PLIST=1
 WIDGET=2
@@ -1206,12 +1208,14 @@ class Slice(object):
         given slice_matrix.
         """
         thresh_min, thresh_max = self.current_mask.threshold_range
-        m = (((slice_matrix >= thresh_min) & (slice_matrix <= thresh_max)) * 255)
-        m[mask == 1] = 1
-        m[mask == 2] = 2
-        m[mask == 253] = 253
-        m[mask == 254] = 254
-        return m.astype('uint8')
+        #m = (((slice_matrix >= thresh_min) & (slice_matrix <= thresh_max)) * 255)
+        #m[mask == 1] = 1
+        #m[mask == 2] = 2
+        #m[mask == 253] = 253
+        #m[mask == 254] = 254
+        m = numpy.zeros_like(mask, dtype='uint8')
+        threshold.threshold(slice_matrix, m, thresh_min, thresh_max)
+        return m
 
     def do_threshold_to_all_slices(self):
         mask = self.current_mask
