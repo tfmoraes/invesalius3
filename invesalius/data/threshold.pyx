@@ -24,8 +24,8 @@ def threshold(DTYPE16_t[:, :] image, DTYPE8_t[:, :] mask, DTYPE16_t low, DTYPE16
     cdef DTYPE16_t v
     for y in prange(sy, nogil=True):
         for x in xrange(sx):
-            v = mask[y, x]
-            if not v:
+            v = image[y, x]
+            if not mask[y, x]:
                 if v >= low and v <= high:
                     mask[y, x] = 255
                 else:
