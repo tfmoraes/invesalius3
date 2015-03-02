@@ -466,7 +466,8 @@ class Slice(object):
             elif operation == const.BRUSH_THRESH_ADD_ONLY:
                 roi_m[((index) & (roi_i >= thresh_min) & (roi_i <= thresh_max))] = 254
             elif operation == const.BRUSH_THRESH_ERASE_ONLY:
-                roi_m[((index) & ((roi_i < thresh_min) | (roi_i > thresh_max)))] = 1
+                out_thresh = (roi_i < thresh_min) | (roi_i > thresh_max)
+                roi_m[((index) & (out_thresh))] = 1
             elif operation == const.BRUSH_DRAW:
                 roi_m[index] = 254
             elif operation == const.BRUSH_ERASE:
