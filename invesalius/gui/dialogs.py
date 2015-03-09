@@ -1384,3 +1384,65 @@ class ClutImagedataDialog(wx.Dialog):
         super(wx.Dialog, self).Show(show)
         if gen_evt:
             self.clut_widget._generate_event()
+
+
+class MaskBooleanDialog(wx.Dialog):
+    def __init__(self, masks):
+        pre = wx.PreDialog()
+        pre.Create(wx.GetApp().GetTopWindow(), -1, style=wx.DEFAULT_DIALOG_STYLE|wx.FRAME_FLOAT_ON_PARENT)
+        self.PostCreate(pre)
+
+        self._init_gui(masks)
+
+    def _init_gui(self, masks):
+        mask_choices = [(masks[i].name, masks[i]) for i in sorted(masks)]
+        self.mask1 = wx.ComboBox(self, -1, mask_choices[0][0], choices=[])
+        self.mask2 = wx.ComboBox(self, -1, mask_choices[0][0], choices=[])
+
+        for n, m in mask_choices:
+            self.mask1.Append(n, m)
+            self.mask2.Append(n, m)
+
+        self.mask1.SetSelection(0)
+        self.mask2.SetSelection(0)
+
+        op_choices = ((u"Union", const.BOOLEAN_UNION),
+                      (u"Difference", const.BOOLEAN_DIFF))
+        self.op_boolean = wx.ComboBox(self, -1, op_choices[0][0], choices=[])
+
+        for n, i in op_choices:
+            self.op_boolean.Append(n, i)
+
+        self.op_boolean.SetSelection(0)
+
+        btn_ok = wx.Button(self, wx.ID_OK)
+        btn_ok.SetDefault()
+
+        btn_cancel = wx.Button(self, wx.ID_CANCEL)
+
+        btnsizer = wx.StdDialogButtonSizer()
+        btnsizer.AddButton(btn_ok)
+        btnsizer.AddButton(btn_cancel)
+        btnsizer.Realize()
+
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.mask1, 1, wx.EXPAND)
+        sizer.Add(self.op_boolean, 1, wx.EXPAND)
+        sizer.Add(self.mask2, 1, wx.EXPAND)
+        sizer.Add(btnsizer, 1, wx.EXPAND)
+
+        self.SetSizer(sizer)
+        sizer.Fit(self)
+
+        self.Centre()
+
+        btn_ok.Bind(wx.EVT_BUTTON, self.OnOk)
+
+    def OnOk(self, evt):
+        op = self.op_boolean.GetClientData(self.op_boolean.GetSelection())
+        m1 = self.mask1.GetClientData(self.mask1.GetSelection())
+        m2 = self.mask2.GetClientData(self.mask2.GetSelection())
+
+        print op, m1.name, m2.name
+
+        Publisher.sendMessage('Do boolean operation', (op, m1, m2))
