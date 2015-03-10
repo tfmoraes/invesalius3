@@ -1222,7 +1222,9 @@ class Slice(object):
 
     def do_boolean_op(self, op, m1, m2):
         name_ops = {const.BOOLEAN_UNION: _(u"Union"), 
-                    const.BOOLEAN_DIFF: _(u"Diff")}
+                    const.BOOLEAN_DIFF: _(u"Diff"),
+                    const.BOOLEAN_AND: _(u"Intersection"),
+                    const.BOOLEAN_XOR: _(u"XOR")}
 
 
         name = u"%s_%s_%s" % (name_ops[op], m1.name, m2.name)
@@ -1249,6 +1251,12 @@ class Slice(object):
 
         elif op == const.BOOLEAN_DIFF:
             m[:] = ((m1 > 2) - (m2 > 2)) * 255
+
+        elif op == const.BOOLEAN_AND:
+            m[:] = ((m1 > 2) & (m2 > 2)) * 255
+
+        elif op == const.BOOLEAN_XOR:
+            m[:] = numpy.logical_xor((m1 > 2), (m2 > 2)) * 255
 
         future_mask.was_edited = True
         self._add_mask_into_proj(future_mask)
