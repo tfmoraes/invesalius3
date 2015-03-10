@@ -1250,7 +1250,7 @@ class Slice(object):
             m[:] = ((m1 > 2) + (m2 > 2)) * 255
 
         elif op == const.BOOLEAN_DIFF:
-            m[:] = ((m1 > 2) - (m2 > 2)) * 255
+            m[:] = ((m1 > 2) - ((m1 > 2) & (m2 > 2))) * 255
 
         elif op == const.BOOLEAN_AND:
             m[:] = ((m1 > 2) & (m2 > 2)) * 255
