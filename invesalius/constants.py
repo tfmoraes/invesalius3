@@ -571,3 +571,5 @@ PROJECTION_MIP_SIZE=2
 # ------------- Boolean operations ------------------
 BOOLEAN_UNION = 1
 BOOLEAN_DIFF = 2
+BOOLEAN_AND = 3
+BOOLEAN_XOR = 4

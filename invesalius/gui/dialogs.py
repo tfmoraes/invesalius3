@@ -1407,7 +1407,9 @@ class MaskBooleanDialog(wx.Dialog):
         self.mask2.SetSelection(0)
 
         op_choices = ((u"Union", const.BOOLEAN_UNION),
-                      (u"Difference", const.BOOLEAN_DIFF))
+                      (u"Difference", const.BOOLEAN_DIFF), 
+                      (u"Intersection", const.BOOLEAN_AND),
+                      (u"XOR", const.BOOLEAN_XOR))
         self.op_boolean = wx.ComboBox(self, -1, op_choices[0][0], choices=[])
 
         for n, i in op_choices:
@@ -1443,6 +1445,8 @@ class MaskBooleanDialog(wx.Dialog):
         m1 = self.mask1.GetClientData(self.mask1.GetSelection())
         m2 = self.mask2.GetClientData(self.mask2.GetSelection())
 
-        print op, m1.name, m2.name
-
         Publisher.sendMessage('Do boolean operation', (op, m1, m2))
+        Publisher.sendMessage('Reload actual slice')
+
+        self.Close()
+        self.Destroy()
