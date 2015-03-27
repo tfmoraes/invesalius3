@@ -1489,7 +1489,11 @@ class MaskBooleanDialog(wx.Dialog):
             self.mask2.Append(n, m)
 
         self.mask1.SetSelection(0)
-        self.mask2.SetSelection(0)
+
+        if len(mask_choices) > 1:
+            self.mask2.SetSelection(1)
+        else:
+            self.mask2.SetSelection(0)
 
         op_choices = ((u"Union", const.BOOLEAN_UNION),
                       (u"Difference", const.BOOLEAN_DIFF), 
