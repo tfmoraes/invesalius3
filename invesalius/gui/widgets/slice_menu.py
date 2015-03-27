@@ -164,6 +164,11 @@ class SliceMenu(wx.Menu):
         self.AppendMenu(-1, _("Projection type"), submenu_projection)
         ###self.AppendMenu(-1, _("Image Tiling"), submenu_image_tiling)
 
+        self.kgc_id = new_id = wx.NewId()
+        item = wx.MenuItem(self, new_id, u"Keep greatest component")
+        self.AppendItem(item)
+
+
         # It doesn't work in Linux
         self.Bind(wx.EVT_MENU, self.OnPopup)
         # In Linux the bind must be putted in the submenu
@@ -207,86 +212,90 @@ class SliceMenu(wx.Menu):
 
     def OnPopup(self, evt):
         id = evt.GetId()
-        item = self.ID_TO_TOOL_ITEM[evt.GetId()]
-        key = item.GetLabel()
-        if(key in const.WINDOW_LEVEL.keys()):
-            window, level = const.WINDOW_LEVEL[key]
-            Publisher.sendMessage('Bright and contrast adjustment image',
-                    (window, level))
-            Publisher.sendMessage('Update window level value',\
-               (window, level))
-            Publisher.sendMessage('Update window and level text',\
-                           "WL: %d  WW: %d"%(level, window))
-            Publisher.sendMessage('Update slice viewer')
 
-            #Necessary update the slice plane in the volume case exists
-            Publisher.sendMessage('Render volume viewer')
-
-        elif(key in const.SLICE_COLOR_TABLE.keys()):
-            values = const.SLICE_COLOR_TABLE[key]
-            Publisher.sendMessage('Change colour table from background image', values)
-            Publisher.sendMessage('Update slice viewer')
-
-            if sys.platform == 'linux2':
-                for i in self.pseudo_color_items:
-                    it = self.pseudo_color_items[i]
-                    if it.IsChecked():
-                        it.Toggle()
-
-                item.Toggle()
-            self.HideClutDialog()
-            self._gen_event = True
-
-        elif key in self.plist_presets:
-            values = presets.get_wwwl_preset_colours(self.plist_presets[key])
-            Publisher.sendMessage('Change colour table from background image from plist', values)
-            Publisher.sendMessage('Update slice viewer')
-
-            if sys.platform == 'linux2':
-                for i in self.pseudo_color_items:
-                    it = self.pseudo_color_items[i]
-                    if it.IsChecked():
-                        it.Toggle()
-
-                item.Toggle()
-            self.HideClutDialog()
-            self._gen_event = True
-
-        elif(key in const.IMAGE_TILING.keys()):
-            values = const.IMAGE_TILING[key]
-            Publisher.sendMessage('Set slice viewer layout', values)
-            Publisher.sendMessage('Update slice viewer')
-
-        elif key in PROJECTIONS_ID:
-            print 'Key', key
-            pid = PROJECTIONS_ID[key]
-            Publisher.sendMessage('Set projection type', pid)
+        if id == self.kgc_id:
+            Publisher.sendMessage('Keep greatest component')
             Publisher.sendMessage('Reload actual slice')
-
-        elif key == _('Custom'):
-            if self.cdialog is None:
-                slc = sl.Slice()
-                histogram = slc.histogram
-                init = slc.matrix.min()
-                end = slc.matrix.max()
-                nodes = slc.nodes
-                self.cdialog = ClutImagedataDialog(histogram, init, end, nodes)
-                self.cdialog.Show()
-            else:
-                self.cdialog.Show(self._gen_event)
-
-            if sys.platform == 'linux2':
-                for i in self.pseudo_color_items:
-                    it = self.pseudo_color_items[i]
-                    if it.IsChecked():
-                        it.Toggle()
-
-                item.Toggle()
+        else:
             item = self.ID_TO_TOOL_ITEM[evt.GetId()]
-            item.Check(True)
-            self._gen_event = False
+            key = item.GetLabel()
+            if(key in const.WINDOW_LEVEL.keys()):
+                window, level = const.WINDOW_LEVEL[key]
+                Publisher.sendMessage('Bright and contrast adjustment image',
+                        (window, level))
+                Publisher.sendMessage('Update window level value',\
+                   (window, level))
+                Publisher.sendMessage('Update window and level text',\
+                               "WL: %d  WW: %d"%(level, window))
+                Publisher.sendMessage('Update slice viewer')
 
-        evt.Skip()
+                #Necessary update the slice plane in the volume case exists
+                Publisher.sendMessage('Render volume viewer')
+
+            elif(key in const.SLICE_COLOR_TABLE.keys()):
+                values = const.SLICE_COLOR_TABLE[key]
+                Publisher.sendMessage('Change colour table from background image', values)
+                Publisher.sendMessage('Update slice viewer')
+
+                if sys.platform == 'linux2':
+                    for i in self.pseudo_color_items:
+                        it = self.pseudo_color_items[i]
+                        if it.IsChecked():
+                            it.Toggle()
+
+                    item.Toggle()
+                self.HideClutDialog()
+                self._gen_event = True
+
+            elif key in self.plist_presets:
+                values = presets.get_wwwl_preset_colours(self.plist_presets[key])
+                Publisher.sendMessage('Change colour table from background image from plist', values)
+                Publisher.sendMessage('Update slice viewer')
+
+                if sys.platform == 'linux2':
+                    for i in self.pseudo_color_items:
+                        it = self.pseudo_color_items[i]
+                        if it.IsChecked():
+                            it.Toggle()
+
+                    item.Toggle()
+                self.HideClutDialog()
+                self._gen_event = True
+
+            elif(key in const.IMAGE_TILING.keys()):
+                values = const.IMAGE_TILING[key]
+                Publisher.sendMessage('Set slice viewer layout', values)
+                Publisher.sendMessage('Update slice viewer')
+
+            elif key in PROJECTIONS_ID:
+                print 'Key', key
+                pid = PROJECTIONS_ID[key]
+                Publisher.sendMessage('Set projection type', pid)
+                Publisher.sendMessage('Reload actual slice')
+
+            elif key == _('Custom'):
+                if self.cdialog is None:
+                    slc = sl.Slice()
+                    histogram = slc.histogram
+                    init = slc.matrix.min()
+                    end = slc.matrix.max()
+                    nodes = slc.nodes
+                    self.cdialog = ClutImagedataDialog(histogram, init, end, nodes)
+                    self.cdialog.Show()
+                else:
+                    self.cdialog.Show(self._gen_event)
+
+                if sys.platform == 'linux2':
+                    for i in self.pseudo_color_items:
+                        it = self.pseudo_color_items[i]
+                        if it.IsChecked():
+                            it.Toggle()
+
+                    item.Toggle()
+                item = self.ID_TO_TOOL_ITEM[evt.GetId()]
+                item.Check(True)
+                self._gen_event = False
+            evt.Skip()
 
     def HideClutDialog(self):
         if self.cdialog:

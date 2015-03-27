@@ -16,10 +16,13 @@
 #    PARTICULAR. Consulte a Licenca Publica Geral GNU para obter mais
 #    detalhes.
 #--------------------------------------------------------------------------
+import heapq
 import os
 import tempfile
 
 import numpy
+from scipy import ndimage
+from scipy.ndimage.measurements import label
 import vtk
 from wx.lib.pubsub import pub as Publisher
 
@@ -161,6 +164,8 @@ class Slice(object):
         Publisher.subscribe(self._set_projection_type, 'Set projection type')
 
         Publisher.subscribe(self._do_boolean_op, 'Do boolean operation')
+
+        Publisher.subscribe(self._keep_greatest_region, 'Keep greatest component')
 
         Publisher.subscribe(self.OnExportMask,'Export mask to file')
 
@@ -1114,6 +1119,7 @@ class Slice(object):
             if mask.matrix[n, 0, 0] == 0:
                 m = mask.matrix[n, 1:, 1:]
                 mask.matrix[n, 1:, 1:] = self.do_threshold_to_a_slice(self.matrix[n-1], m, mask.threshold_range)
+                mask.matrix[n, 0, 0] = 1
 
         mask.matrix.flush()
 
@@ -1260,6 +1266,28 @@ class Slice(object):
 
         future_mask.was_edited = True
         self._add_mask_into_proj(future_mask)
+
+    def _keep_greatest_region(self, pubsub_evt):
+        self.keep_greatest_region(self.current_mask)
+
+    def keep_greatest_region(self, mask):
+        self.do_threshold_to_all_slices(mask)
+        mask.matrix[0, :, :] = 1
+        mask.matrix[:, 0, :] = 1
+        mask.matrix[:, :, 0] = 1
+
+        m= mask.matrix[1:, 1:, 1:]
+        m[:] = (m > 128) * 255
+
+        labeled_array, num_features = label(m)
+        sizes = ndimage.sum(m,labeled_array,range(1,num_features+1))
+        sl = zip(range(1, num_features + 1), sizes)
+        sl.sort(key=lambda x: x[1])
+        tag = sl[-1][0]
+        m[labeled_array!=tag]=0
+        
+        mask.was_edited = True
+        self.discard_all_buffers()
 
     def apply_slice_buffer_to_mask(self, orientation):
         """
