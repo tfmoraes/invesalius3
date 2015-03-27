@@ -609,7 +609,7 @@ class MenuBar(wx.MenuBar):
         #app(const.ID_EDIT_LIST, "Show Undo List...")
         #################################################################
 
-        file_edit.Append(const.ID_BOOLEAN_MASK, _(u"\tBoolean operations"))
+        file_edit.Append(const.ID_BOOLEAN_MASK, _(u"Boolean operations"))
 
 
         # VIEW
