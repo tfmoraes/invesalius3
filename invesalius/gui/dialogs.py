@@ -1475,7 +1475,7 @@ class WatershedOptionsDialog(wx.Dialog):
 class MaskBooleanDialog(wx.Dialog):
     def __init__(self, masks):
         pre = wx.PreDialog()
-        pre.Create(wx.GetApp().GetTopWindow(), -1, style=wx.DEFAULT_DIALOG_STYLE|wx.FRAME_FLOAT_ON_PARENT)
+        pre.Create(wx.GetApp().GetTopWindow(), -1, _(u"Booleans operations"),  style=wx.DEFAULT_DIALOG_STYLE|wx.FRAME_FLOAT_ON_PARENT)
         self.PostCreate(pre)
 
         self._init_gui(masks)
@@ -1519,11 +1519,18 @@ class MaskBooleanDialog(wx.Dialog):
         btnsizer.AddButton(btn_cancel)
         btnsizer.Realize()
 
+        gsizer = wx.FlexGridSizer(rows=3, cols=2, hgap=5, vgap=5)
+
+        gsizer.Add(wx.StaticText(self, -1, _(u"Mask 1")))
+        gsizer.Add(self.mask1, 1, wx.EXPAND)
+        gsizer.Add(wx.StaticText(self, -1, _(u"Operation")))
+        gsizer.Add(self.op_boolean, 1, wx.EXPAND)
+        gsizer.Add(wx.StaticText(self, -1, _(u"Mask 2")))
+        gsizer.Add(self.mask2, 1, wx.EXPAND)
+
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.mask1, 1, wx.EXPAND)
-        sizer.Add(self.op_boolean, 1, wx.EXPAND)
-        sizer.Add(self.mask2, 1, wx.EXPAND)
-        sizer.Add(btnsizer, 1, wx.EXPAND)
+        sizer.Add(gsizer, 0, wx.EXPAND | wx.ALIGN_CENTER | wx.ALL, border=5)
+        sizer.Add(btnsizer, 0, wx.EXPAND | wx.ALIGN_CENTER | wx.ALL, border=5)
 
         self.SetSizer(sizer)
         sizer.Fit(self)
