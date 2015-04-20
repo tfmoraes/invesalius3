@@ -779,7 +779,9 @@ class WatershedTool(EditionTools):
         self.ww_wl_cbox = ww_wl_cbox
 
         # Line 6
-        self.btn_wconfig = wx.Button(self, -1, "C", size=(48, -1))
+        bmp = wx.Bitmap("../icons/configuration.png", wx.BITMAP_TYPE_PNG)
+        self.btn_wconfig = wx.BitmapButton(self, -1, bitmap=bmp,
+                                           size=(bmp.GetWidth()+10, bmp.GetHeight()+10))
         self.btn_exp_watershed = wx.Button(self, -1, _('Expand watershed to 3D'))
 
         sizer_btns = wx.BoxSizer(wx.HORIZONTAL)
