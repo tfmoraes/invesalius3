@@ -23,6 +23,7 @@ import random
 import sys
 
 import wx
+import wx.combo
 from wx.lib import masked
 from wx.lib.agw import floatspin
 from wx.lib.wordwrap import wordwrap
@@ -1495,14 +1496,16 @@ class MaskBooleanDialog(wx.Dialog):
         else:
             self.mask2.SetSelection(0)
 
-        op_choices = ((u"Union", const.BOOLEAN_UNION),
-                      (u"Difference", const.BOOLEAN_DIFF), 
-                      (u"Intersection", const.BOOLEAN_AND),
-                      (u"Exclusive disjunction", const.BOOLEAN_XOR))
-        self.op_boolean = wx.ComboBox(self, -1, op_choices[0][0], choices=[])
+        icon_folder = '../icons/'
+        op_choices = ((_(u"Union"), const.BOOLEAN_UNION, 'bool_union.png'),
+                      (_(u"Difference"), const.BOOLEAN_DIFF, 'bool_difference.png'), 
+                      (_(u"Intersection"), const.BOOLEAN_AND, 'bool_intersection.png'),
+                      (_(u"Exclusive disjunction"), const.BOOLEAN_XOR, 'bool_disjunction.png'))
+        self.op_boolean = wx.combo.BitmapComboBox(self, -1, op_choices[0][0], choices=[])
 
-        for n, i in op_choices:
-            self.op_boolean.Append(n, i)
+        for n, i, f in op_choices:
+            bmp = wx.Bitmap(os.path.join(icon_folder, f), wx.BITMAP_TYPE_PNG)
+            self.op_boolean.Append(n, bmp, i)
 
         self.op_boolean.SetSelection(0)
 
