@@ -1498,7 +1498,7 @@ class MaskBooleanDialog(wx.Dialog):
         op_choices = ((u"Union", const.BOOLEAN_UNION),
                       (u"Difference", const.BOOLEAN_DIFF), 
                       (u"Intersection", const.BOOLEAN_AND),
-                      (u"XOR", const.BOOLEAN_XOR))
+                      (u"Exclusive disjunction", const.BOOLEAN_XOR))
         self.op_boolean = wx.ComboBox(self, -1, op_choices[0][0], choices=[])
 
         for n, i in op_choices:
