@@ -116,8 +116,6 @@ class Panel(wx.Panel):
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(gbs, 1, wx.EXPAND)
 
-        self.SetBackgroundColour((255, 0, 0))
-
         self.gbs = gbs
 
         #self.SetSizerAndFit(sizer)
@@ -132,7 +130,6 @@ class LowerTaskPanel(wx.Panel):
                                       agwStyle=fpb.FPB_COLLAPSE_TO_BOTTOM)
 
         self.fold_panel = fold_panel
-        self.SetBackgroundColour((0, 255, 0))
 
         self.enable_items = []
         self.overwrite = False
@@ -225,9 +222,6 @@ class UpperTaskPanel(wx.Panel):
         fold_panel = fpb.FoldPanelBar(self, -1, wx.DefaultPosition,
                                       self.GetSize(),FPB_DEFAULT_STYLE,
                                       fpb.FPB_SINGLE_FOLD)
-
-        self.SetBackgroundColour((0,0,255))
-
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(fold_panel, 1, wx.GROW|wx.EXPAND)
