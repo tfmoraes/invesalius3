@@ -220,7 +220,7 @@ class UpperTaskPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         fold_panel = fpb.FoldPanelBar(self, -1, wx.DefaultPosition,
-                                      self.GetSize(),FPB_DEFAULT_STYLE,
+                                      wx.DefaultSize,FPB_DEFAULT_STYLE,
                                       fpb.FPB_SINGLE_FOLD)
 
         sizer = wx.BoxSizer(wx.VERTICAL)

@@ -118,7 +118,7 @@ class InnerTaskPanel(wx.Panel):
         button_next.Bind(wx.EVT_BUTTON, self.OnButtonNextTask)
 
         line_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        line_sizer.Add(check_box, 1, wx.ALIGN_LEFT|wx.RIGHT|wx.LEFT|wx.BOTTOM, 5)
+        line_sizer.Add(check_box, 0, wx.ALIGN_LEFT|wx.RIGHT|wx.LEFT|wx.BOTTOM, 5)
         line_sizer.Add(button_next, 0,
                        wx.ALIGN_RIGHT|wx.RIGHT|wx.LEFT|wx.BOTTOM, 5)
         line_sizer.Fit(self)
@@ -126,11 +126,11 @@ class InnerTaskPanel(wx.Panel):
         # Add line sizers into main sizer
         main_sizer = wx.BoxSizer(wx.VERTICAL)
         main_sizer.Add(line_new, 0,wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
-        main_sizer.Add(fold_panel, 5, wx.GROW|wx.EXPAND|wx.ALL, 5)
-        main_sizer.AddSizer(line_sizer, 1, wx.GROW|wx.EXPAND)
+        main_sizer.Add(fold_panel, 1, wx.GROW|wx.EXPAND|wx.ALL, 5)
+        main_sizer.AddSizer(line_sizer, 0, wx.GROW|wx.EXPAND)
         main_sizer.Fit(self)
 
-        self.SetSizer(main_sizer)
+        self.SetSizerAndFit(main_sizer)
         self.Update()
         self.SetAutoLayout(1)
 
@@ -161,7 +161,7 @@ class InnerTaskPanel(wx.Panel):
 
             if to_generate:
                 mask_index = sl.current_mask.index
-                method = {'algorithm': algorithm, 
+                method = {'algorithm': algorithm,
                           'options': options}
                 srf_options = {"index": mask_index,
                                "name": '',
@@ -170,7 +170,7 @@ class InnerTaskPanel(wx.Panel):
                                "keep_largest": False,
                                "overwrite": overwrite}
 
-                Publisher.sendMessage('Create surface from index', 
+                Publisher.sendMessage('Create surface from index',
                                       {'method': method, 'options': srf_options})
                 Publisher.sendMessage('Fold surface task')
 
@@ -200,7 +200,7 @@ class InnerTaskPanel(wx.Panel):
 
 class FoldPanel(wx.Panel):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, size=(50,50))
+        wx.Panel.__init__(self, parent)
         self.SetBackgroundColour(wx.Colour(0,255,0))
 
         inner_panel = InnerFoldPanel(self)
@@ -209,7 +209,7 @@ class FoldPanel(wx.Panel):
         sizer.Add(inner_panel, 1, wx.EXPAND|wx.GROW, 2)
         sizer.Fit(self)
 
-        self.SetSizer(sizer)
+        self.SetSizerAndFit(sizer)
         self.Update()
         self.SetAutoLayout(1)
 
@@ -223,7 +223,8 @@ class InnerFoldPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
-        self.SetBackgroundColour(default_colour)
+        #self.SetBackgroundColour(default_colour)
+        self.SetBackgroundColour((255, 0, 0))
 
         # Fold panel and its style settings
         # FIXME: If we dont insert a value in size or if we set wx.DefaultSize,
@@ -231,8 +232,24 @@ class InnerFoldPanel(wx.Panel):
         # is not working properly in this panel. It might be on some child or
         # parent panel. Perhaps we need to insert the item into the sizer also...
         # Study this.
+        #gbs = wx.GridBagSizer()
+
+        #gbs.AddGrowableRow(0, 1)
+        #gbs.AddGrowableCol(0, 1)
+
+        #self.gbs = gbs
+
+        self.last_size = None
+
+        # Panel sizer to expand fold panel
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        #sizer.Add(gbs, 1, wx.GROW|wx.EXPAND)
+        self.SetSizer(sizer)
+
         fold_panel = fpb.FoldPanelBar(self, -1, wx.DefaultPosition,
-                                      (10, 220), 0,fpb.FPB_SINGLE_FOLD)
+                                      wx.DefaultSize, 0,fpb.FPB_SINGLE_FOLD)
+        self.fold_panel = fold_panel
+
 
         # Fold panel style
         style = fpb.CaptionBarStyle()
@@ -243,6 +260,9 @@ class InnerFoldPanel(wx.Panel):
         # Fold 1 - Mask properties
         item = fold_panel.AddFoldPanel(_("Mask properties"), collapsed=True)
         self.mask_prop_panel = MaskProperties(item)
+
+        #self.__calc_best_size(self.mask_prop_panel)
+
         fold_panel.ApplyCaptionStyle(item, style)
         fold_panel.AddFoldPanelWindow(item, self.mask_prop_panel, Spacing= 0,
                                       leftSpacing=0, rightSpacing=0)
@@ -250,34 +270,86 @@ class InnerFoldPanel(wx.Panel):
 
         # Fold 2 - Advanced edition tools
         item = fold_panel.AddFoldPanel(_("Advanced editing tools"), collapsed=True)
+        etw = EditionTools(item)
+
+        #self.__calc_best_size(etw)
+
         fold_panel.ApplyCaptionStyle(item, style)
-        fold_panel.AddFoldPanelWindow(item, EditionTools(item), Spacing= 0,
+        fold_panel.AddFoldPanelWindow(item, etw, Spacing= 0,
                                       leftSpacing=0, rightSpacing=0)
         self.__id_editor = item.GetId()
         self.last_panel_opened = None
 
         # Fold 3 - Watershed
         item = fold_panel.AddFoldPanel(_("Watershed"), collapsed=True)
+        wtw = WatershedTool(item)
+
+        #self.__calc_best_size(wtw)
+
         fold_panel.ApplyCaptionStyle(item, style)
-        fold_panel.AddFoldPanelWindow(item, WatershedTool(item), Spacing= 0,
+        fold_panel.AddFoldPanelWindow(item, wtw, Spacing= 0,
                                       leftSpacing=0, rightSpacing=0)
         self.__id_watershed = item.GetId()
 
         #fold_panel.Expand(fold_panel.GetFoldPanel(1))
+        #gbs.Add(fold_panel, (0, 0), flag=wx.EXPAND)
+        #gbs.AddGrowableRow(0, 1)
+        sizer.Add(fold_panel, 1, wx.EXPAND)
 
-        # Panel sizer to expand fold panel
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(fold_panel, 1, wx.GROW|wx.EXPAND)
-        sizer.Fit(self)
-        self.SetSizer(sizer)
-        self.Update()
-        self.SetAutoLayout(1)
+        #w, h = self.GetSize()
+        #h = h + 3 * item.GetSize().GetHeight()
+
+        print "SIZEEEEEEE", item.GetSize()
+
+        #self.SetInitialSize((w, h))
+
+        self.ResizeFPB()
+        #self.Fit()
+
+        sizer.Layout()
+        self.Fit()
+
+        #self.Update()
+        #self.SetAutoLayout(1)
 
         self.fold_panel = fold_panel
         self.last_style = None
 
         self.__bind_evt()
         self.__bind_pubsub_evt()
+
+    def __calc_best_size(self, panel):
+        print "Best size", self.GetSize()
+        parent = panel.GetParent()
+        q = panel.Reparent(self)
+
+        #gbs = self.gbs
+        fold_panel = self.fold_panel
+
+        # Calculating the size
+        #gbs.AddGrowableRow(0, 1)
+        #gbs.AddGrowableRow(0, 1)
+        #gbs.Add(panel, (0, 0), flag=wx.EXPAND)
+        self.GetSizer().Add(panel, 1, wx.EXPAND)
+        #self.SetSizerAndFit(self.GetSizer())
+        self.GetSizer().Layout()
+        self.GetSizer().Fit(self)
+        #gbs.Layout()
+        #self.Fit()
+        #self.GetSizer().Layout()
+        size = panel.GetSize()
+
+        #gbs.Remove(0)
+        #gbs.RemoveGrowableRow(0)
+
+        self.GetSizer().Remove(0)
+        panel.Reparent(parent)
+        panel.SetInitialSize(size)
+
+        #if self.last_size is None or self.last_size.GetHeight() < size.GetHeight():
+            #self.SetInitialSize(size)
+
+        print "Best size", size, self.GetSize(), self.GetClientSize(), q
 
     def __bind_evt(self):
         self.fold_panel.Bind(fpb.EVT_CAPTIONBAR, self.OnFoldPressCaption)
@@ -313,6 +385,23 @@ class InnerFoldPanel(wx.Panel):
             self.last_style = None
 
         evt.Skip()
+        wx.CallAfter(self.ResizeFPB)
+
+
+    def ResizeFPB(self):
+        sizeNeeded = self.fold_panel.GetPanelsLength(0, 0)[2]
+        self.fold_panel.SetMinSize((self.fold_panel.GetSize()[0], sizeNeeded ))
+        self.fold_panel.SetSize((self.fold_panel.GetSize()[0], sizeNeeded))
+        print self.fold_panel.GetPanelsLength(0, 0), self.fold_panel.GetSize()
+
+        try:
+            self.GetParent().GetSizer().Layout()
+            self.GetParent().Fit()
+
+            self.GetSizer().Layout()
+            self.Fit()
+        except:
+            pass
 
     def OnRetrieveStyle(self, pubsub_evt):
         if (self.last_style == const.SLICE_STATE_EDITOR):
@@ -331,7 +420,7 @@ class InnerFoldPanel(wx.Panel):
 
 class MaskProperties(wx.Panel):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, size=(50,240))
+        wx.Panel.__init__(self, parent)
 
         ## LINE 1
 
@@ -380,7 +469,7 @@ class MaskProperties(wx.Panel):
         sizer.Add(gradient, 1, wx.EXPAND|wx.TOP|wx.LEFT|wx.RIGHT|wx.BOTTOM, 6)
         sizer.Fit(self)
 
-        self.SetSizer(sizer)
+        self.SetSizerAndFit(sizer)
         self.Update()
         self.SetAutoLayout(1)
 
@@ -419,7 +508,7 @@ class MaskProperties(wx.Panel):
         n = self.combo_thresh.GetCount()
         for i in xrange(n-1, -1, -1):
             self.combo_thresh.Delete(i)
-    
+
     def OnRemoveMasks(self, pubsub_evt):
         print "OnRemoveMasks"
         list_index = pubsub_evt.data
@@ -459,7 +548,7 @@ class MaskProperties(wx.Panel):
         thresh = (thresh_min, thresh_max)
         if thresh in Project().threshold_modes.values():
             preset_name = Project().threshold_modes.get_key(thresh)[0]
-            index = self.threshold_modes_names.index(preset_name) 
+            index = self.threshold_modes_names.index(preset_name)
             self.combo_thresh.SetSelection(index)
         else:
             index = self.threshold_modes_names.index(_("Custom"))
@@ -473,7 +562,7 @@ class MaskProperties(wx.Panel):
         thresh = (thresh_min, thresh_max)
         if thresh in Project().threshold_modes.values():
             preset_name = Project().threshold_modes.get_key(thresh)[0]
-            index = self.threshold_modes_names.index(preset_name) 
+            index = self.threshold_modes_names.index(preset_name)
             self.combo_thresh.SetSelection(index)
         else:
             index = self.threshold_modes_names.index(_("Custom"))
@@ -517,7 +606,7 @@ class MaskProperties(wx.Panel):
 
         elif default_thresh in proj.threshold_modes.values():
             preset_name = proj.threshold_modes.get_key(default_thresh)[0]
-            index = self.threshold_modes_names.index(preset_name) 
+            index = self.threshold_modes_names.index(preset_name)
             self.combo_thresh.SetSelection(index)
             thresh_min, thresh_max = default_thresh
         else:
@@ -571,7 +660,7 @@ class MaskProperties(wx.Panel):
 
 class EditionTools(wx.Panel):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, size=(50,240))
+        wx.Panel.__init__(self, parent)
         default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
         self.SetBackgroundColour(default_colour)
 
@@ -639,7 +728,7 @@ class EditionTools(wx.Panel):
                   wx.BOTTOM, 6)
         sizer.Fit(self)
 
-        self.SetSizer(sizer)
+        self.SetSizerAndFit(sizer)
         self.Update()
         self.SetAutoLayout(1)
 
@@ -717,7 +806,7 @@ class EditionTools(wx.Panel):
 
 class WatershedTool(EditionTools):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, size=(50,150))
+        wx.Panel.__init__(self, parent)
         default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
         self.SetBackgroundColour(default_colour)
 
@@ -799,7 +888,7 @@ class WatershedTool(EditionTools):
         sizer.Add(sizer_btns, 0, wx.EXPAND)
         sizer.Fit(self)
 
-        self.SetSizer(sizer)
+        self.SetSizerAndFit(sizer)
         self.Update()
         self.SetAutoLayout(1)
 
