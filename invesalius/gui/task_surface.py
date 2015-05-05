@@ -49,8 +49,8 @@ class TaskPanel(wx.Panel):
 
         inner_panel = InnerTaskPanel(self)
 
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(inner_panel, 1, wx.EXPAND | wx.GROW | wx.BOTTOM | wx.RIGHT |
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(inner_panel, 0, wx.EXPAND | wx.GROW | wx.BOTTOM | wx.RIGHT |
                   wx.LEFT, 7)
         sizer.Fit(self)
 
@@ -68,7 +68,8 @@ class InnerTaskPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         default_colour = self.GetBackgroundColour()
-        self.SetBackgroundColour(wx.Colour(255,255,255))
+        #self.SetBackgroundColour(wx.Colour(255,255,255))
+        self.SetBackgroundColour(wx.Colour(0,0,255))
         self.SetAutoLayout(1)
 
 
@@ -109,13 +110,13 @@ class InnerTaskPanel(wx.Panel):
         # Add line sizers into main sizer
         main_sizer = wx.BoxSizer(wx.VERTICAL)
         main_sizer.Add(line_new, 0,wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
-        main_sizer.Add(fold_panel, 1, wx.GROW|wx.EXPAND|wx.ALL, 5)
+        main_sizer.Add(fold_panel, 0, wx.GROW|wx.EXPAND|wx.ALL, 5)
         main_sizer.Add(button_next, 0, wx.ALIGN_RIGHT|wx.RIGHT|wx.BOTTOM, 5)
         main_sizer.Fit(self)
 
-        self.SetSizer(main_sizer)
+        self.SetSizerAndFit(main_sizer)
         self.Update()
-        self.SetAutoLayout(1)
+        #self.SetAutoLayout(1)
 
         self.sizer = main_sizer
 
@@ -181,10 +182,10 @@ class FoldPanel(wx.Panel):
         inner_panel = InnerFoldPanel(self)
 
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(inner_panel, 1, wx.EXPAND|wx.GROW, 2)
+        sizer.Add(inner_panel, 0, wx.EXPAND|wx.GROW, 2)
         sizer.Fit(self)
 
-        self.SetSizer(sizer)
+        self.SetSizerAndFit(sizer)
         self.Update()
         self.SetAutoLayout(1)
 
@@ -201,7 +202,7 @@ class InnerFoldPanel(wx.Panel):
         # parent panel. Perhaps we need to insert the item into the sizer also...
         # Study this.
         fold_panel = fpb.FoldPanelBar(self, -1, wx.DefaultPosition,
-                                      (10, 140), 0,fpb.FPB_SINGLE_FOLD)
+                                      wx.DefaultSize, 0,fpb.FPB_SINGLE_FOLD)
 
         # Fold panel style
         style = fpb.CaptionBarStyle()
@@ -226,6 +227,9 @@ class InnerFoldPanel(wx.Panel):
         #                              leftSpacing=0, rightSpacing=0)
         #fold_panel.Expand(fold_panel.GetFoldPanel(1))
 
+        self.fold_panel = fold_panel
+        self.__bind_evt()
+
         # Panel sizer to expand fold panel
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(fold_panel, 1, wx.GROW|wx.EXPAND)
@@ -235,14 +239,30 @@ class InnerFoldPanel(wx.Panel):
         self.Update()
         self.SetAutoLayout(1)
 
+
+        self.ResizeFPB()
+
+    def __bind_evt(self):
+        self.fold_panel.Bind(fpb.EVT_CAPTIONBAR, self.OnFoldPressCaption)
+
+    def OnFoldPressCaption(self, evt):
+        evt.Skip()
+        self.ResizeFPB()
+
+    def ResizeFPB(self):
+        sizeNeeded = self.fold_panel.GetPanelsLength(0, 0)[2]
+        self.fold_panel.SetMinSize((self.fold_panel.GetSize()[0], sizeNeeded ))
+        self.fold_panel.SetSize((self.fold_panel.GetSize()[0], sizeNeeded))
+
 BTN_LARGEST = wx.NewId()
 BTN_SPLIT = wx.NewId()
 BTN_SEEDS = wx.NewId()
 class SurfaceTools(wx.Panel):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, size=(50,400))
+        wx.Panel.__init__(self, parent)
         default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
-        self.SetBackgroundColour(default_colour)
+        #self.SetBackgroundColour(default_colour)
+        self.SetBackgroundColour((0, 255, 0))
 
         #self.SetBackgroundColour(wx.Colour(255,255,255))
         self.SetAutoLayout(1)
@@ -327,7 +347,7 @@ class SurfaceTools(wx.Panel):
         main_sizer.Add(fixed_sizer, 0, wx.GROW|wx.EXPAND|wx.TOP, 5)
 
         # Update main sizer and panel layout
-        self.SetSizer(main_sizer)
+        self.SetSizerAndFit(main_sizer)
         self.Update()
         self.SetAutoLayout(1)
         self.sizer = main_sizer
@@ -375,9 +395,10 @@ class SurfaceTools(wx.Panel):
 
 class SurfaceProperties(wx.Panel):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, size=(50,400))
+        wx.Panel.__init__(self, parent)
         default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
-        self.SetBackgroundColour(default_colour)
+        #self.SetBackgroundColour(default_colour)
+        self.SetBackgroundColour((255, 0, 0))
 
         self.surface_dict = utl.TwoWaysDictionary()
 
@@ -439,7 +460,7 @@ class SurfaceProperties(wx.Panel):
 
         self.SetSizer(sizer)
         self.Update()
-        self.SetAutoLayout(1)
+        #self.SetAutoLayout(1)
 
         self.__bind_events()
 
@@ -528,7 +549,7 @@ class SurfaceProperties(wx.Panel):
 class QualityAdjustment(wx.Panel):
     def __init__(self, parent):
         import constants as const
-        wx.Panel.__init__(self, parent, size=(50,240))
+        wx.Panel.__init__(self, parent)
         default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
         self.SetBackgroundColour(default_colour)
 

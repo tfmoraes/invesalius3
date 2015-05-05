@@ -121,6 +121,7 @@ class Panel(wx.Panel):
         #self.SetSizerAndFit(sizer)
         self.SetSizer(sizer)
 
+
 # Lower fold panel
 class LowerTaskPanel(wx.Panel):
     def __init__(self, parent):
@@ -139,7 +140,7 @@ class LowerTaskPanel(wx.Panel):
         self.gbs = gbs
 
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(gbs, 1, wx.GROW|wx.EXPAND)
+        #sizer.Add(gbs, 1, wx.GROW|wx.EXPAND)
         self.SetSizer(sizer)
 
         image_list = wx.ImageList(16,16)
@@ -156,21 +157,26 @@ class LowerTaskPanel(wx.Panel):
         #npanel = wx.Panel(self, -1)
         self.npanel = nb.NotebookPanel(item)
 
-        self.__calc_best_size(self.npanel)
+        #self.__calc_best_size(self.npanel)
 
         fold_panel.AddFoldPanelWindow(item, self.npanel, #fpb.FPB_ALIGN_WIDTH, #Spacing= 0,
                                       leftSpacing=0, rightSpacing=0)
 
-        gbs.AddGrowableRow(0, 1)
-        gbs.Add(fold_panel, (0, 0), flag=wx.EXPAND)
-        gbs.Layout()
-        item.ResizePanel()
+        #gbs.AddGrowableRow(0, 1)
+        #gbs.Add(fold_panel, (0, 0), flag=wx.EXPAND)
+        #gbs.Layout()
+        #item.ResizePanel()
+
+        sizer.Add(fold_panel, 1, wx.EXPAND)
+
+        self.ResizeFPB()
 
         sizer.Fit(self)
         self.Fit()
 
         self.SetStateProjectClose()
         self.__bind_events()
+
 
     def __calc_best_size(self, panel):
         parent = panel.GetParent()
@@ -213,6 +219,11 @@ class LowerTaskPanel(wx.Panel):
     def SetStateProjectOpen(self):
         for item in self.enable_items:
             item.Enable()
+
+    def ResizeFPB(self):
+        sizeNeeded = self.fold_panel.GetPanelsLength(0, 0)[2]
+        self.fold_panel.SetMinSize((self.fold_panel.GetSize()[0], sizeNeeded ))
+        self.fold_panel.SetSize((self.fold_panel.GetSize()[0], sizeNeeded))
 
 
 # Upper fold panel
@@ -332,3 +343,16 @@ class UpperTaskPanel(wx.Panel):
 
 
         evt.Skip()
+        wx.CallAfter(self.ResizeFPB)
+
+    def ResizeFPB(self):
+        sizeNeeded = self.fold_panel.GetPanelsLength(0, 0)[2]
+        self.fold_panel.SetMinSize((self.fold_panel.GetSize()[0], sizeNeeded ))
+        self.fold_panel.SetSize((self.fold_panel.GetSize()[0], sizeNeeded))
+        print "UPPER", self.fold_panel.GetPanelsLength(0, 0), self.fold_panel.GetSize()
+
+        try:
+            self.GetSizer().Layout()
+            self.Fit()
+        except:
+            pass

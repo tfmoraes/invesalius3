@@ -44,7 +44,7 @@ WILDCARD_SAVE_3D = "Inventor (*.iv)|*.iv|"\
                    "VTK PolyData (*.vtp)|*.vtp|"\
                    "Wavefront (*.obj)|*.obj|"\
                    "X3D (*.x3d)|*.x3d"
-                     
+
 INDEX_TO_TYPE_3D = {0: const.FILETYPE_IV,
                     1: const.FILETYPE_PLY,
                     2: const.FILETYPE_RIB,
@@ -86,7 +86,7 @@ class TaskPanel(wx.Panel):
 
         inner_panel = InnerTaskPanel(self)
 
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(inner_panel, 1, wx.EXPAND | wx.GROW | wx.BOTTOM | wx.RIGHT |
                   wx.LEFT, 7)
         sizer.Fit(self)
@@ -234,7 +234,7 @@ class InnerTaskPanel(wx.Panel):
         self.__init_menu()
 
     def __init_menu(self):
-        
+
 
         menu = wx.Menu()
         self.id_to_name = {const.AXIAL:_("Axial slice"),
@@ -246,23 +246,23 @@ class InnerTaskPanel(wx.Panel):
             item = wx.MenuItem(menu, id, self.id_to_name[id])
             menu.AppendItem(item)
 
-        self.menu_picture = menu 
+        self.menu_picture = menu
         menu.Bind(wx.EVT_MENU, self.OnMenuPicture)
 
     def OnMenuPicture(self, evt):
-        print "OnMenuPicture" 
+        print "OnMenuPicture"
         id = evt.GetId()
         value = dlg.ExportPicture(self.id_to_name[id])
         if value:
-            filename, filetype = value 
+            filename, filetype = value
             Publisher.sendMessage('Export picture to file',
                                        (id, filename, filetype))
- 
+
 
 
     def OnLinkExportPicture(self, evt=None):
         self.button_picture.PopupMenu(self.menu_picture)
-        
+
 
     def OnLinkExportMask(self, evt=None):
         project = proj.Project()
@@ -280,7 +280,7 @@ class InnerTaskPanel(wx.Panel):
                             WILDCARD_SAVE_MASK,
                             wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
         dlg.SetFilterIndex(0) # default is VTI
-                                
+
         if dlg.ShowModal() == wx.ID_OK:
             filename = dlg.GetPath()
             print "filename", filename
@@ -316,7 +316,7 @@ class InnerTaskPanel(wx.Panel):
                                 WILDCARD_SAVE_3D,
                                 wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
             dlg.SetFilterIndex(3) # default is STL
-                                
+
             if dlg.ShowModal() == wx.ID_OK:
                 filetype_index = dlg.GetFilterIndex()
                 filetype = INDEX_TO_TYPE_3D[filetype_index]
