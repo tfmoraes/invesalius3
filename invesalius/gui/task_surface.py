@@ -133,7 +133,7 @@ class InnerTaskPanel(wx.Panel):
     def OnLinkNewSurface(self, evt=None):
         #import gui.dialogs as dlg
         sl = slice_.Slice()
-        dialog = dlg.SurfaceCreationDialog(None, -1, 
+        dialog = dlg.SurfaceCreationDialog(None, -1,
                             _('New surface'),
                             mask_edited=sl.current_mask.was_edited)
 
@@ -215,7 +215,6 @@ class InnerFoldPanel(wx.Panel):
         fold_panel.ApplyCaptionStyle(item, style)
         fold_panel.AddFoldPanelWindow(item, SurfaceProperties(item), Spacing= 0,
                                       leftSpacing=0, rightSpacing=0)
-        fold_panel.Expand(fold_panel.GetFoldPanel(0))
 
         # Fold 2 - Surface tools
         item = fold_panel.AddFoldPanel(_("Advanced options"), collapsed=True)
@@ -240,14 +239,16 @@ class InnerFoldPanel(wx.Panel):
         self.SetAutoLayout(1)
 
 
+        fold_panel.Expand(fold_panel.GetFoldPanel(1))
         self.ResizeFPB()
+        fold_panel.Expand(fold_panel.GetFoldPanel(0))
 
     def __bind_evt(self):
         self.fold_panel.Bind(fpb.EVT_CAPTIONBAR, self.OnFoldPressCaption)
 
     def OnFoldPressCaption(self, evt):
         evt.Skip()
-        self.ResizeFPB()
+        wx.CallAfter(self.ResizeFPB)
 
     def ResizeFPB(self):
         sizeNeeded = self.fold_panel.GetPanelsLength(0, 0)[2]
@@ -349,7 +350,6 @@ class SurfaceTools(wx.Panel):
         # Update main sizer and panel layout
         self.SetSizerAndFit(main_sizer)
         self.Update()
-        self.SetAutoLayout(1)
         self.sizer = main_sizer
 
     def OnLinkLargest(self, evt):
@@ -521,7 +521,7 @@ class SurfaceProperties(wx.Panel):
         self.button_colour.SetColour(colour)
         self.slider_transparency.SetValue(transparency)
         self.combo_surface_name.SetSelection(index)
-        Publisher.sendMessage('Update surface data', (index))        
+        Publisher.sendMessage('Update surface data', (index))
 
     def OnComboName(self, evt):
         surface_name = evt.GetString()

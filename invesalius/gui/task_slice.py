@@ -261,18 +261,13 @@ class InnerFoldPanel(wx.Panel):
         item = fold_panel.AddFoldPanel(_("Mask properties"), collapsed=True)
         self.mask_prop_panel = MaskProperties(item)
 
-        #self.__calc_best_size(self.mask_prop_panel)
-
         fold_panel.ApplyCaptionStyle(item, style)
         fold_panel.AddFoldPanelWindow(item, self.mask_prop_panel, Spacing= 0,
                                       leftSpacing=0, rightSpacing=0)
-        fold_panel.Expand(fold_panel.GetFoldPanel(0))
 
         # Fold 2 - Advanced edition tools
         item = fold_panel.AddFoldPanel(_("Advanced editing tools"), collapsed=True)
         etw = EditionTools(item)
-
-        #self.__calc_best_size(etw)
 
         fold_panel.ApplyCaptionStyle(item, style)
         fold_panel.AddFoldPanelWindow(item, etw, Spacing= 0,
@@ -284,33 +279,19 @@ class InnerFoldPanel(wx.Panel):
         item = fold_panel.AddFoldPanel(_("Watershed"), collapsed=True)
         wtw = WatershedTool(item)
 
-        #self.__calc_best_size(wtw)
-
         fold_panel.ApplyCaptionStyle(item, style)
         fold_panel.AddFoldPanelWindow(item, wtw, Spacing= 0,
                                       leftSpacing=0, rightSpacing=0)
         self.__id_watershed = item.GetId()
 
-        #fold_panel.Expand(fold_panel.GetFoldPanel(1))
-        #gbs.Add(fold_panel, (0, 0), flag=wx.EXPAND)
-        #gbs.AddGrowableRow(0, 1)
         sizer.Add(fold_panel, 1, wx.EXPAND)
 
-        #w, h = self.GetSize()
-        #h = h + 3 * item.GetSize().GetHeight()
-
-        print "SIZEEEEEEE", item.GetSize()
-
-        #self.SetInitialSize((w, h))
-
+        fold_panel.Expand(fold_panel.GetFoldPanel(2))
         self.ResizeFPB()
-        #self.Fit()
+        fold_panel.Expand(fold_panel.GetFoldPanel(0))
 
         sizer.Layout()
         self.Fit()
-
-        #self.Update()
-        #self.SetAutoLayout(1)
 
         self.fold_panel = fold_panel
         self.last_style = None
@@ -394,18 +375,18 @@ class InnerFoldPanel(wx.Panel):
         self.fold_panel.SetSize((self.fold_panel.GetSize()[0], sizeNeeded))
         print self.fold_panel.GetPanelsLength(0, 0), self.fold_panel.GetSize()
 
-        try:
-            #self.GetParent().GetParent().GetSizer().Layout()
-            #self.GetParent().GetParent().Fit()
-            self.GetSizer().Layout()
-            self.Fit()
+        #try:
+            ##self.GetParent().GetParent().GetSizer().Layout()
+            ##self.GetParent().GetParent().Fit()
+            #self.GetSizer().Layout()
+            #self.Fit()
 
-            self.GetParent().GetSizer().Layout()
-            self.GetParent().Fit()
-            self.GetParent().GetParent().GetParent().GetParent().GetParent().GetParent().GetParent().ResizeFPB()
-            self.GetParent().GetParent().GetParent().GetParent().GetParent().GetParent().Layout()
-        except Exception, e:
-            print e
+            #self.GetParent().GetSizer().Layout()
+            #self.GetParent().Fit()
+            #self.GetParent().GetParent().GetParent().GetParent().GetParent().GetParent().Layout()
+            #self.GetParent().GetParent().GetParent().GetParent().GetParent().GetParent().GetParent().ResizeFPB()
+        #except Exception, e:
+            #print e
 
     def OnRetrieveStyle(self, pubsub_evt):
         if (self.last_style == const.SLICE_STATE_EDITOR):
