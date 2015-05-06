@@ -140,7 +140,7 @@ class LowerTaskPanel(wx.Panel):
         self.gbs = gbs
 
         sizer = wx.BoxSizer(wx.VERTICAL)
-        #sizer.Add(gbs, 1, wx.GROW|wx.EXPAND)
+        sizer.Add(gbs, 1, wx.GROW|wx.EXPAND)
         self.SetSizer(sizer)
 
         image_list = wx.ImageList(16,16)
@@ -157,19 +157,15 @@ class LowerTaskPanel(wx.Panel):
         #npanel = wx.Panel(self, -1)
         self.npanel = nb.NotebookPanel(item)
 
-        #self.__calc_best_size(self.npanel)
+        self.__calc_best_size(self.npanel)
 
         fold_panel.AddFoldPanelWindow(item, self.npanel, #fpb.FPB_ALIGN_WIDTH, #Spacing= 0,
                                       leftSpacing=0, rightSpacing=0)
 
-        #gbs.AddGrowableRow(0, 1)
-        #gbs.Add(fold_panel, (0, 0), flag=wx.EXPAND)
-        #gbs.Layout()
-        #item.ResizePanel()
-
-        sizer.Add(fold_panel, 1, wx.EXPAND)
-
-        self.ResizeFPB()
+        gbs.AddGrowableRow(0, 1)
+        gbs.Add(fold_panel, (0, 0), flag=wx.EXPAND)
+        gbs.Layout()
+        item.ResizePanel()
 
         sizer.Fit(self)
         self.Fit()
