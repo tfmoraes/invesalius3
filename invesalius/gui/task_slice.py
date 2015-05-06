@@ -121,10 +121,12 @@ class InnerTaskPanel(wx.Panel):
             check_box.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
         button_next.Bind(wx.EVT_BUTTON, self.OnButtonNextTask)
 
+        next_btn_sizer = wx.BoxSizer(wx.VERTICAL)
+        next_btn_sizer.Add(button_next, 1, wx.ALIGN_RIGHT)
+
         line_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        line_sizer.Add(check_box, 0, wx.ALIGN_LEFT|wx.RIGHT|wx.LEFT|wx.BOTTOM, 5)
-        line_sizer.Add(button_next, 0,
-                       wx.ALIGN_RIGHT|wx.RIGHT|wx.LEFT|wx.BOTTOM, 5)
+        line_sizer.Add(check_box, 0, wx.ALIGN_LEFT|wx.RIGHT|wx.LEFT, 5)
+        line_sizer.Add(next_btn_sizer, 1, wx.EXPAND|wx.ALIGN_RIGHT|wx.RIGHT|wx.LEFT, 5)
         line_sizer.Fit(self)
 
         # Add line sizers into main sizer
@@ -132,6 +134,7 @@ class InnerTaskPanel(wx.Panel):
         main_sizer.Add(line_new, 0,wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
         main_sizer.Add(fold_panel, 1, wx.GROW|wx.EXPAND|wx.ALL, 5)
         main_sizer.AddSizer(line_sizer, 0, wx.GROW|wx.EXPAND)
+        main_sizer.AddSpacer(5)
         main_sizer.Fit(self)
 
         self.SetSizerAndFit(main_sizer)
