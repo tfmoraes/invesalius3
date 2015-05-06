@@ -373,20 +373,6 @@ class InnerFoldPanel(wx.Panel):
         sizeNeeded = self.fold_panel.GetPanelsLength(0, 0)[2]
         self.fold_panel.SetMinSize((self.fold_panel.GetSize()[0], sizeNeeded ))
         self.fold_panel.SetSize((self.fold_panel.GetSize()[0], sizeNeeded))
-        print self.fold_panel.GetPanelsLength(0, 0), self.fold_panel.GetSize()
-
-        #try:
-            ##self.GetParent().GetParent().GetSizer().Layout()
-            ##self.GetParent().GetParent().Fit()
-            #self.GetSizer().Layout()
-            #self.Fit()
-
-            #self.GetParent().GetSizer().Layout()
-            #self.GetParent().Fit()
-            #self.GetParent().GetParent().GetParent().GetParent().GetParent().GetParent().Layout()
-            #self.GetParent().GetParent().GetParent().GetParent().GetParent().GetParent().GetParent().ResizeFPB()
-        #except Exception, e:
-            #print e
 
     def OnRetrieveStyle(self, pubsub_evt):
         if (self.last_style == const.SLICE_STATE_EDITOR):

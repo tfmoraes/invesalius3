@@ -345,10 +345,3 @@ class UpperTaskPanel(wx.Panel):
         sizeNeeded = self.fold_panel.GetPanelsLength(0, 0)[2]
         self.fold_panel.SetMinSize((self.fold_panel.GetSize()[0], sizeNeeded ))
         self.fold_panel.SetSize((self.fold_panel.GetSize()[0], sizeNeeded))
-        print "UPPER", self.fold_panel.GetPanelsLength(0, 0), self.fold_panel.GetSize()
-
-        try:
-            self.GetSizer().Layout()
-            self.Fit()
-        except:
-            pass
