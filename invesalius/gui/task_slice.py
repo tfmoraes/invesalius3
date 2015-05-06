@@ -412,7 +412,7 @@ class MaskProperties(wx.Panel):
         # Sizer which represents the first line
         line1 = wx.BoxSizer(wx.HORIZONTAL)
         line1.Add(combo_mask_name, 1, wx.EXPAND|wx.GROW|wx.TOP|wx.RIGHT, 2)
-        line1.Add(button_colour, 0, wx.TOP|wx.LEFT|wx.RIGHT, 2)
+        line1.Add(button_colour, 0, wx.TOP|wx.LEFT|wx.RIGHT|wx.ALIGN_CENTER_VERTICAL , 2)
 
         ### LINE 2
         text_thresh = wx.StaticText(self, -1,
@@ -436,10 +436,18 @@ class MaskProperties(wx.Panel):
 
         # Add all lines into main sizer
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(line1, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
-        sizer.Add(text_thresh, 0, wx.GROW|wx.EXPAND|wx.ALL, 5)
-        sizer.Add(combo_thresh, 0, wx.EXPAND|wx.GROW|wx.TOP|wx.RIGHT, 2)
-        sizer.Add(gradient, 1, wx.EXPAND|wx.TOP|wx.LEFT|wx.RIGHT|wx.BOTTOM, 6)
+        sizer.AddSpacer(7)
+        sizer.Add(line1, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT, 5)
+
+        sizer.AddSpacer(5)
+        sizer.Add(text_thresh, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT, 5)
+        sizer.AddSpacer(2)
+        sizer.Add(combo_thresh, 0, wx.EXPAND|wx.GROW|wx.LEFT|wx.RIGHT, 5)
+
+        sizer.AddSpacer(5)
+        sizer.Add(gradient, 1, wx.EXPAND|wx.LEFT|wx.RIGHT, 5)
+        sizer.AddSpacer(7)
+
         sizer.Fit(self)
 
         self.SetSizerAndFit(sizer)
@@ -663,7 +671,12 @@ class EditionTools(wx.Panel):
         btn_brush_format.SetMenu(menu)
         self.btn_brush_format = btn_brush_format
 
-        spin_brush_size = wx.SpinCtrl(self, -1, "", (20, 50))
+        # To calculate best width to spinctrl
+        dc = wx.WindowDC(self)
+        dc.SetFont(self.GetFont())
+        width, height = dc.GetTextExtent("MMM")
+
+        spin_brush_size = wx.SpinCtrl(self, -1, "", size=(width + 20, -1))
         spin_brush_size.SetRange(1,100)
         spin_brush_size.SetValue(const.BRUSH_SIZE)
         spin_brush_size.Bind(wx.EVT_TEXT, self.OnBrushSize)
@@ -679,9 +692,9 @@ class EditionTools(wx.Panel):
 
         # Sizer which represents the second line
         line2 = wx.BoxSizer(wx.HORIZONTAL)
-        line2.Add(btn_brush_format, 0, wx.EXPAND|wx.GROW|wx.TOP|wx.RIGHT, 0)
-        line2.Add(spin_brush_size, 0, wx.RIGHT, 5)
-        line2.Add(combo_brush_op, 1, wx.EXPAND|wx.TOP|wx.RIGHT|wx.LEFT, 5)
+        line2.Add(btn_brush_format, 0, wx.EXPAND|wx.GROW|wx.RIGHT, 5)
+        line2.Add(spin_brush_size, 0, wx.RIGHT|wx.ALIGN_CENTER_VERTICAL, 5)
+        line2.Add(combo_brush_op, 1, wx.RIGHT|wx.LEFT|wx.ALIGN_CENTER_VERTICAL, 5)
 
         ## LINE 3
         text_thresh = wx.StaticText(self, -1, _("Brush threshold range:"))
@@ -694,11 +707,15 @@ class EditionTools(wx.Panel):
 
         # Add lines into main sizer
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(text1, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
-        sizer.Add(line2, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
-        sizer.Add(text_thresh, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
-        sizer.Add(gradient_thresh, 0, wx.EXPAND|wx.TOP|wx.LEFT|wx.RIGHT|
-                  wx.BOTTOM, 6)
+        sizer.AddSpacer(7)
+        sizer.Add(text1, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT, 5)
+        sizer.AddSpacer(2)
+        sizer.Add(line2, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT, 5)
+        sizer.AddSpacer(5)
+        sizer.Add(text_thresh, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT, 5)
+        sizer.AddSpacer(5)
+        sizer.Add(gradient_thresh, 0, wx.EXPAND|wx.LEFT|wx.RIGHT, 5)
+        sizer.AddSpacer(7)
         sizer.Fit(self)
 
         self.SetSizerAndFit(sizer)
@@ -809,7 +826,12 @@ class WatershedTool(EditionTools):
         btn_brush_format.SetMenu(menu)
         self.btn_brush_format = btn_brush_format
 
-        spin_brush_size = wx.SpinCtrl(self, -1, "", (20, 50))
+        # To calculate best width to spinctrl
+        dc = wx.WindowDC(self)
+        dc.SetFont(self.GetFont())
+        width, height = dc.GetTextExtent("MMM")
+
+        spin_brush_size = wx.SpinCtrl(self, -1, "", size=(width + 20, -1))
         spin_brush_size.SetRange(1,100)
         spin_brush_size.SetValue(const.BRUSH_SIZE)
         spin_brush_size.Bind(wx.EVT_TEXT, self.OnBrushSize)
@@ -827,9 +849,9 @@ class WatershedTool(EditionTools):
 
         # Sizer which represents the second line
         line2 = wx.BoxSizer(wx.HORIZONTAL)
-        line2.Add(btn_brush_format, 0, wx.EXPAND|wx.GROW|wx.TOP|wx.RIGHT, 0)
-        line2.Add(spin_brush_size, 0, wx.RIGHT, 5)
-        line2.Add(combo_brush_op, 1, wx.EXPAND|wx.TOP|wx.RIGHT|wx.LEFT, 5)
+        line2.Add(btn_brush_format, 0, wx.EXPAND|wx.GROW|wx.RIGHT, 5)
+        line2.Add(spin_brush_size, 0, wx.RIGHT|wx.ALIGN_CENTER_VERTICAL, 5)
+        line2.Add(combo_brush_op, 1, wx.RIGHT|wx.LEFT|wx.ALIGN_CENTER_VERTICAL, 5)
 
         ## LINE 3
 
@@ -854,11 +876,17 @@ class WatershedTool(EditionTools):
 
         # Add lines into main sizer
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(text1, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
-        sizer.Add(line2, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
-        sizer.Add(check_box, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
-        sizer.Add(ww_wl_cbox, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
+        sizer.AddSpacer(7)
+        sizer.Add(text1, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT, 5)
+        sizer.AddSpacer(2)
+        sizer.Add(line2, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT, 5)
+        sizer.AddSpacer(5)
+        sizer.Add(check_box, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT, 5)
+        sizer.AddSpacer(2)
+        sizer.Add(ww_wl_cbox, 0, wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT, 5)
+        sizer.AddSpacer(5)
         sizer.Add(sizer_btns, 0, wx.EXPAND)
+        sizer.AddSpacer(7)
         sizer.Fit(self)
 
         self.SetSizerAndFit(sizer)
