@@ -99,7 +99,8 @@ class InnerTaskPanel(wx.Panel):
 
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
-        self.SetBackgroundColour(wx.Colour(255,255,255))
+        backgroud_colour = wx.Colour(255,255,255)
+        self.SetBackgroundColour(backgroud_colour)
         self.SetAutoLayout(1)
 
         # Counter for projects loaded in current GUI
@@ -109,7 +110,9 @@ class InnerTaskPanel(wx.Panel):
         link_export_picture = hl.HyperLinkCtrl(self, -1,
                                             _("Export picture..."))
         link_export_picture.SetUnderlines(False, False, False)
+        link_export_picture.SetBold(True)
         link_export_picture.SetColours("BLACK", "BLACK", "BLACK")
+        link_export_picture.SetBackgroundColour(self.GetBackgroundColour())
         link_export_picture.SetToolTip(tooltip)
         link_export_picture.AutoBrowse(False)
         link_export_picture.UpdateLink()
@@ -119,7 +122,9 @@ class InnerTaskPanel(wx.Panel):
         tooltip = wx.ToolTip(_("Export 3D surface"))
         link_export_surface = hl.HyperLinkCtrl(self, -1,_("Export 3D surface..."))
         link_export_surface.SetUnderlines(False, False, False)
+        link_export_surface.SetBold(True)
         link_export_surface.SetColours("BLACK", "BLACK", "BLACK")
+        link_export_surface.SetBackgroundColour(self.GetBackgroundColour())
         link_export_surface.SetToolTip(tooltip)
         link_export_surface.AutoBrowse(False)
         link_export_surface.UpdateLink()
@@ -189,11 +194,13 @@ class InnerTaskPanel(wx.Panel):
         button_picture = pbtn.PlateButton(self, BTN_PICTURE, "",
                                                BMP_TAKE_PICTURE,
                                                style=button_style)
+        button_picture.SetBackgroundColour(self.GetBackgroundColour())
         self.button_picture = button_picture
 
         button_surface = pbtn.PlateButton(self, BTN_SURFACE, "",
                                                 BMP_EXPORT_SURFACE,
                                               style=button_style)
+        button_surface.SetBackgroundColour(self.GetBackgroundColour())
         #button_mask = pbtn.PlateButton(self, BTN_MASK, "",
         #                                BMP_EXPORT_MASK,
         #                                style=button_style)

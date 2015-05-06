@@ -65,7 +65,8 @@ class TaskPanel(wx.Panel):
 class InnerTaskPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
-        self.SetBackgroundColour(wx.Colour(255,255,255))
+        backgroud_colour = wx.Colour(255,255,255)
+        self.SetBackgroundColour(backgroud_colour)
         self.SetAutoLayout(1)
 
         # Image(s) for buttons
@@ -76,6 +77,7 @@ class InnerTaskPanel(wx.Panel):
         # Button for creating new surface
         button_new_mask = pbtn.PlateButton(self, BTN_NEW, "", BMP_ADD, style=\
                                    pbtn.PB_STYLE_SQUARE | pbtn.PB_STYLE_DEFAULT)
+        button_new_mask.SetBackgroundColour(self.GetBackgroundColour())
         self.Bind(wx.EVT_BUTTON, self.OnButton)
 
 
@@ -83,7 +85,9 @@ class InnerTaskPanel(wx.Panel):
         tooltip = wx.ToolTip(_("Create mask for slice segmentation and editing"))
         link_new_mask = hl.HyperLinkCtrl(self, -1, _("Create new mask"))
         link_new_mask.SetUnderlines(False, False, False)
+        link_new_mask.SetBold(True)
         link_new_mask.SetColours("BLACK", "BLACK", "BLACK")
+        link_new_mask.SetBackgroundColour(self.GetBackgroundColour())
         link_new_mask.SetToolTip(tooltip)
         link_new_mask.AutoBrowse(False)
         link_new_mask.UpdateLink()
@@ -201,7 +205,6 @@ class InnerTaskPanel(wx.Panel):
 class FoldPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
-        self.SetBackgroundColour(wx.Colour(0,255,0))
 
         inner_panel = InnerFoldPanel(self)
 
@@ -223,8 +226,7 @@ class InnerFoldPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
-        #self.SetBackgroundColour(default_colour)
-        self.SetBackgroundColour((255, 0, 0))
+        self.SetBackgroundColour(default_colour)
 
         # Fold panel and its style settings
         # FIXME: If we dont insert a value in size or if we set wx.DefaultSize,
