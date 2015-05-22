@@ -29,6 +29,8 @@ from wx.lib.pubsub import pub as Publisher
 import wx.lib.agw.toasterbox as TB
 import wx.lib.popupctl as pc
 
+from wx.lib.agw.aui.auibar import AuiToolBar
+
 import constants as const
 import default_tasks as tasks
 import default_viewers as viewers
@@ -182,42 +184,46 @@ class Frame(wx.Frame):
         # This is pretty tricky -- order on win32 is inverted when
         # compared to linux2 & darwin
         if sys.platform == 'win32':
-            t1 = ProjectToolBar(self)
-            t2 = HistoryToolBar(self)
-            t3 = LayoutToolBar(self)
-            t4 = ObjectToolBar(self)
+            #t1 = ProjectToolBar(self)
+            #t2 = HistoryToolBar(self)
+            #t3 = LayoutToolBar(self)
+            #t4 = ObjectToolBar(self)
             t5 = SliceToolBar(self)
         else:
-            t5 = ProjectToolBar(self)
-            t4 = HistoryToolBar(self)
-            t3 = LayoutToolBar(self)
-            t2 = ObjectToolBar(self)
+            #t5 = ProjectToolBar(self)
+            #t4 = HistoryToolBar(self)
+            #t3 = LayoutToolBar(self)
+            #t2 = ObjectToolBar(self)
             t1 = SliceToolBar(self)
+
+
+        #self.SetToolBar(t1)
+        #t1.Realize()
 
         aui_manager.AddPane(t1, wx.aui.AuiPaneInfo().
                           Name("General Features Toolbar").
                           ToolbarPane().Top().Floatable(False).
                           LeftDockable(False).RightDockable(False))
 
-        aui_manager.AddPane(t2, wx.aui.AuiPaneInfo().
-                          Name("Layout Toolbar").
-                          ToolbarPane().Top().Floatable(False).
-                          LeftDockable(False).RightDockable(False))
+        #aui_manager.AddPane(t2, wx.aui.AuiPaneInfo().
+                          #Name("Layout Toolbar").
+                          #ToolbarPane().Top().Floatable(False).
+                          #LeftDockable(False).RightDockable(False))
 
-        aui_manager.AddPane(t3, wx.aui.AuiPaneInfo().
-                          Name("Project Toolbar").
-                          ToolbarPane().Top().Floatable(False).
-                          LeftDockable(False).RightDockable(False))
+        #aui_manager.AddPane(t3, wx.aui.AuiPaneInfo().
+                          #Name("Project Toolbar").
+                          #ToolbarPane().Top().Floatable(False).
+                          #LeftDockable(False).RightDockable(False))
 
-        aui_manager.AddPane(t4, wx.aui.AuiPaneInfo().
-                          Name("Slice Toolbar").
-                          ToolbarPane().Top().Floatable(False).
-                          LeftDockable(False).RightDockable(False))
+        #aui_manager.AddPane(t4, wx.aui.AuiPaneInfo().
+                          #Name("Slice Toolbar").
+                          #ToolbarPane().Top().Floatable(False).
+                          #LeftDockable(False).RightDockable(False))
 
-        aui_manager.AddPane(t5, wx.aui.AuiPaneInfo().
-                          Name("History Toolbar").
-                          ToolbarPane().Top().Floatable(False).
-                          LeftDockable(False).RightDockable(False))
+        #aui_manager.AddPane(t5, wx.aui.AuiPaneInfo().
+                          #Name("History Toolbar").
+                          #ToolbarPane().Top().Floatable(False).
+                          #LeftDockable(False).RightDockable(False))
 
         aui_manager.Update()
         self.aui_manager = aui_manager
@@ -1238,14 +1244,14 @@ class ObjectToolBar(wx.ToolBar):
 # ------------------------------------------------------------------
 # ------------------------------------------------------------------
 
-class SliceToolBar(wx.ToolBar):
+class SliceToolBar(AuiToolBar):
     """
     Toolbar related to 2D slice specific operations, including: cross
     intersection reference and scroll slices.
     """
     def __init__(self, parent):
         style = wx.TB_FLAT|wx.TB_NODIVIDER | wx.TB_DOCKABLE
-        wx.ToolBar.__init__(self, parent, -1, wx.DefaultPosition,
+        AuiToolBar.__init__(self, parent, -1, wx.DefaultPosition,
                             wx.DefaultSize,
                             style)
 
@@ -1279,13 +1285,17 @@ class SliceToolBar(wx.ToolBar):
             path = os.path.join(d,"cross.png")
             BMP_CROSS = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
 
-        self.AddCheckTool(const.SLICE_STATE_SCROLL,
-                          BMP_SLICE,
-                          shortHelp = _("Scroll slices"))
+        self.sst = self.AddToggleTool(const.SLICE_STATE_SCROLL,
+                          BMP_SLICE,#, kind=wx.ITEM_CHECK)
+                          wx.NullBitmap,
+                          toggle=True,
+                          short_help_string=_("Scroll slices"))
 
-        self.AddCheckTool(const.SLICE_STATE_CROSS,
-                          BMP_CROSS,
-                          shortHelp = _("Slices' cross intersection"))
+        self.sct = self.AddToggleTool(const.SLICE_STATE_CROSS,
+                          BMP_CROSS,#, kind=wx.ITEM_CHECK)
+                          wx.NullBitmap,
+                          toggle=True,
+                          short_help_string=_("Slices' cross intersection"))
 
     def __bind_events(self):
         """
@@ -1331,7 +1341,9 @@ class SliceToolBar(wx.ToolBar):
         should be toggle each time).
         """
         id = evt.GetId()
-        state = self.GetToolState(id)
+        evt.Skip()
+
+        state = self.GetToolToggled(id)
 
         if state:
             Publisher.sendMessage('Enable style', id)
@@ -1339,12 +1351,17 @@ class SliceToolBar(wx.ToolBar):
         else:
             Publisher.sendMessage('Disable style', id)
 
-        for item in const.TOOL_SLICE_STATES:
-            state = self.GetToolState(item)
+        for item in self.enable_items:
+            state = self.GetToolToggled(item)
             if state and (item != id):
+                print ">>>>", item
                 self.ToggleTool(item, False)
+        #self.ToggleTool(const.SLICE_STATE_SCROLL, self.GetToolToggled(const.SLICE_STATE_CROSS))
+        #self.Update()
+        ##self.sst.SetToggle(self.sct.IsToggled())
+        ##print ">>>", self.sst.IsToggled()
+        #print ">>>", self.sst.GetState()
 
-        evt.Skip()
 
     def SetStateProjectClose(self):
         """
