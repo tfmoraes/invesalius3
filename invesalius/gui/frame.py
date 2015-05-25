@@ -1394,7 +1394,7 @@ class LayoutToolBar(AuiToolBar):
     """
     def __init__(self, parent):
         style = wx.TB_FLAT|wx.TB_NODIVIDER | wx.TB_DOCKABLE
-        wx.ToolBar.__init__(self, parent, -1, wx.DefaultPosition,
+        AuiToolBar.__init__(self, parent, -1, wx.DefaultPosition,
                             wx.DefaultSize,
                             style)
 
@@ -1462,14 +1462,18 @@ class LayoutToolBar(AuiToolBar):
             p = os.path.join(d, "text.png")
             self.BMP_WITH_TEXT = wx.Bitmap(p, wx.BITMAP_TYPE_PNG)
 
-        self.AddLabelTool(ID_LAYOUT,
+        self.AddTool(ID_LAYOUT,
                           "",
-                          bitmap=self.BMP_WITHOUT_MENU,
-                          shortHelp= _("Hide task panel"))
-        self.AddLabelTool(ID_TEXT,
+                          self.BMP_WITHOUT_MENU,
+                          wx.NullBitmap,
+                          wx.ITEM_NORMAL,
+                          short_help_string= _("Hide task panel"))
+        self.AddTool(ID_TEXT,
                           "",
-                          bitmap=self.BMP_WITH_TEXT,
-                          shortHelp= _("Hide text"))
+                          self.BMP_WITH_TEXT,
+                          wx.NullBitmap,
+                          wx.ITEM_NORMAL,
+                          short_help_string= _("Hide text"))
 
     def _EnableState(self, pubsub_evt):
         """
