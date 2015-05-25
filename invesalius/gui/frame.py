@@ -881,14 +881,14 @@ class TaskBarIcon(wx.TaskBarIcon):
 # ------------------------------------------------------------------
 # ------------------------------------------------------------------
 
-class ProjectToolBar(wx.ToolBar):
+class ProjectToolBar(AuiToolBar):
     """
     Toolbar related to general project operations, including: import,
     open, save and saveas, among others.
     """
     def __init__(self, parent):
         style = wx.TB_FLAT|wx.TB_NODIVIDER| wx.TB_DOCKABLE
-        wx.ToolBar.__init__(self, parent, -1, wx.DefaultPosition,
+        AuiToolBar.__init__(self, parent, -1, wx.DefaultPosition,
                             wx.DefaultSize,
                             style)
         self.SetToolBitmapSize(wx.Size(32,32))
@@ -956,21 +956,27 @@ class ProjectToolBar(wx.ToolBar):
             BMP_PHOTO = wx.Bitmap(path, wx.BITMAP_TYPE_PNG)
 
         # Create tool items based on bitmaps
-        self.AddLabelTool(const.ID_DICOM_IMPORT,
+        self.AddTool(const.ID_DICOM_IMPORT,
                           "",
-                          shortHelp =_("Import DICOM files...\tCtrl+I"),
-                          bitmap=BMP_IMPORT)
+                          BMP_IMPORT,
+                          wx.NullBitmap,
+                          wx.ITEM_NORMAL,
+                          short_help_string =_("Import DICOM files...\tCtrl+I"))
         #self.AddLabelTool(const.ID_DICOM_LOAD_NET,
         #                   "Load medical image...",
         #                   BMP_NET)
-        self.AddLabelTool(const.ID_PROJECT_OPEN,
+        self.AddTool(const.ID_PROJECT_OPEN,
                           "",
-                          shortHelp =_("Open InVesalius project..."),
-                          bitmap=BMP_OPEN)
-        self.AddLabelTool(const.ID_PROJECT_SAVE,
+                          BMP_OPEN,
+                          wx.NullBitmap,
+                          wx.ITEM_NORMAL,
+                          short_help_string =_("Open InVesalius project..."))
+        self.AddTool(const.ID_PROJECT_SAVE,
                           "",
-                          shortHelp = _("Save InVesalius project"),
-                          bitmap=BMP_SAVE)
+                          BMP_SAVE,
+                          wx.NullBitmap,
+                          wx.ITEM_NORMAL,
+                          short_help_string = _("Save InVesalius project"))
         #self.AddLabelTool(const.ID_SAVE_SCREENSHOT,
         #                   "Take photo of screen",
         #                   BMP_PHOTO)
@@ -988,6 +994,7 @@ class ProjectToolBar(wx.ToolBar):
             self.SetStateProjectOpen()
         else:
             self.SetStateProjectClose()
+        self.Refresh()
 
     def SetStateProjectClose(self):
         """
@@ -995,6 +1002,7 @@ class ProjectToolBar(wx.ToolBar):
         """
         for tool in self.enable_items:
             self.EnableTool(tool, False)
+        self.Refresh()
 
     def SetStateProjectOpen(self):
         """
@@ -1002,6 +1010,7 @@ class ProjectToolBar(wx.ToolBar):
         """
         for tool in self.enable_items:
             self.EnableTool(tool, True)
+        self.Refresh()
 
 
 
@@ -1167,6 +1176,7 @@ class ObjectToolBar(AuiToolBar):
             self.SetStateProjectOpen()
         else:
             self.SetStateProjectClose()
+        self.Refresh()
 
     def _UntoggleAllItems(self, pubsub_evt=None):
         """
@@ -1488,6 +1498,7 @@ class LayoutToolBar(AuiToolBar):
             self.SetStateProjectOpen()
         else:
             self.SetStateProjectClose()
+        self.Refresh()
 
     def _SetLayoutWithoutTask(self, pubsub_evt):
         """
@@ -1660,6 +1671,7 @@ class HistoryToolBar(AuiToolBar):
             self.SetStateProjectOpen()
         else:
             self.SetStateProjectClose()
+        self.Refresh()
 
     def _SetLayoutWithoutTask(self, pubsub_evt):
         """
