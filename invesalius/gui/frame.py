@@ -1387,7 +1387,7 @@ class SliceToolBar(AuiToolBar):
 # ------------------------------------------------------------------
 # ------------------------------------------------------------------
 
-class LayoutToolBar(wx.ToolBar):
+class LayoutToolBar(AuiToolBar):
     """
     Toolbar related to general layout/ visualization configuration
     e.g: show/hide task panel and show/hide text on viewers.
@@ -1505,7 +1505,7 @@ class LayoutToolBar(wx.ToolBar):
             self.ToggleText()
 
         for item in VIEW_TOOLS:
-            state = self.GetToolState(item)
+            state = self.GetToolToggled(item)
             if state and (item != id):
                 self.ToggleTool(item, False)
 
