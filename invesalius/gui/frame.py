@@ -1176,7 +1176,7 @@ class ObjectToolBar(AuiToolBar):
             state = self.GetToolToggled(id)
             if state:
                 self.ToggleTool(id, False)
-        self.Update()
+        self.Refresh()
 
     def _ToggleLinearMeasure(self, pubsub_evt):
         """
@@ -1339,7 +1339,7 @@ class SliceToolBar(AuiToolBar):
                 if id == const.SLICE_STATE_CROSS:
                     msg = 'Set cross visibility'
                     Publisher.sendMessage(msg, 0)
-        self.Update()
+        self.Refresh()
 
     def OnToggle(self, evt):
         """
