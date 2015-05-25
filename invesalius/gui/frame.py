@@ -29,7 +29,7 @@ from wx.lib.pubsub import pub as Publisher
 import wx.lib.agw.toasterbox as TB
 import wx.lib.popupctl as pc
 
-from wx.lib.agw.aui.auibar import AuiToolBar
+from wx.lib.agw.aui.auibar import AuiToolBar, AUI_TB_PLAIN_BACKGROUND
 
 import constants as const
 import default_tasks as tasks
@@ -887,10 +887,10 @@ class ProjectToolBar(AuiToolBar):
     open, save and saveas, among others.
     """
     def __init__(self, parent):
-        style = wx.TB_FLAT|wx.TB_NODIVIDER| wx.TB_DOCKABLE
+        style = AUI_TB_PLAIN_BACKGROUND
         AuiToolBar.__init__(self, parent, -1, wx.DefaultPosition,
                             wx.DefaultSize,
-                            style)
+                            agwStyle=style)
         self.SetToolBitmapSize(wx.Size(32,32))
 
         self.parent = parent
@@ -1024,9 +1024,9 @@ class ObjectToolBar(AuiToolBar):
     move, rotate, brightness/contrast, etc.
     """
     def __init__(self, parent):
-        style =  wx.TB_FLAT|wx.TB_NODIVIDER | wx.TB_DOCKABLE
+        style = AUI_TB_PLAIN_BACKGROUND
         AuiToolBar.__init__(self, parent, -1, wx.DefaultPosition,
-                            wx.DefaultSize, style)
+                            wx.DefaultSize, agwStyle=style)
 
         self.SetToolBitmapSize(wx.Size(32,32))
 
@@ -1265,10 +1265,10 @@ class SliceToolBar(AuiToolBar):
     intersection reference and scroll slices.
     """
     def __init__(self, parent):
-        style = wx.TB_FLAT|wx.TB_NODIVIDER | wx.TB_DOCKABLE
+        style = AUI_TB_PLAIN_BACKGROUND
         AuiToolBar.__init__(self, parent, -1, wx.DefaultPosition,
                             wx.DefaultSize,
-                            style)
+                            agwStyle=style)
 
         self.SetToolBitmapSize(wx.Size(32,32))
 
@@ -1406,10 +1406,10 @@ class LayoutToolBar(AuiToolBar):
     e.g: show/hide task panel and show/hide text on viewers.
     """
     def __init__(self, parent):
-        style = wx.TB_FLAT|wx.TB_NODIVIDER | wx.TB_DOCKABLE
+        style = AUI_TB_PLAIN_BACKGROUND
         AuiToolBar.__init__(self, parent, -1, wx.DefaultPosition,
                             wx.DefaultSize,
-                            style)
+                            agwStyle=style)
 
         self.SetToolBitmapSize(wx.Size(32,32))
 
@@ -1585,10 +1585,10 @@ class HistoryToolBar(AuiToolBar):
     e.g: show/hide task panel and show/hide text on viewers.
     """
     def __init__(self, parent):
-        style = wx.TB_FLAT|wx.TB_NODIVIDER | wx.TB_DOCKABLE
+        style = AUI_TB_PLAIN_BACKGROUND
         AuiToolBar.__init__(self, parent, -1, wx.DefaultPosition,
                             wx.DefaultSize,
-                            style)
+                            agwStyle=style)
 
         self.SetToolBitmapSize(wx.Size(32,32))
 
