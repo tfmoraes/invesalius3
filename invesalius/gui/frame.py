@@ -1327,6 +1327,7 @@ class SliceToolBar(AuiToolBar):
         else:
             self.SetStateProjectClose()
             self._UntoggleAllItems()
+        self.Refresh()
 
     def _UntoggleAllItems(self, pubsub_evt=None):
         """
@@ -1375,6 +1376,7 @@ class SliceToolBar(AuiToolBar):
         """
         for tool in self.enable_items:
             self.EnableTool(tool, False)
+        self.Refresh()
 
     def SetStateProjectOpen(self):
         """
@@ -1382,6 +1384,7 @@ class SliceToolBar(AuiToolBar):
         """
         for tool in self.enable_items:
             self.EnableTool(tool, True)
+        self.Refresh()
 
 # ------------------------------------------------------------------
 # ------------------------------------------------------------------
@@ -1565,14 +1568,14 @@ class LayoutToolBar(AuiToolBar):
             self.ontool_text = True
 
 
-class HistoryToolBar(wx.ToolBar):
+class HistoryToolBar(AuiToolBar):
     """
     Toolbar related to general layout/ visualization configuration
     e.g: show/hide task panel and show/hide text on viewers.
     """
     def __init__(self, parent):
         style = wx.TB_FLAT|wx.TB_NODIVIDER | wx.TB_DOCKABLE
-        wx.ToolBar.__init__(self, parent, -1, wx.DefaultPosition,
+        AuiToolBar.__init__(self, parent, -1, wx.DefaultPosition,
                             wx.DefaultSize,
                             style)
 
@@ -1630,15 +1633,19 @@ class HistoryToolBar(wx.ToolBar):
             p = os.path.join(d, "redo_small.png")
             self.BMP_REDO = wx.Bitmap(p, wx.BITMAP_TYPE_PNG)
 
-        self.AddLabelTool(wx.ID_UNDO,
+        self.AddTool(wx.ID_UNDO,
                           "",
-                          bitmap=self.BMP_UNDO,
-                          shortHelp= _("Undo"))
+                          self.BMP_UNDO,
+                          wx.NullBitmap,
+                          wx.ITEM_NORMAL,
+                          short_help_string= _("Undo"))
 
-        self.AddLabelTool(wx.ID_REDO,
+        self.AddTool(wx.ID_REDO,
                           "",
-                          bitmap=self.BMP_REDO,
-                          shortHelp= _("Redo"))
+                          self.BMP_REDO,
+                          wx.NullBitmap,
+                          wx.ITEM_NORMAL,
+                          short_help_string=_("Redo"))
 
         self.EnableTool(wx.ID_UNDO, False)
         self.EnableTool(wx.ID_REDO, False)
@@ -1685,7 +1692,7 @@ class HistoryToolBar(wx.ToolBar):
             self.ToggleText()
 
         for item in VIEW_TOOLS:
-            state = self.GetToolState(item)
+            state = self.GetToolToggled(item)
             if state and (item != id):
                 self.ToggleTool(item, False)
 
@@ -1746,6 +1753,7 @@ class HistoryToolBar(wx.ToolBar):
             self.EnableTool(wx.ID_UNDO, True)
         else:
             self.EnableTool(wx.ID_UNDO, False)
+        self.Refresh()
 
     def OnEnableRedo(self, pubsub_evt):
         value = pubsub_evt.data
@@ -1753,3 +1761,4 @@ class HistoryToolBar(wx.ToolBar):
             self.EnableTool(wx.ID_REDO, True)
         else:
             self.EnableTool(wx.ID_REDO, False)
+        self.Refresh()
