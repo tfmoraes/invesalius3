@@ -24,6 +24,7 @@ import random
 import tempfile
 import weakref
 
+import numpy as np
 import vtk
 import wx
 from wx.lib.pubsub import pub as Publisher
@@ -36,6 +37,8 @@ import session as ses
 import surface_process
 import utils as utl
 import vtk_utils as vu
+
+from data import smooth_cy
 
 try:
     import ca_smoothing
@@ -465,13 +468,27 @@ class SurfaceManager():
         q_in = multiprocessing.Queue()
         q_out = multiprocessing.Queue()
 
+        if algorithm == 'Whitaker':
+            iteractions = 10
+            bsize = 4
+            mask_tfile = tempfile.mktemp()
+            mmask = np.memmap(mask_tfile, shape=mask.matrix.shape, dtype='float64', mode='w+')
+            smooth_cy.smooth(mask.matrix, iteractions, bsize, mmask)
+            mmask[0, :, :] = -1
+            mmask[:, 0, :] = -1
+            mmask[:, :, 0] = -1
+
+        else:
+            mask_tfile = mask.temp_file
+            mmask = mask.matrix
+
         p = []
         for i in xrange(n_processors):
             sp = surface_process.SurfaceProcess(pipe_in, filename_img,
                                                 matrix.shape, matrix.dtype,
-                                                mask.temp_file,
-                                                mask.matrix.shape,
-                                                mask.matrix.dtype,
+                                                mask_tfile,
+                                                mmask.shape,
+                                                mmask.dtype,
                                                 spacing,
                                                 mode, min_value, max_value,
                                                 decimate_reduction,

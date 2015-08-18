@@ -151,7 +151,10 @@ class SurfaceProcess(multiprocessing.Process):
         contour.SetInputData(image)
         #contour.SetInput(flip.GetOutput())
         if self.from_binary:
-            contour.SetValue(0, 127) # initial threshold
+            if self.algorithm == 'Whitaker':
+                contour.SetValue(0, 0.0) # initial threshold
+            else:
+                contour.SetValue(0, 127) # initial threshold
         else:
             contour.SetValue(0, self.min_value) # initial threshold
             contour.SetValue(1, self.max_value) # final threshold

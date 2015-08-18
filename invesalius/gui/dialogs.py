@@ -1307,7 +1307,8 @@ class SurfaceMethodPanel(wx.Panel):
         self.mask_edited = mask_edited
         self.alg_types = {_(u'Default'): 'Default',
                           _(u'Context aware smoothing'): 'ca_smoothing',
-                          _(u'Binary'): 'Binary'}
+                          _(u'Binary'): 'Binary',
+                          _(u'Reducing Aliasing'): 'Whitaker'}
         self.edited_imp = [_(u'Default'), ]
 
         self._build_widgets()
