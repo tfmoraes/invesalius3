@@ -11,17 +11,20 @@ import numpy
 if sys.platform == 'linux2':
     setup(
         cmdclass = {'build_ext': build_ext},
-        ext_modules = cythonize([ Extension("invesalius.data.mips", ["invesalius/data/mips.pyx"],
+        ext_modules = cythonize([ Extension("invesalius.data.mips",
+                                            ["invesalius/data/mips.pyx"],
                                             include_dirs =  [numpy.get_include()],
                                             extra_compile_args=['-fopenmp'],
                                             extra_link_args=['-fopenmp']),
 
-                                 Extension("invesalius.data.interpolation", ["invesalius/data/interpolation.pyx"],
+                                 Extension("invesalius.data.interpolation",
+                                           ["invesalius/data/interpolation.pyx"],
                                            include_dirs=[numpy.get_include()],
                                            extra_compile_args=['-fopenmp',],
                                            extra_link_args=['-fopenmp',]),
 
-                                 Extension("invesalius.data.transforms", ["invesalius/data/transforms.pyx"],
+                                 Extension("invesalius.data.transforms",
+                                           ["invesalius/data/transforms.pyx"],
                                            include_dirs=[numpy.get_include()],
                                            extra_compile_args=['-fopenmp',],
                                            extra_link_args=['-fopenmp',]),
