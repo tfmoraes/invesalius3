@@ -118,7 +118,7 @@ def smooth(np.ndarray[DTYPE8_t, ndim=3] image,
     cdef np.ndarray[DTYPE8_t, ndim=3] _mask = np.zeros_like(image)
     cdef np.ndarray[DTYPEF64_t, ndim=3] aux = np.zeros_like(out)
 
-    cdef int i, x, y, z, S;
+    cdef int i, x, y, z, S
     cdef DTYPEF64_t H, v, cn
     cdef DTYPEF64_t diff=0.0
     cdef DTYPEF64_t dt=1/6.0
@@ -152,31 +152,31 @@ def smooth(np.ndarray[DTYPE8_t, ndim=3] image,
                     S += 1
 
     for i in xrange(n):
-        replicate(out, aux);
-        diff = 0.0;
+        replicate(out, aux)
+        diff = 0.0
 
         for z in xrange(dz):
             for y in xrange(dy):
                 for x in xrange(dx):
                     if mask[z, y, x]:
-                        H = calculate_H(aux, z, y, x);
-                        v = aux[z, y, x] + dt*H;
+                        H = calculate_H(aux, z, y, x)
+                        v = aux[z, y, x] + dt*H
 
                         if image[z, y, x]:
-                            if v > 0:
-                                out[z, y, x] = v
-                            else:
-                                out[z, y, x] = 0.0001
-                        else:
                             if v < 0:
-                                out[z, y, x] = v
+                                out[z, y, x] = 0.0
                             else:
-                                out[z, y, x] = -0.0001
+                                out[z, y, x] = v
+                        else:
+                            if v > 0:
+                                out[z, y, x] = 0.0
+                            else:
+                                out[z, y, x] = v
 
                         diff += (out[z, y, x] - aux[z, y, x])*(out[z, y, x] - aux[z, y, x])
 
-        cn = sqrt((1.0/S) * diff);
+        cn = sqrt((1.0/S) * diff)
         print "%d - CN: %.28f - diff: %.28f\n" % (i, cn, diff)
 
         if cn <= E:
-            break;
+            break
