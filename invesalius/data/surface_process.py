@@ -158,9 +158,9 @@ class SurfaceProcess(multiprocessing.Process):
         else:
             contour.SetValue(0, self.min_value) # initial threshold
             contour.SetValue(1, self.max_value) # final threshold
-        contour.ComputeScalarsOn()
-        contour.ComputeGradientsOn()
-        contour.ComputeNormalsOn()
+        #  contour.ComputeScalarsOn()
+        #  contour.ComputeGradientsOn()
+        #  contour.ComputeNormalsOn()
         contour.ReleaseDataFlagOn()
         contour.Update()
         #contour.AddObserver("ProgressEvent", lambda obj,evt:

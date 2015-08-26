@@ -472,11 +472,9 @@ class SurfaceManager():
             iteractions = 10
             bsize = 4
             mask_tfile = tempfile.mktemp()
+
             mmask = np.memmap(mask_tfile, shape=mask.matrix.shape, dtype='float64', mode='w+')
-            smooth_cy.smooth(mask.matrix, iteractions, bsize, mmask)
-            mmask[0, :, :] = -1
-            mmask[:, 0, :] = -1
-            mmask[:, :, 0] = -1
+            smooth_cy.smooth((mask.matrix > 127).astype('uint8'), iteractions, bsize, mmask)
 
         else:
             mask_tfile = mask.temp_file
@@ -591,6 +589,38 @@ class SurfaceManager():
                                                  options['steps'])
             #  polydata.SetSource(None)
             #  polydata.DebugOn()
+
+        elif algorithm == 'Whitaker':
+            normals = vtk.vtkPolyDataNormals()
+            normals_ref = weakref.ref(normals)
+            normals_ref().AddObserver("ProgressEvent", lambda obj,evt:
+                                      UpdateProgress(normals_ref(), _("Creating 3D surface...")))
+            normals.SetInput(polydata)
+            normals.ReleaseDataFlagOn()
+            #normals.SetFeatureAngle(80)
+            #normals.AutoOrientNormalsOn()
+            normals.ComputeCellNormalsOn()
+            normals.GetOutput().ReleaseDataFlagOn()
+            normals.Update()
+            del polydata
+            polydata = normals.GetOutput()
+            polydata.SetSource(None)
+            del normals
+
+            clean = vtk.vtkCleanPolyData()
+            clean.ReleaseDataFlagOn()
+            clean.GetOutput().ReleaseDataFlagOn()
+            clean_ref = weakref.ref(clean)
+            clean_ref().AddObserver("ProgressEvent", lambda obj,evt:
+                            UpdateProgress(clean_ref(), _("Creating 3D surface...")))
+            clean.SetInput(polydata)
+            clean.PointMergingOn()
+            clean.Update()
+
+            del polydata
+            polydata = clean.GetOutput()
+            polydata.SetSource(None)
+            del clean
 
         else:
             #smoother = vtk.vtkWindowedSincPolyDataFilter()
