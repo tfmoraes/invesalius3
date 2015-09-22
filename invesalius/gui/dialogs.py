@@ -1304,6 +1304,12 @@ class SurfaceMethodPanel(wx.Panel):
     def _set_cb_types(self, evt):
         if self.alg_types[evt.GetString()] == 'ca_smoothing':
             self.ca_options.Enable()
+        elif self.alg_types[evt.GetString()] == 'Whitaker':
+            self.ca_options.Enable()
+            self.ca_options.angle.Disable()
+            self.ca_options.max_distance.Disable()
+            self.ca_options.min_weight.Disable()
+            self.ca_options.steps.Enable()
         else:
             self.ca_options.Disable()
         evt.Skip()
@@ -1320,6 +1326,8 @@ class SurfaceMethodPanel(wx.Panel):
                        'max distance': self.ca_options.max_distance.GetValue(),
                        'min weight': self.ca_options.min_weight.GetValue(),
                        'steps': self.ca_options.steps.GetValue()}
+        elif self.GetAlgorithmSelected() == 'Whitaker':
+            options = {'steps': self.ca_options.steps.GetValue()}
         else:
             options = {}
         return options

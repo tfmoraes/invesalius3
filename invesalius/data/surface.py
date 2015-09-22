@@ -469,7 +469,7 @@ class SurfaceManager():
         q_out = multiprocessing.Queue()
 
         if algorithm == 'Whitaker':
-            iteractions = 10
+            iteractions = options['steps']
             bsize = 4
             mask_tfile = tempfile.mktemp()
 
