@@ -90,7 +90,11 @@ cdef DTYPEF64_t calculate_H(DTYPEF64_t[:, :, :] I, int z, int y, int x) nogil:
                 + fx*fz*fxz + fy*fz*fyz)) \
                 / (fx*fx + fy*fy + fz*fz)
     else:
-        H = 0.0
+
+        H = ((fy*fy + fz*fz)*fxx + (fx*fx + fz*fz)*fyy \
+                + (fx*fx + fy*fy)*fzz - 2*(fx*fy*fxy \
+                + fx*fz*fxz + fy*fz*fyz)) \
+                / (0.000001)
 
     return H
 
@@ -135,6 +139,8 @@ def smooth(np.ndarray[DTYPE8_t, ndim=3] image,
 
     del _mask
 
+    # mask[:] = mask - image
+
     cdef int dz = image.shape[0]
     cdef int dy = image.shape[1]
     cdef int dx = image.shape[2]
@@ -164,12 +170,12 @@ def smooth(np.ndarray[DTYPE8_t, ndim=3] image,
 
                         if image[z, y, x]:
                             if v < 0:
-                                out[z, y, x] = 0.0
+                                out[z, y, x] = 0.00001
                             else:
                                 out[z, y, x] = v
                         else:
                             if v > 0:
-                                out[z, y, x] = 0.0
+                                out[z, y, x] = -0.00001
                             else:
                                 out[z, y, x] = v
 
@@ -180,3 +186,5 @@ def smooth(np.ndarray[DTYPE8_t, ndim=3] image,
 
         if cn <= E:
             break
+
+    return mask
