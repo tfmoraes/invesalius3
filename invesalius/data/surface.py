@@ -59,6 +59,7 @@ class Surface():
         self.transparency = const.SURFACE_TRANSPARENCY
         self.volume = 0
         self.is_shown = 1
+        self.temp_file = ''
         if not name:
             self.name = const.SURFACE_NAME_PATTERN %(self.index+1)
         else:
@@ -100,6 +101,19 @@ class Surface():
         self.volume = sp['volume']
         self.polydata = pu.Import(os.path.join(dirpath, sp['polydata']))
         Surface.general_index = max(Surface.general_index, self.index)
+
+    def save_workdir(self):
+        surface = {'colour': self.colour,
+                   'index': self.index,
+                   'name': self.name,
+                   'polydata': self.temp_file,
+                   'transparency': self.transparency,
+                   'visible': bool(self.is_shown),
+                   'volume': self.volume,
+                  }
+        plist_filename = os.path.splitext(self.temp_file)[0] + '.plist'
+        plistlib.writePlist(surface, plist_filename)
+        return os.path.split(plist_filename)[-1]
 
     def _set_class_index(self, index):
         Surface.general_index = index
@@ -278,6 +292,17 @@ class SurfaceManager():
             surface.index = index
             self.last_surface_index = index
 
+        wdir = proj.working_dir
+        temp_file = tempfile.mktemp(prefix='surface%d_' % surface.index, suffix='.vtp', dir=wdir)
+
+        writer = vtk.vtkXMLPolyDataWriter()
+        writer.SetInput(polydata)
+        writer.SetFileName(temp_file)
+        writer.Write()
+        del writer
+
+        surface.temp_file = temp_file
+
         # Set actor colour and transparency
         actor.GetProperty().SetColor(surface.colour)
         actor.GetProperty().SetOpacity(1-surface.transparency)
@@ -307,6 +332,7 @@ class SurfaceManager():
                                         (surface.index, surface.name,
                                         surface.colour, surface.volume,
                                         surface.transparency))
+
         return surface.index
 
     def OnCloseProject(self, pubsub_evt):
@@ -644,6 +670,8 @@ class SurfaceManager():
             polydata.DebugOn()
             del filled_polydata
 
+        proj = prj.Project()
+
         normals = vtk.vtkPolyDataNormals()
         normals.ReleaseDataFlagOn()
         normals_ref = weakref.ref(normals)
@@ -693,6 +721,17 @@ class SurfaceManager():
             surface = Surface(index = self.last_surface_index)
         else:
             surface = Surface(name=surface_name)
+
+        wdir = proj.working_dir
+        temp_file = tempfile.mktemp(prefix='surface%d_' % surface.index, suffix='.vtp', dir=wdir)
+
+        writer = vtk.vtkXMLPolyDataWriter()
+        writer.SetInput(polydata)
+        writer.SetFileName(temp_file)
+        writer.Write()
+        del writer
+
+        surface.temp_file = temp_file
         surface.colour = colour
         surface.polydata = polydata
         del polydata
@@ -707,7 +746,6 @@ class SurfaceManager():
 
         prop.SetInterpolation(interpolation)
 
-        proj = prj.Project()
         if overwrite:
             proj.ChangeSurface(surface)
         else:

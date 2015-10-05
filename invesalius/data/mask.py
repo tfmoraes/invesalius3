@@ -33,6 +33,7 @@ import session as ses
 from wx.lib.pubsub import pub as Publisher
 
 
+
 class EditionHistoryNode(object):
     def __init__(self, index, orientation, array, clean=False):
         self.index = index
@@ -259,6 +260,26 @@ class Mask():
         path = os.path.join(dirpath, mask_file)
         self._open_mask(path, tuple(shape))
 
+    def save_workdir(self):
+        mask = {}
+        filename = os.path.split(self.temp_file)[-1]
+
+        mask['index'] = self.index
+        mask['name'] = self.name
+        mask['colour'] = self.colour
+        mask['opacity'] = self.opacity
+        mask['threshold_range'] = self.threshold_range
+        mask['edition_threshold_range'] = self.edition_threshold_range
+        mask['visible'] = self.is_shown
+        mask['mask_file'] = filename
+        mask['mask_shape'] = self.matrix.shape
+        mask['edited'] = self.was_edited
+
+        plist_filename = os.path.splitext(self.temp_file)[0]+ '.plist'
+        plistlib.writePlist(mask, plist_filename)
+
+        return os.path.split(plist_filename)[-1]
+
     def OnFlipVolume(self, pubsub_evt):
         axis = pubsub_evt.data
         submatrix = self.matrix[1:, 1:, 1:]
@@ -289,10 +310,14 @@ class Mask():
         Mask.general_index = index
 
     def create_mask(self, shape):
-        print "Creating a mask"
-        self.temp_file = tempfile.mktemp()
+        from project import Project
+        proj = Project()
+        wdir = proj.working_dir
+        self.temp_file = tempfile.mktemp(prefix='mask%d_' % self.index, dir=wdir)
+        print "Creating mask at", self.temp_file
         shape = shape[0] + 1, shape[1] + 1, shape[2] + 1
         self.matrix = numpy.memmap(self.temp_file, mode='w+', dtype='uint8', shape=shape)
+        proj.save_workdir()
 
     def clean(self):
         self.matrix[1:, 1:, 1:] = 0

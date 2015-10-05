@@ -32,6 +32,7 @@ from vtk.util import numpy_support
 
 import constants as const
 from data import vtk_utils
+
 import utils
 
 # TODO: Test cases which are originally in sagittal/coronal orientation
@@ -421,10 +422,12 @@ def dcm2memmap(files, slice_size, orientation, resolution_percentage):
     From a list of dicom files it creates memmap file in the temp folder and
     returns it and its related filename.
     """
+    from project import Project
     message = _("Generating multiplanar visualization...")
     update_progress= vtk_utils.ShowProgress(len(files) - 1, dialog_type = "ProgressDialog")
-
-    temp_file = tempfile.mktemp()
+    proj = Project()
+    wdir = proj.working_dir
+    temp_file = os.path.join(wdir, 'matrix.dat')
 
     if orientation == 'SAGITTAL':
         if resolution_percentage == 1.0:
@@ -496,7 +499,9 @@ def dcm2memmap(files, slice_size, orientation, resolution_percentage):
 def analyze2mmap(analyze):
     data = analyze.get_data()
     header = analyze.get_header()
-    temp_file = tempfile.mktemp()
+    proj = Project()
+    wdir = proj.working_dir
+    temp_file = os.path.join(wdir, 'matrix.dat')
 
     # Sagital
     if header['orient'] == 2:

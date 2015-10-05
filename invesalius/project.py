@@ -74,6 +74,7 @@ class Project(object):
 
         self.raycasting_preset = ''
 
+        self.working_dir = tempfile.mkdtemp()
 
         #self.surface_quality_list = ["Low", "Medium", "High", "Optimal *",
         #                             "Custom"i]
@@ -84,6 +85,13 @@ class Project(object):
         # Allow insertion of new surface quality modes
 
     def Close(self):
+        try:
+            print ">>>>> Trying to remove", self.working_dir
+            os.rmdir(self.working_dir)
+            print ">>>> done"
+        except OSError:
+            print ">>>> It was not possible"
+
         for name in self.__dict__:
             attr = getattr(self, name)
             del attr
@@ -195,77 +203,10 @@ class Project(object):
         return measures
 
     def SavePlistProject(self, dir_, filename):
-        dir_temp = tempfile.mkdtemp()
-        filename_tmp = os.path.join(dir_temp, 'matrix.dat')
-        filelist = {}
-
-        project = {
-                   # Format info
-                   "format_version": 1,
-                   "invesalius_version": const.INVESALIUS_VERSION,
-                   "date": datetime.datetime.now().isoformat(),
-
-                   # case info
-                   "name": self.name, # patient's name
-                   "modality": self.modality, # CT, RMI, ...
-                   "orientation": self.original_orientation,
-                   "window_width": self.window,
-                   "window_level": self.level,
-                   "scalar_range": self.threshold_range,
-                   "spacing": self.spacing,
-                  }
-
-        # Saving the matrix containing the slices
-        matrix = {'filename': u'matrix.dat',
-                  'shape': self.matrix_shape,
-                  'dtype': self.matrix_dtype,
-                 }
-        project['matrix'] = matrix
-        filelist[self.matrix_filename] = 'matrix.dat'
-        #shutil.copyfile(self.matrix_filename, filename_tmp)
-
-        # Saving the masks
-        masks = {}
-        for index in self.mask_dict:
-            masks[str(index)] = self.mask_dict[index].SavePlist(dir_temp,
-                                                                filelist)
-        project['masks'] = masks
-
-        # Saving the surfaces
-        surfaces = {}
-        for index in self.surface_dict:
-            surfaces[str(index)] = self.surface_dict[index].SavePlist(dir_temp,
-                                                                     filelist)
-        project['surfaces'] = surfaces
-
-        # Saving the measurements
-        measurements = self.GetMeasuresDict()
-        measurements_filename = 'measurements.plist'
-        temp_mplist = tempfile.mktemp() 
-        plistlib.writePlist(measurements, 
-                            temp_mplist)
-        filelist[temp_mplist] = measurements_filename
-        project['measurements'] = measurements_filename
-
-        # Saving the annotations (empty in this version)
-        project['annotations'] = {}
-
-        # Saving the main plist
-        temp_plist = tempfile.mktemp()
-        plistlib.writePlist(project, temp_plist)
-        filelist[temp_plist] = 'main.plist'
-
-        # Compressing and generating the .inv3 file
         path = os.path.join(dir_,filename)
-        Compress(dir_temp, path, filelist)
+        filelist = self.save_workdir()
+        Compress(self.working_dir, path, filelist)
 
-        # Removing the temp folder.
-        shutil.rmtree(dir_temp)
-
-        for f in filelist:
-            if filelist[f].endswith('.plist'):
-                print f
-                os.remove(f)
 
     def OpenPlistProject(self, filename):
         import data.measures as ms
@@ -278,7 +219,9 @@ class Project(object):
             ow.SetInstance(fow)
             
         filelist = Extract(filename, tempfile.mkdtemp())
+        print  "@@@@", os.path.split(filelist[0])[0]
         dirpath = os.path.abspath(os.path.split(filelist[0])[0])
+        self.working_dir = dirpath
 
         # Opening the main file from invesalius 3 project
         main_plist =  os.path.join(dirpath ,'main.plist')
@@ -326,15 +269,77 @@ class Project(object):
             measure.Load(measurements[index])
             self.measurement_dict[int(index)] = measure
 
+    def save_workdir(self):
+        filelist = []
+        project = {
+                   # Format info
+                   "format_version": 1,
+                   "invesalius_version": const.INVESALIUS_VERSION,
+                   "date": datetime.datetime.now().isoformat(),
+
+                   # case info
+                   "name": self.name, # patient's name
+                   "modality": self.modality, # CT, RMI, ...
+                   "orientation": self.original_orientation,
+                   "window_width": self.window,
+                   "window_level": self.level,
+                   "scalar_range": self.threshold_range,
+                   "spacing": self.spacing,
+                  }
+
+        # Saving the matrix containing the slices
+        matrix = {'filename': u'matrix.dat',
+                  'shape': self.matrix_shape,
+                  'dtype': self.matrix_dtype,
+                 }
+
+        project['matrix'] = matrix
+        filelist.append(os.path.join(self.working_dir, 'matrix.dat'))
+        #shutil.copyfile(self.matrix_filename, filename_tmp)
+
+        # Saving the masks
+        masks = {}
+        for index in self.mask_dict:
+            masks[str(index)] = self.mask_dict[index].save_workdir()
+            filelist.append(os.path.join(self.working_dir, masks[str(index)]))
+            filelist.append(os.path.join(self.working_dir, os.path.splitext(masks[str(index)])[0]))
+        project['masks'] = masks
+
+        #  # Saving the surfaces
+        surfaces = {}
+        for index in self.surface_dict:
+            surfaces[str(index)] = self.surface_dict[index].save_workdir()
+            filelist.append(os.path.join(self.working_dir, surfaces[str(index)]))
+            filelist.append(os.path.join(self.working_dir, os.path.splitext(surfaces[str(index)])[0]))
+        project['surfaces'] = surfaces
+
+        # Saving the measurements
+        measurements = self.GetMeasuresDict()
+        measurements_filename = 'measurements.plist'
+        temp_mplist = os.path.join(self.working_dir, measurements_filename)
+        plistlib.writePlist(measurements, temp_mplist)
+        project['measurements'] = measurements_filename
+        filelist.append(os.path.join(self.working_dir, 'measurements.plist'))
+
+        # Saving the annotations (empty in this version)
+        project['annotations'] = {}
+
+        # Saving the main plist
+        pfname = os.path.join(self.working_dir, 'main.plist')
+        plistlib.writePlist(project, pfname)
+        filelist.append(os.path.join(self.working_dir, 'main.plist'))
+
+        return filelist
+
+
 def Compress(folder, filename, filelist):
     tmpdir, tmpdir_ = os.path.split(folder)
     current_dir = os.path.abspath(".")
-    #os.chdir(tmpdir)
-    #file_list = glob.glob(os.path.join(tmpdir_,"*"))
-    tar_filename = tmpdir_ + ".inv3"
     tar = tarfile.open(filename.encode(wx.GetDefaultPyEncoding()), "w:gz")
     for name in filelist:
-        tar.add(name, arcname=os.path.join(tmpdir_, filelist[name]))
+        sname = name.split(os.path.sep)
+        print ">>>>", sname
+        tar.add(name, arcname=os.path.join(sname[-2], sname[-1]))
     tar.close()
     #shutil.move(tmpdir_+ ".inv3", filename)
     #os.chdir(current_dir)
@@ -350,6 +355,8 @@ def Extract(filename, folder):
         fname = os.path.join(folder, t.name.decode('utf-8'))
         fdst = file(fname, 'wb')
 
+        print fsrc, fdst
+
         shutil.copyfileobj(fsrc, fdst)
 
         filelist.append(fname)
@@ -361,7 +368,7 @@ def Extract(filename, folder):
     print filelist
     return filelist
 
-    
+
 def Extract_(filename, folder):
     tar = tarfile.open(filename, "r:gz")
     #tar.list(verbose=True)
