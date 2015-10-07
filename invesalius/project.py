@@ -110,6 +110,7 @@ class Project(object):
         """
         index = len(self.mask_dict)
         self.mask_dict[index] = mask
+        self.save_workdir()
         return index
 
     def RemoveMask(self, index):
@@ -121,6 +122,7 @@ class Project(object):
                 new_dict[i-1] = self.mask_dict[i]
                 new_dict[i-1].index = i-1
         self.mask_dict = new_dict
+        self.save_workdir()
 
     def GetMask(self, index):
         return self.mask_dict[index]
@@ -129,6 +131,7 @@ class Project(object):
         #self.last_surface_index = surface.index
         index = len(self.surface_dict)
         self.surface_dict[index] = surface
+        self.save_workdir()
         return index
 
     def ChangeSurface(self, surface):
@@ -144,6 +147,7 @@ class Project(object):
                 new_dict[i-1] = self.surface_dict[i]
                 new_dict[i-1].index = i-1
         self.surface_dict = new_dict
+        self.save_workdir()
 
 
     def AddMeasurement(self, measurement):

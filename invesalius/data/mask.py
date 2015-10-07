@@ -317,7 +317,6 @@ class Mask():
         print "Creating mask at", self.temp_file
         shape = shape[0] + 1, shape[1] + 1, shape[2] + 1
         self.matrix = numpy.memmap(self.temp_file, mode='w+', dtype='uint8', shape=shape)
-        proj.save_workdir()
 
     def clean(self):
         self.matrix[1:, 1:, 1:] = 0
