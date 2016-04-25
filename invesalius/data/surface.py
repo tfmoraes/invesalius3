@@ -595,31 +595,31 @@ class SurfaceManager():
             normals_ref = weakref.ref(normals)
             normals_ref().AddObserver("ProgressEvent", lambda obj,evt:
                                       UpdateProgress(normals_ref(), _("Creating 3D surface...")))
-            normals.SetInput(polydata)
+            normals.SetInputData(polydata)
             normals.ReleaseDataFlagOn()
             #normals.SetFeatureAngle(80)
             #normals.AutoOrientNormalsOn()
             normals.ComputeCellNormalsOn()
-            normals.GetOutput().ReleaseDataFlagOn()
+            #  normals.GetOutput().ReleaseDataFlagOn()
             normals.Update()
             del polydata
             polydata = normals.GetOutput()
-            polydata.SetSource(None)
+            #  polydata.SetSource(None)
             del normals
 
             clean = vtk.vtkCleanPolyData()
             clean.ReleaseDataFlagOn()
-            clean.GetOutput().ReleaseDataFlagOn()
+            #  clean.GetOutput().ReleaseDataFlagOn()
             clean_ref = weakref.ref(clean)
             clean_ref().AddObserver("ProgressEvent", lambda obj,evt:
                             UpdateProgress(clean_ref(), _("Creating 3D surface...")))
-            clean.SetInput(polydata)
+            clean.SetInputData(polydata)
             clean.PointMergingOn()
             clean.Update()
 
             del polydata
             polydata = clean.GetOutput()
-            polydata.SetSource(None)
+            #  polydata.SetSource(None)
             del clean
 
         else:
