@@ -584,8 +584,16 @@ class LinearMeasure(object):
                 r, g, b = self.colour
                 canvas.draw_line(p0, p1, colour=(r*255, g*255, b*255, 255))
 
+            v = np.array(p1) - np.array(p0)
+            t = np.linalg.norm(v)
+            nv = v / t
+            m = (np.array(p1) + np.array(p0)) / 2.0
+            angle = np.arctan2(v[1], v[0])
             txt = u"%.3f mm" % self.GetValue()
-            canvas.draw_text_box(txt, ((points[0][0]+points[1][0])/2.0, (points[0][1]+points[1][1])/2.0), txt_colour=MEASURE_TEXT_COLOUR, bg_colour=MEASURE_TEXTBOX_COLOUR)
+            w, h = canvas.calc_text_size(txt)
+            d = t/2.0 - w/2.0
+            p = np.array(p0) + nv*d
+            canvas.draw_text_box(txt, p, angle=angle, txt_colour=MEASURE_TEXT_COLOUR, bg_colour=MEASURE_TEXTBOX_COLOUR)
 
     def GetNumberOfPoints(self):
         return len(self.points)

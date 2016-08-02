@@ -217,7 +217,7 @@ class CanvasRendererCTX:
         self.image.SetAlphaBuffer(self.alpha)
         self.image.Clear()
         gc = wx.GraphicsContext.Create(self.image)
-        gc.SetAntialiasMode(0)
+        gc.SetAntialiasMode(1)
 
         self.gc = gc
 
@@ -389,7 +389,7 @@ class CanvasRendererCTX:
         px, py = pos
         gc.DrawText(text, px, py)
 
-    def draw_text_box(self, text, pos, font=None, txt_colour=(255, 255, 255), bg_colour=(128, 128, 128, 128), border=5):
+    def draw_text_box(self, text, pos, angle=0.0, font=None, txt_colour=(255, 255, 255), bg_colour=(128, 128, 128, 128), border=5):
         """
         Draw text inside a text box.
 
@@ -415,13 +415,19 @@ class CanvasRendererCTX:
         px, py = pos
         py = -py
 
+        gc.PushState()
+        gc.Translate(px, py)
+        gc.Rotate(-angle)
+
         # Drawing the box
         cw, ch = w + border * 2, h + border * 2
-        self.draw_rectangle((px, py), cw, ch, bg_colour, bg_colour)
+        self.draw_rectangle((0, 0), cw, ch, bg_colour, bg_colour)
 
         # Drawing the text
         tpx, tpy = px + border, py + border
-        self.draw_text(text, (tpx, tpy), font, txt_colour)
+        self.draw_text(text, (border, border), font, txt_colour)
+
+        gc.PopState()
 
     def draw_arc(self, center, p0, p1, line_colour=(255, 0, 0, 128), width=2):
         """
@@ -464,6 +470,19 @@ class CanvasRendererCTX:
         path = gc.CreatePath()
         path.AddArc((c[0], c[1]), min(s0, s1), sa, ea)
         gc.StrokePath(path)
+
+    def calc_text_size(self, text, font=None):
+        if self.gc is None:
+            return None
+        gc = self.gc
+
+        if font is None:
+            font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+
+        _font = gc.CreateFont(font)
+        gc.SetFont(_font)
+        w, h = gc.GetTextExtent(text)
+        return w, h
 
 
 class Viewer(wx.Panel):
