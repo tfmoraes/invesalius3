@@ -30,10 +30,10 @@ import wx
 
 from wx.lib.pubsub import pub as Publisher
 
-import constants as const
-import converters
-import cursor_actors as ca
-import session as ses
+import invesalius.constants as const
+import invesalius.data.converters as converters
+import invesalius.data.cursor_actors as ca
+import invesalius.session as ses
 
 import numpy as np
 
@@ -43,16 +43,15 @@ from scipy.ndimage import watershed_ift, generate_binary_structure
 from skimage.morphology import watershed
 from skimage import filter
 
-from gui import dialogs
-from .measures import MeasureData
+import invesalius.gui.dialogs as dialogs
+from invesalius.data.measures import MeasureData
 
 from . import floodfill
 
-import watershed_process
-
-import utils
-import transformations
-import geometry as geom
+import invesalius.data.watershed_process as watershed_process
+import invesalius.utils as utils
+import invesalius.data.transformations as transformations
+import invesalius.data.geometry as geom
 
 ORIENTATIONS = {
         "AXIAL": const.AXIAL,
@@ -231,10 +230,8 @@ class CrossInteractorStyle(DefaultInteractorStyle):
         coord = self.viewer.calcultate_scroll_position(px, py)
         Publisher.sendMessage('Update cross position', (wx, wy, wz))
         self.ScrollSlice(coord)
-        Publisher.sendMessage('Set ball reference position based on bound',
-                                   (wx, wy, wz))
+        Publisher.sendMessage('Set ball reference position', (wx, wy, wz))
         Publisher.sendMessage('Set camera in volume', (wx, wy, wz))
-        Publisher.sendMessage('Render volume viewer')
 
         iren.Render()
 
@@ -1659,8 +1656,13 @@ class FloodFillMaskInteractorStyle(DefaultInteractorStyle):
         self.config = FFillConfig()
         self.dlg_ffill = None
 
+        # InVesalius uses the following values to mark non selected parts in a
+        # mask:
+        # 0 - Threshold
+        # 1 - Manual edition and  floodfill
+        # 2 - Watershed
         self.t0 = 0
-        self.t1 = 1
+        self.t1 = 2
         self.fill_value = 254
 
         self._dlg_title = _(u"Fill holes")
@@ -1751,7 +1753,12 @@ class FloodFillMaskInteractorStyle(DefaultInteractorStyle):
 class RemoveMaskPartsInteractorStyle(FloodFillMaskInteractorStyle):
         def __init__(self, viewer):
             FloodFillMaskInteractorStyle.__init__(self, viewer)
-            self.t0 = 254
+            # InVesalius uses the following values to mark selected parts in a
+            # mask:
+            # 255 - Threshold
+            # 254 - Manual edition and  floodfill
+            # 253 - Watershed
+            self.t0 = 253
             self.t1 = 255
             self.fill_value = 1
 
@@ -1887,7 +1894,12 @@ class SelectMaskPartsInteractorStyle(DefaultInteractorStyle):
         self.config = SelectPartConfig()
         self.dlg = None
 
-        self.t0 = 254
+        # InVesalius uses the following values to mark selected parts in a
+        # mask:
+        # 255 - Threshold
+        # 254 - Manual edition and  floodfill
+        # 253 - Watershed
+        self.t0 = 253
         self.t1 = 255
         self.fill_value = 254
 
@@ -1895,7 +1907,7 @@ class SelectMaskPartsInteractorStyle(DefaultInteractorStyle):
 
     def SetUp(self):
         if not self.config.dlg_visible:
-            import data.mask as mask
+            import invesalius.data.mask as mask
             default_name =  const.MASK_NAME_PATTERN %(mask.Mask.general_index+2)
 
             self.config.mask_name = default_name
@@ -1984,6 +1996,9 @@ class FFillSegmentationConfig(object):
 
         self.use_ww_wl = True
 
+        self.confid_mult = 2.5
+        self.confid_iters = 3
+
 
 class FloodFillSegmentInteractorStyle(DefaultInteractorStyle):
     def __init__(self, viewer):
@@ -2053,36 +2068,47 @@ class FloodFillSegmentInteractorStyle(DefaultInteractorStyle):
         mask = self.viewer.slice_.buffer_slices[self.orientation].mask.copy()
         image = self.viewer.slice_.buffer_slices[self.orientation].image
 
-        if self.config.method == 'threshold':
-            v = image[y, x]
-            t0 = self.config.t0
-            t1 = self.config.t1
+        if self.config.method == 'confidence':
+            dy, dx = image.shape
+            image = image.reshape((1, dy, dx))
+            mask = mask.reshape((1, dy, dx))
 
-        elif self.config.method == 'dynamic':
-            if self.config.use_ww_wl:
-                print "Using WW&WL"
-                ww = self.viewer.slice_.window_width
-                wl = self.viewer.slice_.window_level
-                image = get_LUT_value_255(image, ww, wl)
+            bstruct = np.array(generate_binary_structure(2, CON2D[self.config.con_2d]), dtype='uint8')
+            bstruct = bstruct.reshape((1, 3, 3))
 
-            v = image[y, x]
+            out_mask = self.do_rg_confidence(image, mask, (x, y, 0), bstruct)
+        else:
+            if self.config.method == 'threshold':
+                v = image[y, x]
+                t0 = self.config.t0
+                t1 = self.config.t1
 
-            t0 = v - self.config.dev_min
-            t1 = v + self.config.dev_max
+            elif self.config.method == 'dynamic':
+                if self.config.use_ww_wl:
+                    print "Using WW&WL"
+                    ww = self.viewer.slice_.window_width
+                    wl = self.viewer.slice_.window_level
+                    image = get_LUT_value_255(image, ww, wl)
 
-        if image[y, x] < t0 or image[y, x] > t1:
-            return
+                v = image[y, x]
 
-        dy, dx = image.shape
-        image = image.reshape((1, dy, dx))
-        mask = mask.reshape((1, dy, dx))
+                t0 = v - self.config.dev_min
+                t1 = v + self.config.dev_max
 
-        out_mask = np.zeros_like(mask)
 
-        bstruct = np.array(generate_binary_structure(2, CON2D[self.config.con_2d]), dtype='uint8')
-        bstruct = bstruct.reshape((1, 3, 3))
+            if image[y, x] < t0 or image[y, x] > t1:
+                return
 
-        floodfill.floodfill_threshold(image, [[x, y, 0]], t0, t1, 1, bstruct, out_mask)
+            dy, dx = image.shape
+            image = image.reshape((1, dy, dx))
+            mask = mask.reshape((1, dy, dx))
+
+            out_mask = np.zeros_like(mask)
+
+            bstruct = np.array(generate_binary_structure(2, CON2D[self.config.con_2d]), dtype='uint8')
+            bstruct = bstruct.reshape((1, 3, 3))
+
+            floodfill.floodfill_threshold(image, [[x, y, 0]], t0, t1, 1, bstruct, out_mask)
 
         mask[out_mask.astype('bool')] = self.config.fill_value
 
@@ -2108,45 +2134,90 @@ class FloodFillSegmentInteractorStyle(DefaultInteractorStyle):
         mask = self.viewer.slice_.current_mask.matrix[1:, 1:, 1:]
         image = self.viewer.slice_.matrix
 
-        if self.config.method == 'threshold':
-            v = image[z, y, x]
-            t0 = self.config.t0
-            t1 = self.config.t1
+        if self.config.method != 'confidence':
+            if self.config.method == 'threshold':
+                v = image[z, y, x]
+                t0 = self.config.t0
+                t1 = self.config.t1
 
-        elif self.config.method == 'dynamic':
-            if self.config.use_ww_wl:
-                print "Using WW&WL"
-                ww = self.viewer.slice_.window_width
-                wl = self.viewer.slice_.window_level
-                image = get_LUT_value_255(image, ww, wl)
+            elif self.config.method == 'dynamic':
+                if self.config.use_ww_wl:
+                    print "Using WW&WL"
+                    ww = self.viewer.slice_.window_width
+                    wl = self.viewer.slice_.window_level
+                    image = get_LUT_value_255(image, ww, wl)
 
-            v = image[z, y, x]
+                v = image[z, y, x]
 
-            t0 = v - self.config.dev_min
-            t1 = v + self.config.dev_max
+                t0 = v - self.config.dev_min
+                t1 = v + self.config.dev_max
 
-        if image[z, y, x] < t0 or image[z, y, x] > t1:
-            return
+            if image[z, y, x] < t0 or image[z, y, x] > t1:
+                return
 
-        out_mask = np.zeros_like(mask)
 
         bstruct = np.array(generate_binary_structure(3, CON3D[self.config.con_3d]), dtype='uint8')
         self.viewer.slice_.do_threshold_to_all_slices()
         cp_mask = self.viewer.slice_.current_mask.matrix.copy()
 
-        with futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(floodfill.floodfill_threshold, image, [[x, y, z]], t0, t1, 1, bstruct, out_mask)
+        if self.config.method == 'confidence':
+            with futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(self.do_rg_confidence, image, mask, (x, y, z), bstruct)
 
-            dlg = wx.ProgressDialog(self._progr_title, self._progr_msg, parent=None, style=wx.PD_APP_MODAL)
-            while not future.done():
-                dlg.Pulse()
-                time.sleep(0.1)
+                dlg = wx.ProgressDialog(self._progr_title, self._progr_msg, parent=None, style=wx.PD_APP_MODAL)
+                while not future.done():
+                    dlg.Pulse()
+                    time.sleep(0.1)
+                dlg.Destroy()
+                out_mask = future.result()
+        else:
+            out_mask = np.zeros_like(mask)
+            with futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(floodfill.floodfill_threshold, image, [[x, y, z]], t0, t1, 1, bstruct, out_mask)
 
-            dlg.Destroy()
+                dlg = wx.ProgressDialog(self._progr_title, self._progr_msg, parent=None, style=wx.PD_APP_MODAL)
+                while not future.done():
+                    dlg.Pulse()
+                    time.sleep(0.1)
+
+                dlg.Destroy()
 
         mask[out_mask.astype('bool')] = self.config.fill_value
 
         self.viewer.slice_.current_mask.save_history(0, 'VOLUME', self.viewer.slice_.current_mask.matrix.copy(), cp_mask)
+
+    def do_rg_confidence(self, image, mask, p, bstruct):
+        x, y, z = p
+        if self.config.use_ww_wl:
+            ww = self.viewer.slice_.window_width
+            wl = self.viewer.slice_.window_level
+            image = get_LUT_value_255(image, ww, wl)
+        bool_mask = np.zeros_like(mask, dtype='bool')
+        out_mask = np.zeros_like(mask)
+
+        for k in xrange(int(z-1), int(z+2)):
+            if k < 0 or k >= bool_mask.shape[0]:
+                continue
+            for j in xrange(int(y-1), int(y+2)):
+                if j < 0 or j >= bool_mask.shape[1]:
+                    continue
+                for i in xrange(int(x-1), int(x+2)):
+                    if i < 0 or i >= bool_mask.shape[2]:
+                        continue
+                    bool_mask[k, j, i] = True
+
+        for i in xrange(self.config.confid_iters):
+            var = np.std(image[bool_mask])
+            mean = np.mean(image[bool_mask])
+
+            t0 = mean - var * self.config.confid_mult
+            t1 = mean + var * self.config.confid_mult
+
+            floodfill.floodfill_threshold(image, [[x, y, z]], t0, t1, 1, bstruct, out_mask)
+
+            bool_mask[out_mask == 1] = True
+
+        return out_mask
 
 def get_style(style):
     STYLES = {

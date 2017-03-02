@@ -29,23 +29,19 @@ import vtk
 import wx
 from wx.lib.pubsub import pub as Publisher
 
-import constants as const
-import imagedata_utils as iu
-import polydata_utils as pu
-import project as prj
-import session as ses
-import surface_process
-import utils as utl
-import vtk_utils as vu
+import invesalius.constants as const
+import invesalius.data.imagedata_utils as iu
+import invesalius.data.polydata_utils as pu
+import invesalius.project as prj
+import invesalius.session as ses
+import invesalius.data.surface_process as surface_process
+import invesalius.utils as utl
+import invesalius.data.vtk_utils as vu
 
-from data import smooth_cy
+from invesalius.data import cy_mesh
+from invesalius.data import smooth_cy
 
-try:
-    import ca_smoothing
-except ImportError:
-    import data.ca_smoothing as ca_smoothing
-
-# TODO: Verificar ReleaseDataFlagOn and SetSource 
+# TODO: Verificar ReleaseDataFlagOn and SetSource
 
 class Surface():
     """
@@ -579,16 +575,28 @@ class SurfaceManager():
             #  polydata.SetSource(None)
             del clean
 
-            try:
-                polydata.BuildLinks()
-            except TypeError:
-                polydata.BuildLinks(0)
-            polydata = ca_smoothing.ca_smoothing(polydata, options['angle'],
-                                                 options['max distance'],
-                                                 options['min weight'],
-                                                 options['steps'])
+            #  try:
+                #  polydata.BuildLinks()
+            #  except TypeError:
+                #  polydata.BuildLinks(0)
+            #  polydata = ca_smoothing.ca_smoothing(polydata, options['angle'],
+                                                 #  options['max distance'],
+                                                 #  options['min weight'],
+                                                 #  options['steps'])
+
+            mesh = cy_mesh.Mesh(polydata)
+            cy_mesh.ca_smoothing(mesh, options['angle'],
+                                 options['max distance'],
+                                 options['min weight'],
+                                 options['steps'])
+            #  polydata = mesh.to_vtk()
+
             #  polydata.SetSource(None)
             #  polydata.DebugOn()
+            w = vtk.vtkPLYWriter()
+            w.SetInputData(polydata)
+            w.SetFileName('/tmp/ca_smoothing_inv.ply')
+            w.Write()
 
         elif algorithm == 'Whitaker':
             normals = vtk.vtkPolyDataNormals()

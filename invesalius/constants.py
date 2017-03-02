@@ -23,8 +23,7 @@ import sys
 import wx
 import itertools
 
-from project import Project
-
+#from invesalius.project import Project
 INVESALIUS_VERSION = "3.0"
 
 #---------------
@@ -208,8 +207,10 @@ VOLUME_POSITION = {AXIAL: [AXIAL_VOLUME_CAM_VIEW_UP, AXIAL_VOLUME_CAM_POSITION],
 
 
 # Mask threshold options
-proj = Project()
-THRESHOLD_RANGE = proj.threshold_modes[_("Bone")]
+
+#proj = Project()
+#THRESHOLD_RANGE = proj.threshold_modes[_("Bone")]
+THRESHOLD_RANGE = [0,3033]
 THRESHOLD_PRESETS_INDEX = _("Bone")
 THRESHOLD_HUE_RANGE = (0, 0.6667)
 THRESHOLD_INVALUE = 5000
@@ -319,9 +320,30 @@ WINDOW_LEVEL = {_("Abdomen"):(350,50),
 
 REDUCE_IMAGEDATA_QUALITY = 0
 
-ICON_DIR = os.path.abspath(os.path.join('..', 'icons'))
-SAMPLE_DIR = os.path.abspath(os.path.join('..', 'samples'))
-DOC_DIR = os.path.abspath(os.path.join('..', 'docs'))
+FILE_PATH = os.path.split(__file__)[0]
+
+if hasattr(sys,"frozen") and (sys.frozen == "windows_exe"\
+                            or sys.frozen == "console_exe"):
+    abs_path = os.path.abspath(FILE_PATH + os.sep + ".." + os.sep + ".." + os.sep + "..")
+    ICON_DIR = os.path.join(abs_path, "icons")
+    SAMPLE_DIR = os.path.join(FILE_PATH, 'samples')
+    DOC_DIR = os.path.join(FILE_PATH, 'docs')
+
+    folder=RAYCASTING_PRESETS_DIRECTORY= os.path.join(abs_path, "presets", "raycasting")
+else:
+    ICON_DIR = os.path.abspath(os.path.join(FILE_PATH, '..', 'icons'))
+    SAMPLE_DIR = os.path.abspath(os.path.join(FILE_PATH,'..', 'samples'))
+    DOC_DIR = os.path.abspath(os.path.join(FILE_PATH,'..', 'docs'))
+
+    folder=RAYCASTING_PRESETS_DIRECTORY= os.path.abspath(os.path.join(".",
+                                                                  "presets",
+                                                                  "raycasting"))
+
+# MAC App
+if not os.path.exists(ICON_DIR):
+    ICON_DIR = os.path.abspath(os.path.join(FILE_PATH, '..', '..', '..', '..', 'icons'))
+    SAMPLE_DIR = os.path.abspath(os.path.join(FILE_PATH,'..',  '..', '..', '..', 'samples'))
+    DOC_DIR = os.path.abspath(os.path.join(FILE_PATH,'..', '..', '..', '..', 'docs'))
 
 
 ID_TO_BMP = {VOL_FRONT: [_("Front"), os.path.join(ICON_DIR, "view_front.png")],
@@ -335,10 +357,6 @@ ID_TO_BMP = {VOL_FRONT: [_("Front"), os.path.join(ICON_DIR, "view_front.png")],
 
 # if 1, use vtkVolumeRaycastMapper, if 0, use vtkFixedPointVolumeRayCastMapper
 TYPE_RAYCASTING_MAPPER = 0
-
-folder=RAYCASTING_PRESETS_DIRECTORY= os.path.abspath(os.path.join("..",
-                                                                  "presets",
-                                                                  "raycasting"))
 
 
 RAYCASTING_FILES = {_("Airways"): "Airways.plist",
@@ -469,8 +487,9 @@ VTK_WARNING = 0
 
 [ID_DICOM_IMPORT, ID_PROJECT_OPEN, ID_PROJECT_SAVE_AS, ID_PROJECT_SAVE,
 ID_PROJECT_CLOSE, ID_PROJECT_INFO, ID_SAVE_SCREENSHOT, ID_DICOM_LOAD_NET,
-ID_PRINT_SCREENSHOT, ID_IMPORT_OTHERS_FILES, ID_ANALYZE_IMPORT, ID_PREFERENCES,
-ID_DICOM_NETWORK, ID_TIFF_JPG_PNG, ID_VIEW_INTERPOLATED] = [wx.NewId() for number in range(15)]
+ID_PRINT_SCREENSHOT, ID_IMPORT_OTHERS_FILES, ID_PREFERENCES, ID_DICOM_NETWORK,
+ID_TIFF_JPG_PNG, ID_VIEW_INTERPOLATED, ID_ANALYZE_IMPORT, ID_NIFTI_IMPORT,
+ID_PARREC_IMPORT] = [wx.NewId() for number in range(17)]
 ID_EXIT = wx.ID_EXIT
 ID_ABOUT = wx.ID_ABOUT
 
@@ -499,6 +518,7 @@ ID_CLEAN_MASK = wx.NewId()
 
 ID_REORIENT_IMG = wx.NewId()
 ID_FLOODFILL_MASK = wx.NewId()
+ID_FILL_HOLE_AUTO = wx.NewId()
 ID_REMOVE_MASK_PART = wx.NewId()
 ID_SELECT_MASK_PART = wx.NewId()
 ID_FLOODFILL_SEGMENTATION = wx.NewId()
@@ -567,7 +587,7 @@ STYLE_LEVEL = {SLICE_STATE_EDITOR: 1,
                STATE_DEFAULT: 0,
                STATE_MEASURE_ANGLE: 2,
                STATE_MEASURE_DISTANCE: 2,
-               STATE_WL: 3,
+               STATE_WL: 2,
                STATE_SPIN: 2,
                STATE_ZOOM: 2,
                STATE_ZOOM_SL: 2,
@@ -618,3 +638,53 @@ BOOLEAN_UNION = 1
 BOOLEAN_DIFF = 2
 BOOLEAN_AND = 3
 BOOLEAN_XOR = 4
+
+#------------ Navigation defaults -------------------
+
+SELECT = 0
+MTC = 1
+FASTRAK = 2
+ISOTRAKII = 3
+PATRIOT = 4
+DEBUGTRACK = 5
+DISCTRACK = 6
+DEFAULT_TRACKER = SELECT
+
+TRACKER = [_("Select tracker:"), _("Claron MicronTracker"),
+           _("Polhemus FASTRAK"), _("Polhemus ISOTRAK II"),
+           _("Polhemus PATRIOT"), _("Debug tracker"),
+           _("Disconnect tracker")]
+
+STATIC_REF = 0
+DYNAMIC_REF = 1
+DEFAULT_REF_MODE = DYNAMIC_REF
+REF_MODE = [_("Static ref."), _("Dynamic ref.")]
+
+IR1 = wx.NewId()
+IR2 = wx.NewId()
+IR3 = wx.NewId()
+TR1 = wx.NewId()
+TR2 = wx.NewId()
+TR3 = wx.NewId()
+SET = wx.NewId()
+
+BTNS_IMG = {IR1: {0: _('LEI')},
+            IR2: {1: _('REI')},
+            IR3: {2: _('NAI')}}
+
+TIPS_IMG = [wx.ToolTip(_("Select left ear in image")),
+            wx.ToolTip(_("Select right ear in image")),
+            wx.ToolTip(_("Select nasion in image"))]
+
+BTNS_TRK = {TR1: {3: _('LET')},
+            TR2: {4: _('RET')},
+            TR3: {5: _('NAT')},
+            SET: {6: _('SET')}}
+
+TIPS_TRK = [wx.ToolTip(_("Select left ear with spatial tracker")),
+            wx.ToolTip(_("Select right ear with spatial tracker")),
+            wx.ToolTip(_("Select nasion with spatial tracker")),
+            wx.ToolTip(_("Show set coordinates in image"))]
+
+CAL_DIR = os.path.abspath(os.path.join(FILE_PATH, '..', 'navigation', 'mtc_files', 'CalibrationFiles'))
+MAR_DIR = os.path.abspath(os.path.join(FILE_PATH, '..', 'navigation', 'mtc_files', 'Markers'))

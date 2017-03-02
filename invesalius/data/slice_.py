@@ -23,20 +23,18 @@ import numpy as np
 import vtk
 from wx.lib.pubsub import pub as Publisher
 
-import constants as const
-import converters
-import imagedata_utils as iu
-import style as st
-import session as ses
-import utils
+import invesalius.constants as const
+import invesalius.data.converters as converters
+import invesalius.data.imagedata_utils as iu
+import invesalius.style as st
+import invesalius.session as ses
+import invesalius.utils as utils
+from invesalius.data.mask import Mask
+from invesalius.project import Project
+from invesalius.data import mips
 
-from mask import Mask
-from project import Project
-from data import mips
-
-from data import transforms
-import transformations
-
+from invesalius.data import transforms
+import invesalius.data.transformations as transformations
 OTHER=0
 PLIST=1
 WIDGET=2
@@ -196,6 +194,8 @@ class Slice(object):
 
         Publisher.subscribe(self.__undo_edition, 'Undo edition')
         Publisher.subscribe(self.__redo_edition, 'Redo edition')
+
+        Publisher.subscribe(self._fill_holes_auto, 'Fill holes automatically')
  
     def GetMaxSliceNumber(self, orientation):
         shape = self.matrix.shape
@@ -386,7 +386,6 @@ class Slice(object):
     def __show_mask(self, pubsub_evt):
         # "if" is necessary because wx events are calling this before any mask
         # has been created
-        print "__show_mask"
         if self.current_mask:
             index, value = pubsub_evt.data
             self.ShowMask(index, value)
@@ -532,10 +531,12 @@ class Slice(object):
                 image = self.do_colour_image(ww_wl_image)
             if self.current_mask and self.current_mask.is_shown:
                 if self.buffer_slices[orientation].vtk_mask:
-                    print "Getting from buffer"
+                    # Prints that during navigation causes delay in update
+                    # print "Getting from buffer"
                     mask = self.buffer_slices[orientation].vtk_mask
                 else:
-                    print "Do not getting from buffer"
+                    # Prints that during navigation causes delay in update
+                    # print "Do not getting from buffer"
                     n_mask = self.get_mask_slice(orientation, slice_number)
                     mask = converters.to_vtk(n_mask, self.spacing, slice_number, orientation)
                     mask = self.do_colour_mask(mask, self.opacity)
@@ -889,7 +890,6 @@ class Slice(object):
 
     def ShowMask(self, index, value):
         "Show a mask given its index and 'show' value (0: hide, other: show)"
-        print "Showing Mask"
         proj = Project()
         proj.mask_dict[index].is_shown = value
         proj.mask_dict[index].on_show()
@@ -1486,3 +1486,28 @@ class Slice(object):
         #filename, filetype = pubsub_evt.data
         #if (filetype == const.FILETYPE_IMAGEDATA):
             #iu.Export(imagedata, filename)
+
+    def _fill_holes_auto(self, pubsub_evt):
+        data = pubsub_evt.data
+        target = data['target']
+        conn = data['conn']
+        orientation = data['orientation']
+        size = data['size']
+
+        if target == '2D':
+            index = self.buffer_slices[orientation].index
+        else:
+            index = 0
+            self.do_threshold_to_all_slices()
+
+        self.current_mask.fill_holes_auto(target, conn, orientation, index, size)
+
+        self.buffer_slices['AXIAL'].discard_mask()
+        self.buffer_slices['CORONAL'].discard_mask()
+        self.buffer_slices['SAGITAL'].discard_mask()
+
+        self.buffer_slices['AXIAL'].discard_vtk_mask()
+        self.buffer_slices['CORONAL'].discard_vtk_mask()
+        self.buffer_slices['SAGITAL'].discard_vtk_mask()
+
+        Publisher.sendMessage('Reload actual slice')

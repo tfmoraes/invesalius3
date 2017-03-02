@@ -23,14 +23,14 @@ if sys.platform == 'linux2':
                                            extra_compile_args=['-fopenmp',],
                                            extra_link_args=['-fopenmp',]),
 
-                       Extension("invesalius.data.transforms", ["invesalius/data/transforms.pyx"],
-                                 include_dirs=[numpy.get_include()],
-                                 extra_compile_args=['-fopenmp',],
-                                 extra_link_args=['-fopenmp',]),
+                                 Extension("invesalius.data.transforms", ["invesalius/data/transforms.pyx"],
+                                           include_dirs=[numpy.get_include()],
+                                           extra_compile_args=['-fopenmp',],
+                                           extra_link_args=['-fopenmp',]),
 
-                       Extension("invesalius.data.floodfill", ["invesalius/data/floodfill.pyx"],
-                                 include_dirs=[numpy.get_include()],
-                                 language='c++',),
+                                 Extension("invesalius.data.floodfill", ["invesalius/data/floodfill.pyx"],
+                                           include_dirs=[numpy.get_include()],
+                                           language='c++',),
 
                                  # "Reducing Aliasing Artifacts in Iso-Surfaces of Binary Volumes"
                                  Extension("invesalius.data.smooth_cy",
@@ -38,6 +38,12 @@ if sys.platform == 'linux2':
                                            include_dirs=[numpy.get_include()],
                                            extra_compile_args=['-fopenmp'],
                                            extra_link_args=['-fopenmp'],),
+
+                                 Extension("invesalius.data.cy_mesh", ["invesalius/data/cy_mesh.pyx"],
+                                           include_dirs=[numpy.get_include()],
+                                           extra_compile_args=['-fopenmp', '-std=c++11'],
+                                           extra_link_args=['-fopenmp', '-std=c++11'],
+                                           language='c++',),
 
                                  ])
     )
@@ -59,6 +65,11 @@ elif sys.platform == 'win32':
 
                                  Extension("invesalius.data.floodfill", ["invesalius/data/floodfill.pyx"],
                                            include_dirs=[numpy.get_include()],
+                                           language='c++',),
+
+                                 Extension("invesalius.data.cy_mesh", ["invesalius/data/cy_mesh.pyx"],
+                                           include_dirs=[numpy.get_include()],
+                                           extra_compile_args=['/openmp',],
                                            language='c++',),
                                  ])
     )
@@ -85,5 +96,12 @@ else:
                                  Extension("invesalius.data.floodfill", ["invesalius/data/floodfill.pyx"],
                                            include_dirs=[numpy.get_include()],
                                            language='c++',),
+
+                                 Extension("invesalius.data.cy_mesh", ["invesalius/data/cy_mesh.pyx"],
+                                           include_dirs=[numpy.get_include()],
+                                           extra_compile_args=['-fopenmp', '-std=c++11'],
+                                           extra_link_args=['-fopenmp', '-std=c++11'],
+                                           language='c++',),
+
                                  ])
     )

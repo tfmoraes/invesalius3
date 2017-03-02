@@ -31,18 +31,17 @@ import wx.lib.popupctl as pc
 
 from wx.lib.agw.aui.auibar import AuiToolBar, AUI_TB_PLAIN_BACKGROUND
 
-import constants as const
-import default_tasks as tasks
-import default_viewers as viewers
-import gui.dialogs as dlg
-import import_panel as imp
-import import_bitmap_panel as imp_bmp
-import import_network_panel as imp_net
-import project as prj
-import session as ses
-import utils
-import preferences
-
+import invesalius.constants as const
+import invesalius.gui.default_tasks as tasks
+import invesalius.gui.default_viewers as viewers
+import invesalius.gui.dialogs as dlg
+import invesalius.gui.import_panel as imp
+import invesalius.gui.import_bitmap_panel as imp_bmp
+import invesalius.gui.import_network_panel as imp_net
+import invesalius.project as prj
+import invesalius.session as ses
+import invesalius.utils as utils
+import invesalius.gui.preferences as preferences
 # Layout tools' IDs - this is used only locally, therefore doesn't
 # need to be defined in constants.py
 VIEW_TOOLS = [ID_LAYOUT, ID_TEXT] =\
@@ -174,8 +173,7 @@ class Frame(wx.Frame):
                           Hide().Layer(1).MaximizeButton(True).
                           Name("Data").Position(1))
 
-        # This is the DICOM import panel. When the two panels above
-        # are shown, this should be hiden
+        # This is the DICOM import panel. When the two panels above as dicom        # are shown, this should be hiden
         caption = _("Preview medical data to be reconstructed")
         aui_manager.AddPane(imp.Panel(self), wx.aui.AuiPaneInfo().
                           Name("Import").CloseButton(False).Centre().Hide().
@@ -353,8 +351,7 @@ class Frame(wx.Frame):
 
     def _ShowImportPanel(self, evt_pubsub):
         """
-        Show only DICOM import panel.
-        """
+        Show only DICOM import panel. as dicom        """
         Publisher.sendMessage("Set layout button data only")
         aui_manager = self.aui_manager
         aui_manager.GetPane("Import").Show(1)
@@ -399,7 +396,11 @@ class Frame(wx.Frame):
         elif id == const.ID_PROJECT_OPEN:
             self.ShowOpenProject()
         elif id == const.ID_ANALYZE_IMPORT:
-            self.ShowAnalyzeImporter()
+            self.ShowImportOtherFiles(id)
+        elif id == const.ID_NIFTI_IMPORT:
+            self.ShowImportOtherFiles(id)
+        elif id == const.ID_PARREC_IMPORT:
+            self.ShowImportOtherFiles(id)
         elif id == const.ID_TIFF_JPG_PNG:
             self.ShowBitmapImporter()
         elif id == const.ID_PROJECT_SAVE:
@@ -447,6 +448,9 @@ class Frame(wx.Frame):
 
         elif id == const.ID_FLOODFILL_MASK:
             self.OnFillHolesManually()
+
+        elif id == const.ID_FILL_HOLE_AUTO:
+            self.OnFillHolesAutomatically()
 
         elif id == const.ID_REMOVE_MASK_PART:
             self.OnRemoveMaskParts()
@@ -535,9 +539,14 @@ class Frame(wx.Frame):
 
     def ShowImportDicomPanel(self):
         """
-        Show import DICOM panel.
-        """
+        Show import DICOM panel. as dicom        """
         Publisher.sendMessage('Show import directory dialog')
+
+    def ShowImportOtherFiles(self, id_file):
+        """
+        Show import Analyze, NiFTI1 or PAR/REC dialog.
+        """
+        Publisher.sendMessage('Show import other files dialog', id_file)
 
     def ShowRetrieveDicomPanel(self):
         Publisher.sendMessage('Show retrieve dicom panel')
@@ -553,12 +562,6 @@ class Frame(wx.Frame):
         Show save as dialog.
         """
         Publisher.sendMessage('Show save dialog', True)
-
-    def ShowAnalyzeImporter(self):
-        """
-        Show save as dialog.
-        """
-        Publisher.sendMessage('Show analyze dialog', True)
 
     def ShowBitmapImporter(self):
         """
@@ -596,6 +599,10 @@ class Frame(wx.Frame):
     def OnFillHolesManually(self):
         Publisher.sendMessage('Enable style', const.SLICE_STATE_MASK_FFILL)
 
+    def OnFillHolesAutomatically(self):
+        fdlg = dlg.FillHolesAutoDialog(_(u"Fill holes automatically"))
+        fdlg.Show()
+
     def OnRemoveMaskParts(self):
         Publisher.sendMessage('Enable style', const.SLICE_STATE_REMOVE_MASK_PARTS)
 
@@ -632,6 +639,7 @@ class MenuBar(wx.MenuBar):
                              const.ID_PROJECT_CLOSE,
                              const.ID_REORIENT_IMG,
                              const.ID_FLOODFILL_MASK,
+                             const.ID_FILL_HOLE_AUTO,
                              const.ID_REMOVE_MASK_PART,
                              const.ID_SELECT_MASK_PART,
                              const.ID_FLOODFILL_SEGMENTATION,]
@@ -668,7 +676,9 @@ class MenuBar(wx.MenuBar):
 
         #Import Others Files
         others_file_menu = wx.Menu()
-        others_file_menu.Append(const.ID_ANALYZE_IMPORT, "Analyze")
+        others_file_menu.Append(const.ID_ANALYZE_IMPORT, _("Analyze 7.5"))
+        others_file_menu.Append(const.ID_NIFTI_IMPORT, _("NIfTI 1"))
+        others_file_menu.Append(const.ID_PARREC_IMPORT, _("PAR/REC"))
         others_file_menu.Append(const.ID_TIFF_JPG_PNG, u"TIFF,BMP,JPG or PNG (\xb5CT)")
 
         # FILE
@@ -747,17 +757,23 @@ class MenuBar(wx.MenuBar):
         self.clean_mask_menu.Enable(False)
 
         mask_menu.AppendSeparator()
+
         self.fill_hole_mask_menu = mask_menu.Append(const.ID_FLOODFILL_MASK, _(u"Fill holes manually"))
         self.fill_hole_mask_menu.Enable(False)
+
+        self.fill_hole_auto_menu = mask_menu.Append(const.ID_FILL_HOLE_AUTO, _(u"Fill holes automatically"))
+        self.fill_hole_mask_menu.Enable(False)
+
+        mask_menu.AppendSeparator()
 
         self.remove_mask_part_menu = mask_menu.Append(const.ID_REMOVE_MASK_PART, _(u"Remove parts"))
         self.remove_mask_part_menu.Enable(False)
 
         self.select_mask_part_menu = mask_menu.Append(const.ID_SELECT_MASK_PART, _(u"Select parts"))
         self.select_mask_part_menu.Enable(False)
-    
+
         mask_menu.AppendSeparator()
-        
+
         self.crop_mask_menu = mask_menu.Append(const.ID_CROP_MASK, _("Crop"))
         self.crop_mask_menu.Enable(False)
 
@@ -1041,8 +1057,7 @@ class TaskBarIcon(wx.TaskBarIcon):
 
 class ProjectToolBar(AuiToolBar):
     """
-    Toolbar related to general project operations, including: import,
-    open, save and saveas, among others.
+    Toolbar related to general invesalius.project operations, including: import, as project    open, save and saveas, among others.
     """
     def __init__(self, parent):
         style = AUI_TB_PLAIN_BACKGROUND
