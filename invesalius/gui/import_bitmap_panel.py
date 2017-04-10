@@ -17,7 +17,10 @@
 #    detalhes.
 #--------------------------------------------------------------------------
 import wx
-import wx.gizmos as gizmos
+try:
+    from wx.adv import EditableListBox as EditableListBox
+except ImportError:
+    from wx.gizmos  import TreeListCtrl
 from wx.lib.pubsub import pub as Publisher
 import wx.lib.splitter as spl
 
@@ -188,15 +191,15 @@ class TextPanel(wx.Panel):
         self.Bind(wx.EVT_CHAR_HOOK, self.OnKeyPress)
 
     def __init_gui(self):
-        tree = gizmos.TreeListCtrl(self, -1, style =
-                                   wx.TR_DEFAULT_STYLE
-                                   | wx.TR_HIDE_ROOT
-                                   | wx.TR_ROW_LINES
-                                   | wx.TR_COLUMN_LINES
-                                   | wx.TR_FULL_ROW_HIGHLIGHT
-                                   | wx.TR_MULTIPLE
-                                   | wx.TR_HIDE_ROOT
-                                   )
+        tree = TreeListCtrl(self, -1, style =
+                            wx.TR_DEFAULT_STYLE
+                            | wx.TR_HIDE_ROOT
+                            | wx.TR_ROW_LINES
+                            | wx.TR_COLUMN_LINES
+                            | wx.TR_FULL_ROW_HIGHLIGHT
+                            | wx.TR_MULTIPLE
+                            | wx.TR_HIDE_ROOT
+                            )
 
 
         tree.AddColumn(_("Path"))

@@ -24,7 +24,10 @@ import sys
 
 import vtk
 import wx
-import wx.combo
+try:
+    from wx.adv import BitmapComboBox
+except ImportError:
+    from wx.combo import BitmapComboBox
 
 from vtk.wx.wxVTKRenderWindowInteractor import wxVTKRenderWindowInteractor
 from wx.lib import masked
@@ -1792,7 +1795,7 @@ class MaskBooleanDialog(wx.Dialog):
                       (_(u"Difference"), const.BOOLEAN_DIFF, 'bool_difference.png'),
                       (_(u"Intersection"), const.BOOLEAN_AND, 'bool_intersection.png'),
                       (_(u"Exclusive disjunction"), const.BOOLEAN_XOR, 'bool_disjunction.png'))
-        self.op_boolean = wx.combo.BitmapComboBox(self, -1, op_choices[0][0], choices=[])
+        self.op_boolean = BitmapComboBox(self, -1, op_choices[0][0], choices=[])
 
         for n, i, f in op_choices:
             bmp = wx.Bitmap(os.path.join(icon_folder, f), wx.BITMAP_TYPE_PNG)

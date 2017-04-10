@@ -22,7 +22,10 @@ import sys
 
 import numpy as np
 import wx
-import wx.lib.hyperlink as hl
+try:
+    from wx.lib.agw import hyperlink as hl
+except ImportError:
+    import wx.lib.hyperlink as hl
 import wx.lib.masked.numctrl
 from wx.lib.pubsub import pub as Publisher
 

@@ -29,6 +29,11 @@ from wx.lib.pubsub import pub as Publisher
 import wx.lib.agw.toasterbox as TB
 import wx.lib.popupctl as pc
 
+try:
+    from wx.adv import TaskBarIcon as _TaskBarIcon
+except ImportError:
+    from wx import TaskBarIcon as _TaskBarIcon
+
 from wx.lib.agw.aui.auibar import AuiToolBar, AUI_TB_PLAIN_BACKGROUND
 
 import invesalius.constants as const
@@ -176,23 +181,23 @@ class Frame(wx.Frame):
                           Name("Data").Position(1))
 
         # This is the DICOM import panel. When the two panels above as dicom        # are shown, this should be hiden
-        caption = _("Preview medical data to be reconstructed")
-        aui_manager.AddPane(imp.Panel(self), wx.aui.AuiPaneInfo().
-                          Name("Import").CloseButton(False).Centre().Hide().
-                          MaximizeButton(False).Floatable(True).
-                          Caption(caption).CaptionVisible(True))
+        #  caption = _("Preview medical data to be reconstructed")
+        #  aui_manager.AddPane(imp.Panel(self), wx.aui.AuiPaneInfo().
+                          #  Name("Import").CloseButton(False).Centre().Hide().
+                          #  MaximizeButton(False).Floatable(True).
+                          #  Caption(caption).CaptionVisible(True))
 
-        caption = _("Preview bitmap to be reconstructed")
-        aui_manager.AddPane(imp_bmp.Panel(self), wx.aui.AuiPaneInfo().
-                          Name("ImportBMP").CloseButton(False).Centre().Hide().
-                          MaximizeButton(False).Floatable(True).
-                          Caption(caption).CaptionVisible(True))
+        #  caption = _("Preview bitmap to be reconstructed")
+        #  aui_manager.AddPane(imp_bmp.Panel(self), wx.aui.AuiPaneInfo().
+                          #  Name("ImportBMP").CloseButton(False).Centre().Hide().
+                          #  MaximizeButton(False).Floatable(True).
+                          #  Caption(caption).CaptionVisible(True))
 
-        ncaption = _("Retrieve DICOM from PACS")
-        aui_manager.AddPane(imp_net.Panel(self), wx.aui.AuiPaneInfo().
-                          Name("Retrieve").Centre().Hide().
-                          MaximizeButton(True).Floatable(True).
-                          Caption(ncaption).CaptionVisible(True))
+        #  ncaption = _("Retrieve DICOM from PACS")
+        #  aui_manager.AddPane(imp_net.Panel(self), wx.aui.AuiPaneInfo().
+                          #  Name("Retrieve").Centre().Hide().
+                          #  MaximizeButton(True).Floatable(True).
+                          #  Caption(ncaption).CaptionVisible(True))
 
         # Add toolbars to manager
         # This is pretty tricky -- order on win32 is inverted when
@@ -1078,7 +1083,7 @@ class StatusBar(wx.StatusBar):
 # ------------------------------------------------------------------
 # ------------------------------------------------------------------
 
-class TaskBarIcon(wx.TaskBarIcon):
+class TaskBarIcon(_TaskBarIcon):
     """
     TaskBarIcon has different behaviours according to the platform:
         - win32:  Show icon on "Notification Area" (near clock)
@@ -1086,7 +1091,7 @@ class TaskBarIcon(wx.TaskBarIcon):
         - linux2: Show icon on "Notification Area" (near clock)
     """
     def __init__(self, parent=None):
-        wx.TaskBarIcon.__init__(self)
+        _TaskBarIcon.__init__(self)
         self.frame = parent
 
         icon = wx.Icon(os.path.join(const.ICON_DIR, "invesalius.ico"),

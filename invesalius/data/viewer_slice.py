@@ -26,7 +26,8 @@ import tempfile
 import numpy as np
 
 import vtk
-from vtk.wx.wxVTKRenderWindowInteractor import wxVTKRenderWindowInteractor
+from invesalius.data.wxVTKRenderWindowInteractor import wxVTKRenderWindowInteractor
+#  from vtk.wx.wxVTKRenderWindowInteractor import wxVTKRenderWindowInteractor
 
 import invesalius.data.styles as styles
 import wx
@@ -95,10 +96,10 @@ class ContourMIPConfig(wx.Panel):
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(txt_mip_size, 0, wx.EXPAND | wx.ALL, 2)
         sizer.Add(self.mip_size_spin, 0, wx.EXPAND)
-        sizer.AddSpacer((10, 0))
+        sizer.AddSpacer(10)
         sizer.Add(self.txt_mip_border, 0, wx.EXPAND | wx.ALL, 2)
         sizer.Add(self.border_spin, 0, wx.EXPAND)
-        sizer.AddSpacer((10, 0))
+        sizer.AddSpacer(10)
         sizer.Add(self.inverted, 0, wx.EXPAND)
         self.SetSizer(sizer)
         sizer.Fit(self)
@@ -196,7 +197,7 @@ class CanvasRendererCTX:
         self.alpha = np.zeros((h, w, 1), dtype=np.uint8)
 
         self.bitmap = wx.EmptyBitmapRGBA(w, h)
-        self.image = wx.ImageFromBuffer(w, h, self.rgb, self.alpha)
+        self.image = wx.ImageFromBuffer(w, h, self.rgb, self.alpha.data)
 
     def _resize_canvas(self, w, h):
         self._array = np.zeros((h, w, 4), dtype=np.uint8)
@@ -208,7 +209,7 @@ class CanvasRendererCTX:
         self.alpha = np.zeros((h, w, 1), dtype=np.uint8)
 
         self.bitmap = wx.EmptyBitmapRGBA(w, h)
-        self.image = wx.ImageFromBuffer(w, h, self.rgb, self.alpha)
+        self.image = wx.ImageFromBuffer(w, h, self.rgb, self.alpha.data)
 
         self.modified = True
 
@@ -582,7 +583,7 @@ class Viewer(wx.Panel):
         sizer.Add(scroll, 0, wx.EXPAND|wx.GROW)
 
         background_sizer = wx.BoxSizer(wx.VERTICAL)
-        background_sizer.AddSizer(sizer, 1, wx.EXPAND|wx.GROW|wx.ALL, 2)
+        background_sizer.Add(sizer, 1, wx.EXPAND|wx.GROW|wx.ALL, 2)
         #background_sizer.Add(self.mip_ctrls, 0, wx.EXPAND|wx.GROW|wx.ALL, 2)
         self.SetSizer(background_sizer)
         background_sizer.Fit(self)

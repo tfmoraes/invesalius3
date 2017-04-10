@@ -29,7 +29,10 @@ except ImportError:
 
 import wx
 import wx.grid
-import wx.lib.flatnotebook as fnb
+try:
+    from wx.lib.agw import flatnotebook as fnb
+except ImportError:
+    import wx.lib.flatnotebook as fnb
 import wx.lib.platebtn as pbtn
 from wx.lib.pubsub import pub as Publisher
 

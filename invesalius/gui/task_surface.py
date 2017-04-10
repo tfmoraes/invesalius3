@@ -20,8 +20,16 @@ import sys
 import os
 
 import wx
-import wx.lib.hyperlink as hl
+try:
+    from wx.lib.agw import hyperlink as hl
+except ImportError:
+    import wx.lib.hyperlink as hl
 from wx.lib.pubsub import pub as Publisher
+
+try:
+    SystemSettings_GetColour = wx.SystemSettings.GetColour
+except AttributeError:
+    SystemSettings_GetColour = wx.SystemSettings_GetColour
 
 import invesalius.constants as const
 import invesalius.data.slice_ as slice_
@@ -195,7 +203,7 @@ class FoldPanel(wx.Panel):
 class InnerFoldPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
-        default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+        default_colour = SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
         self.SetBackgroundColour(default_colour)
 
         # Fold panel and its style settings
@@ -264,7 +272,7 @@ BTN_SEEDS = wx.NewId()
 class SurfaceTools(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
-        default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+        default_colour = SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
         self.SetBackgroundColour(default_colour)
 
         #self.SetBackgroundColour(wx.Colour(255,255,255))
@@ -398,7 +406,7 @@ class SurfaceTools(wx.Panel):
 class SurfaceProperties(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
-        default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+        default_colour = SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
         self.SetBackgroundColour(default_colour)
 
         self.surface_list = []
@@ -559,7 +567,7 @@ class QualityAdjustment(wx.Panel):
     def __init__(self, parent):
         import invesalius.constants as const
         wx.Panel.__init__(self, parent)
-        default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+        default_colour = SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
         self.SetBackgroundColour(default_colour)
 
         # LINE 1

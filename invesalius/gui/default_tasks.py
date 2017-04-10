@@ -18,7 +18,11 @@
 #--------------------------------------------------------------------------
 
 import wx
-import wx.lib.foldpanelbar as fpb
+try:
+    from wx.lib.agw import foldpanelbar as fpb
+except ImportError:
+    import wx.lib.foldpanelbar as fpb
+
 from wx.lib.pubsub import pub as Publisher
 
 import invesalius.constants as const

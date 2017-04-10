@@ -17,7 +17,11 @@
 #    detalhes.
 #--------------------------------------------------------------------------
 import wx
-import wx.gizmos as gizmos
+
+try:
+    from wx.dataview import TreeListCtrl
+except ImportError:
+    from wx.gizmos  import TreeListCtrl
 from wx.lib.pubsub import pub as Publisher
 import wx.lib.splitter as spl
 
@@ -103,7 +107,7 @@ class InnerPanel(wx.Panel):
         self.combo_interval.SetSelection(0)
 
         inner_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        inner_sizer.AddSizer(btnsizer, 0, wx.LEFT|wx.TOP, 5)
+        inner_sizer.Add(btnsizer, 0, wx.LEFT|wx.TOP, 5)
         inner_sizer.Add(self.combo_interval, 0, wx.LEFT|wx.RIGHT|wx.TOP, 5)
         panel.SetSizer(inner_sizer)
         inner_sizer.Fit(panel)
@@ -211,30 +215,47 @@ class TextPanel(wx.Panel):
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
     def __init_gui(self):
-        tree = gizmos.TreeListCtrl(self, -1, style =
-                                   wx.TR_DEFAULT_STYLE
-                                   | wx.TR_HIDE_ROOT
-                                   | wx.TR_ROW_LINES
-                                   | wx.TR_COLUMN_LINES
-                                   | wx.TR_FULL_ROW_HIGHLIGHT
-                                   | wx.TR_SINGLE
-                                  )
+        tree = TreeListCtrl(self, -1, style =
+                            wx.TR_DEFAULT_STYLE
+                            | wx.TR_HIDE_ROOT
+                            | wx.TR_ROW_LINES
+                            #  | wx.TR_COLUMN_LINES
+                            | wx.TR_FULL_ROW_HIGHLIGHT
+                            | wx.TR_SINGLE
+                            )
 
 
-        tree.AddColumn(_("Patient name"))
-        tree.AddColumn(_("Patient ID"))
-        tree.AddColumn(_("Age"))
-        tree.AddColumn(_("Gender"))
-        tree.AddColumn(_("Study description"))
-        tree.AddColumn(_("Modality"))
-        tree.AddColumn(_("Date acquired"))
-        tree.AddColumn(_("# Images"))
-        tree.AddColumn(_("Institution"))
-        tree.AddColumn(_("Date of birth"))
-        tree.AddColumn(_("Accession Number"))
-        tree.AddColumn(_("Referring physician"))
+        try:
+            tree.AppendColumn(_("Patient name"))
+            tree.AppendColumn(_("Patient ID"))
+            tree.AppendColumn(_("Age"))
+            tree.AppendColumn(_("Gender"))
+            tree.AppendColumn(_("Study description"))
+            tree.AppendColumn(_("Modality"))
+            tree.AppendColumn(_("Date acquired"))
+            tree.AppendColumn(_("# Images"))
+            tree.AppendColumn(_("Institution"))
+            tree.AppendColumn(_("Date of birth"))
+            tree.AppendColumn(_("Accession Number"))
+            tree.AppendColumn(_("Referring physician"))
+        except AttributeError:
+            tree.AddColumn(_("Patient name"))
+            tree.AddColumn(_("Patient ID"))
+            tree.AddColumn(_("Age"))
+            tree.AddColumn(_("Gender"))
+            tree.AddColumn(_("Study description"))
+            tree.AddColumn(_("Modality"))
+            tree.AddColumn(_("Date acquired"))
+            tree.AddColumn(_("# Images"))
+            tree.AddColumn(_("Institution"))
+            tree.AddColumn(_("Date of birth"))
+            tree.AddColumn(_("Accession Number"))
+            tree.AddColumn(_("Referring physician"))
 
-        tree.SetMainColumn(0)        # the one with the tree in it...
+        try:
+            tree.SetMainColumn(0)        # the one with the tree in it...
+        except AttributeError:
+            pass
         tree.SetColumnWidth(0, 280)  # Patient name
         tree.SetColumnWidth(1, 110)  # Patient ID
         tree.SetColumnWidth(2, 40)   # Age
@@ -248,7 +269,7 @@ class TextPanel(wx.Panel):
         tree.SetColumnWidth(10, 140) # Accession Number
         tree.SetColumnWidth(11, 160) # Referring physician
 
-        self.root = tree.AddRoot(_("InVesalius Database"))
+        #  self.root = tree.AddRoot(_("InVesalius Database"))
         self.tree = tree
 
     def SelectSeries(self, pubsub_evt):

@@ -21,9 +21,17 @@ import sys
 import os
 
 import wx
-import wx.lib.hyperlink as hl
+try:
+    from wx.lib.agw import hyperlink as hl
+except ImportError:
+    import wx.lib.hyperlink as hl
 import wx.lib.platebtn as pbtn
 from wx.lib.pubsub import pub as Publisher
+
+try:
+    SystemSettings_GetColour = wx.SystemSettings.GetColour
+except AttributeError:
+    SystemSettings_GetColour = wx.SystemSettings_GetColour
 
 import invesalius.data.mask as mask
 import invesalius.data.slice_ as slice_
@@ -108,7 +116,7 @@ class InnerTaskPanel(wx.Panel):
         #print wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
         #print wx.SystemSettings_GetColour(wx.SYS_COLOUR_SCROLLBAR)
         #print wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUHILIGHT)
-        default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+        default_colour = SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
         fold_panel = FoldPanel(self)
         fold_panel.SetBackgroundColour(default_colour)
         self.fold_panel = fold_panel
@@ -134,7 +142,7 @@ class InnerTaskPanel(wx.Panel):
         main_sizer = wx.BoxSizer(wx.VERTICAL)
         main_sizer.Add(line_new, 0,wx.GROW|wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, 5)
         main_sizer.Add(fold_panel, 1, wx.GROW|wx.EXPAND|wx.ALL, 5)
-        main_sizer.AddSizer(line_sizer, 0, wx.GROW|wx.EXPAND)
+        main_sizer.Add(line_sizer, 0, wx.GROW|wx.EXPAND)
         main_sizer.AddSpacer(5)
         main_sizer.Fit(self)
 
@@ -229,7 +237,7 @@ class FoldPanel(wx.Panel):
 class InnerFoldPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
-        default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+        default_colour = SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
         self.SetBackgroundColour(default_colour)
 
         # Fold panel and its style settings
@@ -643,7 +651,7 @@ class MaskProperties(wx.Panel):
 class EditionTools(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
-        default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+        default_colour = SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
         self.SetBackgroundColour(default_colour)
 
         ## LINE 1
@@ -807,7 +815,7 @@ class EditionTools(wx.Panel):
 class WatershedTool(EditionTools):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
-        default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+        default_colour = SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
         self.SetBackgroundColour(default_colour)
 
         ## LINE 1

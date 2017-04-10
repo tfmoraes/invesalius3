@@ -29,10 +29,11 @@ if sys.platform == 'win32':
     import _winreg
 else:
     if sys.platform != 'darwin':
-        import wxversion
+        pass
+        #  import wxversion
         #wxversion.ensureMinimal('2.8-unicode', optionsRequired=True)
         #wxversion.select('2.8-unicode', optionsRequired=True)
-        wxversion.ensureMinimal('3.0')
+        #  wxversion.ensureMinimal('3.0')
         
 import wx
 #from wx.lib.pubsub import setupv1 #new wx
@@ -47,6 +48,11 @@ from wx.lib.pubsub import pub as Publisher
 #else:
 #    if sys.platform != 'darwin':
 #        _SplashScreen = wx.SplashScreen
+
+try:
+    from wx.adv import SplashScreen as _SplashScreen
+except ImportError:
+    from wx import SplashScreen as _SplashScreen
 
 
 import invesalius.gui.language_dialog as lang_dlg
@@ -92,7 +98,7 @@ class InVesalius(wx.App):
 
 # ------------------------------------------------------------------
 
-class SplashScreen(wx.SplashScreen):
+class SplashScreen(_SplashScreen):
     """
     Splash screen to be shown in InVesalius initialization.
     """
@@ -175,8 +181,12 @@ class SplashScreen(wx.SplashScreen):
 				
             bmp = wx.Image(path).ConvertToBitmap()
 
-            style = wx.SPLASH_TIMEOUT | wx.SPLASH_CENTRE_ON_SCREEN
-            wx.SplashScreen.__init__(self,
+            try:
+                style = wx.SPLASH_TIMEOUT | wx.SPLASH_CENTRE_ON_SCREEN
+            except AttributeError:
+                style = wx.adv.SPLASH_TIMEOUT | wx.adv.SPLASH_CENTRE_ON_SCREEN
+
+            _SplashScreen.__init__(self,
                                      bitmap=bmp,
                                      splashStyle=style,
                                      milliseconds=1500,
