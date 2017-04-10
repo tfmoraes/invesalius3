@@ -196,7 +196,10 @@ class CanvasRendererCTX:
         self.rgb = np.zeros((h, w, 3), dtype=np.uint8)
         self.alpha = np.zeros((h, w, 1), dtype=np.uint8)
 
-        self.bitmap = wx.EmptyBitmapRGBA(w, h)
+        try:
+            self.bitmap = wx.Bitmap.FromRGBA(w, h)
+        except AttributeError:
+            self.bitmap = wx.EmptyBitmapRGBA(w, h)
         self.image = wx.ImageFromBuffer(w, h, self.rgb, self.alpha.data)
 
     def _resize_canvas(self, w, h):
@@ -208,7 +211,10 @@ class CanvasRendererCTX:
         self.rgb = np.zeros((h, w, 3), dtype=np.uint8)
         self.alpha = np.zeros((h, w, 1), dtype=np.uint8)
 
-        self.bitmap = wx.EmptyBitmapRGBA(w, h)
+        try:
+            self.bitmap = wx.Bitmap.FromRGBA(w, h)
+        except AttributeError:
+            self.bitmap = wx.EmptyBitmapRGBA(w, h)
         self.image = wx.ImageFromBuffer(w, h, self.rgb, self.alpha.data)
 
         self.modified = True
@@ -288,7 +294,7 @@ class CanvasRendererCTX:
         w, h = gc.GetTextExtent(text)
         return w, h
 
-    def draw_line(self, pos0, pos1, arrow_start=False, arrow_end=False, colour=(255, 0, 0, 128), width=2, style=wx.SOLID):
+    def draw_line(self, pos0, pos1, arrow_start=False, arrow_end=False, colour=(255, 0, 0, 0.5), width=2, style=wx.SOLID):
         """
         Draw a line from pos0 to pos1
 
@@ -311,7 +317,7 @@ class CanvasRendererCTX:
         p0y = -p0y
         p1y = -p1y
 
-        pen = wx.Pen(wx.Colour(*colour), width, wx.SOLID)
+        pen = wx.Pen(wx.Colour(int(colour[0]), int(colour[1]), int(colour[2]), alpha=colour[3]), width, wx.SOLID)
         pen.SetCap(wx.CAP_BUTT)
         gc.SetPen(pen)
 
@@ -372,7 +378,7 @@ class CanvasRendererCTX:
             return None
         gc = self.gc
 
-        pen = wx.Pen(wx.Colour(*line_colour), width, wx.SOLID)
+        pen = wx.Pen(wx.Colour(int(line_colour[0]), int(line_colour[1]), int(line_colour[2]), alpha=line_colour[3]), width, wx.SOLID)
         gc.SetPen(pen)
 
         brush = wx.Brush(wx.Colour(*fill_colour))
@@ -403,7 +409,8 @@ class CanvasRendererCTX:
         gc = self.gc
 
         px, py = pos
-        gc.SetPen(wx.Pen(line_colour))
+        pen = wx.Pen(wx.Colour(int(line_colour[0]), int(line_colour[1]), int(line_colour[2]), alpha=line_colour[3]))
+        gc.SetPen(pen)
         gc.SetBrush(wx.Brush(fill_colour))
         gc.DrawRectangle(px, py, width, height)
         self._drawn = True
@@ -481,7 +488,7 @@ class CanvasRendererCTX:
         if self.gc is None:
             return None
         gc = self.gc
-        pen = wx.Pen(wx.Colour(*line_colour), width, wx.SOLID)
+        pen = wx.Pen(wx.Colour(int(line_colour[0]), int(line_colour[1]), int(line_colour[2]), alpha=line_colour[3]), width, wx.SOLID)
         gc.SetPen(pen)
 
         c = np.array(center)
@@ -506,7 +513,7 @@ class CanvasRendererCTX:
             ea = a0
 
         path = gc.CreatePath()
-        path.AddArc((c[0], c[1]), min(s0, s1), sa, ea)
+        path.AddArc(float(c[0]), float(c[1]), float(min(s0, s1)), sa, ea, True)
         gc.StrokePath(path)
         self._drawn = True
 

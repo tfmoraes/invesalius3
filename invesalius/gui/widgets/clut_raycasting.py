@@ -169,8 +169,8 @@ class CLUTRaycastingWidget(wx.Panel):
         pass
 
     def OnClick(self, evt):
-        x, y = evt.GetPositionTuple()
-        if self.save_button.HasClicked(evt.GetPositionTuple()):
+        x, y = evt.GetPosition()
+        if self.save_button.HasClicked(evt.GetPosition()):
             print "Salvando"
             filename = dialog.ShowSavePresetDialog()
             if filename:
@@ -218,7 +218,7 @@ class CLUTRaycastingWidget(wx.Panel):
         """
         Used to change the colour of a point
         """
-        point = self._has_clicked_in_a_point(evt.GetPositionTuple())
+        point = self._has_clicked_in_a_point(evt.GetPosition())
         if point:
             i, j = point
             actual_colour = self.curves[i].nodes[j].colour
@@ -240,7 +240,7 @@ class CLUTRaycastingWidget(wx.Panel):
         """
         Used to remove a point
         """
-        point = self._has_clicked_in_a_point(evt.GetPositionTuple())
+        point = self._has_clicked_in_a_point(evt.GetPosition())
         if point:
             i, j = point
             print "RightClick", i, j
@@ -249,7 +249,7 @@ class CLUTRaycastingWidget(wx.Panel):
             nevt = CLUTEvent(myEVT_CLUT_POINT_RELEASE, self.GetId(), i)
             self.GetEventHandler().ProcessEvent(nevt)
             return
-        n_curve = self._has_clicked_in_selection_curve(evt.GetPositionTuple())
+        n_curve = self._has_clicked_in_selection_curve(evt.GetPosition())
         if n_curve is not None:
             print "Removing a curve"
             self.RemoveCurve(n_curve)
@@ -383,7 +383,7 @@ class CLUTRaycastingWidget(wx.Panel):
         self.to_render = True
         i,j = self.point_dragged
 
-        width, height= self.GetVirtualSizeTuple()
+        width, height= self.GetVirtualSize()
 
         if y >= height - self.padding:
             y = height - self.padding
@@ -525,7 +525,7 @@ class CLUTRaycastingWidget(wx.Panel):
         x,y = node.x, node.y
         value = node.graylevel
         alpha = node.opacity
-        widget_width, widget_height = self.GetVirtualSizeTuple()
+        widget_width, widget_height = self.GetVirtualSize()
 
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         font.SetWeight(wx.BOLD)
@@ -600,7 +600,7 @@ class CLUTRaycastingWidget(wx.Panel):
 
     def Render(self, dc):
         ctx = wx.GraphicsContext.Create(dc)
-        width, height= self.GetVirtualSizeTuple()
+        width, height= self.GetVirtualSize()
         height -= (self.padding * 2)
         width -= self.padding
 
@@ -614,7 +614,7 @@ class CLUTRaycastingWidget(wx.Panel):
             self._draw_selected_point_text(ctx)
 
     def _build_histogram(self):
-        width, height = self.GetVirtualSizeTuple()
+        width, height = self.GetVirtualSize()
         width -= self.padding
         height -= (self.padding * 2)
         x_init = self.Histogram.init
@@ -684,7 +684,7 @@ class CLUTRaycastingWidget(wx.Panel):
         """
         Given a Hounsfield point returns a pixel point in the canvas.
         """
-        width,height = self.GetVirtualSizeTuple()
+        width,height = self.GetVirtualSize()
         width -= (TOOLBAR_SIZE)
         proportion = width * 1.0 / (self.end - self.init)
         x = (graylevel - self.init) * proportion + TOOLBAR_SIZE
@@ -694,7 +694,7 @@ class CLUTRaycastingWidget(wx.Panel):
         """
         Given a Opacity point returns a pixel point in the canvas.
         """
-        width,height = self.GetVirtualSizeTuple()
+        width,height = self.GetVirtualSize()
         height -= (self.padding * 2)
         y = height - (opacity * height) + self.padding
         return y
@@ -703,7 +703,7 @@ class CLUTRaycastingWidget(wx.Panel):
         """
         Translate from pixel point to Hounsfield scale.
         """
-        width, height= self.GetVirtualSizeTuple()
+        width, height= self.GetVirtualSize()
         width -= (TOOLBAR_SIZE)
         proportion = width * 1.0 / (self.end - self.init)
         graylevel = (x - TOOLBAR_SIZE) / proportion - abs(self.init)
@@ -713,7 +713,7 @@ class CLUTRaycastingWidget(wx.Panel):
         """
         Translate from pixel point to opacity.
         """
-        width, height= self.GetVirtualSizeTuple()
+        width, height= self.GetVirtualSize()
         height -= (self.padding * 2)
         opacity = (height - y + self.padding) * 1.0 / height
         return opacity

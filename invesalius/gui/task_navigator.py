@@ -29,6 +29,11 @@ except ImportError:
 import wx.lib.masked.numctrl
 from wx.lib.pubsub import pub as Publisher
 
+try:
+    from wx.lib.agw import foldpanelbar as fpb
+except ImportError:
+    import wx.lib.foldpanelbar as fpb
+
 import invesalius.constants as const
 import invesalius.data.bases as db
 import invesalius.data.coordinates as dco
@@ -36,7 +41,6 @@ import invesalius.data.coregistration as dcr
 import invesalius.data.trackers as dt
 import invesalius.data.trigger as trig
 import invesalius.gui.dialogs as dlg
-import invesalius.gui.widgets.foldpanelbar as fpb
 import invesalius.gui.widgets.colourselect as csel
 
 class TaskPanel(wx.Panel):

@@ -134,10 +134,10 @@ class GradientSlider(wx.Panel):
         # Drawing the transparent slider.
         bytes = numpy.array(self.colour * width_transparency * h, 'B')
         try:
+            slider = wx.Bitmap.FromBufferRGBA(width_transparency, h, bytes)
+            dc.DrawBitmap(slider, self.min_position, 0, True)
+        except AttributeError:
             slider = wx.BitmapFromBufferRGBA(width_transparency, h, bytes)
-        except:
-            pass
-        else:
             dc.DrawBitmap(slider, self.min_position, 0, True)
 
     def OnEraseBackGround(self, evt):
