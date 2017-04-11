@@ -1059,8 +1059,10 @@ def SaveChangesDialog2(filename):
 
 
 def ShowAboutDialog(parent):
-
-    info = wx.AboutDialogInfo()
+    try:
+        info = wx.adv.AboutDialogInfo()
+    except AttributeError:
+        info = wx.AboutDialogInfo()
     info.Name = "InVesalius"
     info.Version = "3.1"
     info.Copyright = _("(c) 2007-2017 Center for Information Technology Renato Archer - CTI")
@@ -1107,7 +1109,10 @@ def ShowAboutDialog(parent):
     info.Artists = ["Otavio Henrique Junqueira Amorim"]
 
     # Then we call wx.AboutBox providing its info object
-    wx.AboutBox(info)
+    try:
+        wx.adv.AboutBox(info)
+    except AttributeError:
+        wx.AboutBox(info)
 
 
 def ShowSavePresetDialog(default_filename="raycasting"):

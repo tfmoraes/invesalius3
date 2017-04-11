@@ -267,10 +267,12 @@ class Slice(object):
         self.CloseProject()
 
     def CloseProject(self):
-        f = self._matrix.filename
-        self._matrix._mmap.close()
-        self._matrix  = None
-        os.remove(f)
+        if self._matrix is not None:
+            f = self._matrix.filename
+            self._matrix._mmap.close()
+            self._matrix  = None
+            os.remove(f)
+
         self.current_mask = None
 
         for name in self.aux_matrices:
