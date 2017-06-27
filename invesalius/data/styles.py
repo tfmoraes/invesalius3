@@ -1063,6 +1063,17 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
                 self.temp_file, self.matrix = self.viewer.slice_.create_temp_mask()
                 self.viewer.slice_.aux_matrices['watershed'] = self.matrix
 
+
+        template = (
+        "img = np.memmap('%s', shape=%s, dtype='int16', mode='r+')\n"
+        "m1 = np.memmap('%s', shape=%s, dtype='int8', mode='r+')\n"
+        "m2 = np.memmap('%s', shape=%s, dtype='int8', mode='r+')"
+        ) % (self.viewer.slice_.matrix.filename, self.viewer.slice_.matrix.shape,
+               self.viewer.slice_.current_mask.matrix.filename, self.viewer.slice_.current_mask.matrix.shape,
+               self.matrix.filename, self.matrix.shape)
+
+        print template
+
     def _remove_mask(self):
         if self.matrix is not None:
             self.matrix = None
