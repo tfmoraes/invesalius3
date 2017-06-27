@@ -23,6 +23,8 @@ import numpy as np
 import vtk
 from wx.lib.pubsub import pub as Publisher
 
+from skimage.exposure import rescale_intensity
+
 import invesalius.constants as const
 import invesalius.data.converters as converters
 import invesalius.data.imagedata_utils as iu
@@ -32,6 +34,8 @@ import invesalius.utils as utils
 from invesalius.data.mask import Mask
 from invesalius.project import Project
 from invesalius.data import mips
+
+from invesalius.data import clahe
 
 from invesalius.data import transforms
 import invesalius.data.transformations as transformations
@@ -121,6 +125,10 @@ class Slice(object):
 
     @matrix.setter
     def matrix(self, value):
+        copy = value.copy()
+        rescaled = np.array(copy - copy.min(), dtype='uint16')
+        out = clahe._clahe(rescaled, kernel_size=(16, 16, 16), clip_limit=8, nbins=256, NR_OF_GREY=rescaled.max() - rescaled.min() + 1)
+        value[:] = rescale_intensity(out, (out.min(), out.max()), (int(value.min()), int(value.max())))
         self._matrix = value
         i, e = value.min(), value.max()
         r = int(e) - int(i)
