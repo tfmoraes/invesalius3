@@ -1512,7 +1512,7 @@ class ReorientImageInteractorStyle(DefaultInteractorStyle):
             self.viewer.slice_data.renderer.RemoveActor(actor)
 
         self.viewer.slice_.rotations = [0, 0, 0]
-        self.viewer.slice_.q_orientation = np.array((1, 0, 0, 0))
+        self.viewer.slice_.q_orientation = np.identity(4)
         self._discard_buffers()
         Publisher.sendMessage('Close reorient dialog')
         Publisher.sendMessage('Show current mask')
@@ -1587,7 +1587,7 @@ class ReorientImageInteractorStyle(DefaultInteractorStyle):
 
     def OnDblClick(self, evt):
         self.viewer.slice_.rotations = [0, 0, 0]
-        self.viewer.slice_.q_orientation = np.array((1, 0, 0, 0))
+        self.viewer.slice_.q_orientation = np.identity(4)
 
         Publisher.sendMessage('Update reorient angles', (0, 0, 0))
 
@@ -1605,14 +1605,22 @@ class ReorientImageInteractorStyle(DefaultInteractorStyle):
         x, y, z = self.picker.GetPickPosition()
 
         if self.viewer.orientation == 'AXIAL':
-            self.viewer.slice_.center = (x, y, icz)
+            new_center = (x, y, icz)
         elif self.viewer.orientation == 'CORONAL':
-            self.viewer.slice_.center = (x, icy, z)
+            new_center = (x, icy, z)
         elif self.viewer.orientation == 'SAGITAL':
-            self.viewer.slice_.center = (icx, y, z)
+            new_center = (icx, y, z)
 
+        #  print self.viewer.slice_.center, new_center
 
-        self._discard_buffers()
+        #  new_center = self._transform_coord(*[i-j for i, j in zip(new_center, self.viewer.slice_.center)])
+        #  self.viewer.slice_.center = [i+j for i, j in zip(new_center, self.viewer.slice_.center)]
+
+        self.viewer.slice_.center = self._transform_coord(*new_center)
+
+        print self.viewer.slice_.center, new_center
+
+        #  self._discard_buffers()
         self.viewer.slice_.current_mask.clear_history()
         Publisher.sendMessage('Reload actual slice')
 
@@ -1626,12 +1634,6 @@ class ReorientImageInteractorStyle(DefaultInteractorStyle):
         self.picker.Pick(mx, my, 0, self.viewer.slice_data.renderer)
         x, y, z = self.picker.GetPickPosition()
 
-        if self.viewer.orientation == 'AXIAL':
-            p1 = np.array((y-cy, x-cx))
-        elif self.viewer.orientation == 'CORONAL':
-            p1 = np.array((z-cz, x-cx))
-        elif self.viewer.orientation == 'SAGITAL':
-            p1 = np.array((z-cz, y-cy))
         p0 = self.p0
         p1 = self.get_image_point_coord(x, y, z)
 
@@ -1642,9 +1644,17 @@ class ReorientImageInteractorStyle(DefaultInteractorStyle):
         axis = axis / norm
         angle = np.arccos(np.dot(p0, p1)/(np.linalg.norm(p0)*np.linalg.norm(p1)))
 
-        self.viewer.slice_.q_orientation = transformations.quaternion_multiply(self.viewer.slice_.q_orientation, transformations.quaternion_about_axis(angle, axis))
+        #  self.viewer.slice_.q_orientation = transformations.quaternion_multiply(self.viewer.slice_.q_orientation, transformations.quaternion_about_axis(angle, axis))
+        self.viewer.slice_.q_orientation = transformations.concatenate_matrices(
+            transformations.translation_matrix((cx, cy, cz)),
+            transformations.rotation_matrix(angle, axis),
+            transformations.translation_matrix((-cx, -cy, -cz)),
+            self.viewer.slice_.q_orientation,
+        )
 
-        az, ay, ax = transformations.euler_from_quaternion(self.viewer.slice_.q_orientation)
+        print angle
+
+        ax, ay, az = transformations.euler_from_matrix(self.viewer.slice_.q_orientation)
         Publisher.sendMessage('Update reorient angles', (ax, ay, az))
 
         self._discard_buffers()
@@ -1661,13 +1671,23 @@ class ReorientImageInteractorStyle(DefaultInteractorStyle):
         elif self.viewer.orientation == 'SAGITAL':
             x = cx
 
-        x, y, z = x-cx, y-cy, z-cz
+        M = self.viewer.slice_.q_orientation
 
-        M = transformations.quaternion_matrix(self.viewer.slice_.q_orientation)
-        tcoord = np.array((z, y, x, 1)).dot(M)
+        c = M.dot(np.array((cx, cy, cz, 1.0)))
+        c = c[:3] / c[3]
+
+        tcoord = M.dot(np.array((x, y, z, 1)))
         tcoord = tcoord[:3]/tcoord[3]
 
+
         #  print (z, y, x), tcoord
+        return tcoord - c
+
+    def _transform_coord(self, x, y, z):
+        M = self.viewer.slice_.q_orientation
+        tcoord = M.dot(np.array((x, y, z, 1)))
+        tcoord = tcoord[:3]/tcoord[3]
+
         return tcoord
 
     def _create_line(self, x0, y0, x1, y1, color):

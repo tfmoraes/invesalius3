@@ -96,7 +96,7 @@ class Slice(object):
         self._spacing = (1.0, 1.0, 1.0)
         self.center = [0, 0, 0]
 
-        self.q_orientation = np.array((1, 0, 0, 0))
+        self.q_orientation = np.identity(4)
 
         self.number_of_colours = 256
         self.saturation_range = (0, 0)
@@ -612,22 +612,23 @@ class Slice(object):
             if self._type_projection == const.PROJECTION_NORMAL:
                 number_slices = 1
 
-            if np.any(self.q_orientation[1::]):
-                cx, cy, cz = self.center
-                T0 = transformations.translation_matrix((-cz, -cy, -cx))
-                #  Rx = transformations.rotation_matrix(rx, (0, 0, 1))
-                #  Ry = transformations.rotation_matrix(ry, (0, 1, 0))
-                #  Rz = transformations.rotation_matrix(rz, (1, 0, 0))
-                #  #  R = transformations.euler_matrix(rz, ry, rx, 'rzyx')
-                #  R = transformations.concatenate_matrices(Rx, Ry, Rz)
-                R = transformations.quaternion_matrix(self.q_orientation)
-                T1 = transformations.translation_matrix((cz, cy, cx))
-                M = transformations.concatenate_matrices(T1, R.T, T0)
+            if not np.all(self.q_orientation == np.identity(4)):
+                #  cx, cy, cz = self.center
+                #  T0 = transformations.translation_matrix((-cz, -cy, -cx))
+                #  #  Rx = transformations.rotation_matrix(rx, (0, 0, 1))
+                #  #  Ry = transformations.rotation_matrix(ry, (0, 1, 0))
+                #  #  Rz = transformations.rotation_matrix(rz, (1, 0, 0))
+                #  #  #  R = transformations.euler_matrix(rz, ry, rx, 'rzyx')
+                #  #  R = transformations.concatenate_matrices(Rx, Ry, Rz)
+                #  R = transformations.quaternion_matrix(self.q_orientation)
+                #  T1 = transformations.translation_matrix((cz, cy, cx))
+                #  M = transformations.concatenate_matrices(T1, R.T, T0)
+                M = np.linalg.inv(self.q_orientation)
 
 
             if orientation == 'AXIAL':
                 tmp_array = np.array(self.matrix[slice_number:slice_number + number_slices])
-                if np.any(self.q_orientation[1::]):
+                if not np.all(self.q_orientation == np.identity(4)):
                     transforms.apply_view_matrix_transform(self.matrix, self.spacing, M, slice_number, orientation, self.interp_method, self.matrix.min(), tmp_array)
                     print ">>>", tmp_array.min(), tmp_array.max()
                 if self._type_projection == const.PROJECTION_NORMAL:
@@ -675,7 +676,7 @@ class Slice(object):
 
             elif orientation == 'CORONAL':
                 tmp_array = np.array(self.matrix[:, slice_number: slice_number + number_slices, :])
-                if np.any(self.q_orientation[1::]):
+                if not np.all(self.q_orientation == np.identity(4)):
                     transforms.apply_view_matrix_transform(self.matrix, self.spacing, M, slice_number, orientation, self.interp_method, self.matrix.min(), tmp_array)
 
                 if self._type_projection == const.PROJECTION_NORMAL:
@@ -725,7 +726,7 @@ class Slice(object):
                         n_image = np.array(self.matrix[:, slice_number, :])
             elif orientation == 'SAGITAL':
                 tmp_array = np.array(self.matrix[:, :, slice_number: slice_number + number_slices])
-                if np.any(self.q_orientation[1::]):
+                if not np.all(self.q_orientation == np.identity(4)):
                     transforms.apply_view_matrix_transform(self.matrix, self.spacing, M, slice_number, orientation, self.interp_method, self.matrix.min(), tmp_array)
 
                 if self._type_projection == const.PROJECTION_NORMAL:
@@ -1433,18 +1434,20 @@ class Slice(object):
         mcopy = np.memmap(temp_file, shape=self.matrix.shape, dtype=self.matrix.dtype, mode='w+')
         mcopy[:] = self.matrix
 
-        cx, cy, cz = self.center
-        T0 = transformations.translation_matrix((-cz, -cy, -cx))
-        R = transformations.quaternion_matrix(self.q_orientation)
-        T1 = transformations.translation_matrix((cz, cy, cx))
-        M = transformations.concatenate_matrices(T1, R.T, T0)
+        #  cx, cy, cz = self.center
+        #  T0 = transformations.translation_matrix((-cz, -cy, -cx))
+        #  R = transformations.quaternion_matrix(self.q_orientation)
+        #  T1 = transformations.translation_matrix((cz, cy, cx))
+        #  M = transformations.concatenate_matrices(T1, R.T, T0)
+
+        M = np.linalg.inv(self.q_orientation)
 
         transforms.apply_view_matrix_transform(mcopy, self.spacing, M, 0, 'AXIAL', self.interp_method, mcopy.min(), self.matrix)
 
         del mcopy
         os.remove(temp_file)
 
-        self.q_orientation = np.array((1, 0, 0, 0))
+        self.q_orientation = np.identity(4)
         self.center = [(s * d/2.0) for (d, s) in zip(self.matrix.shape[::-1], self.spacing)]
 
         self.__clean_current_mask(None)

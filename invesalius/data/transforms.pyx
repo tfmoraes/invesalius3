@@ -29,9 +29,9 @@ cdef void mul_mat4_vec4(double[:, :] M,
 cdef image_t coord_transform(image_t[:, :, :] volume, double[:, :] M, int x, int y, int z, double sx, double sy, double sz, interp_function f_interp, image_t cval) nogil:
 
     cdef double coord[4]
-    coord[0] = z*sz
+    coord[0] = x*sx
     coord[1] = y*sy
-    coord[2] = x*sx
+    coord[2] = z*sz
     coord[3] = 1.0
 
     cdef double _ncoord[4]
@@ -47,14 +47,17 @@ cdef image_t coord_transform(image_t[:, :, :] volume, double[:, :] M, int x, int
     mul_mat4_vec4(M, coord, _ncoord)
 
     cdef double nz, ny, nx
-    nz = (_ncoord[0]/_ncoord[3])/sz
+    nx = (_ncoord[0]/_ncoord[3])/sx
     ny = (_ncoord[1]/_ncoord[3])/sy
-    nx = (_ncoord[2]/_ncoord[3])/sx
+    nz = (_ncoord[2]/_ncoord[3])/sz
 
     cdef double v
 
     if 0 <= nz <= (dz-1) and 0 <= ny <= (dy-1) and 0 <= nx <= (dx-1):
-        return <image_t>f_interp(volume, nx, ny, nz)
+        v = f_interp(volume, nx, ny, nz)
+        if v < cval:
+            return cval
+        return <image_t>v
         #  if minterpol == 0:
             #  return <image_t>nearest_neighbour_interp(volume, nx, ny, nz)
         #  elif minterpol == 1:
