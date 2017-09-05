@@ -438,6 +438,33 @@ def ShowSaveAsProjectDialog(default_filename=None):
     os.chdir(current_dir)
     return filename
 
+def ShowSaveHDF5Dialog():
+    dlg = wx.FileDialog(None,
+                        _("Save project as..."), # title
+                        "", # last used directory
+                        '',
+                        _("HDF5 file (*.hdf5)|*.hdf5"),
+                        wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
+
+    filename = None
+    try:
+        if dlg.ShowModal() == wx.ID_OK:
+            filename = dlg.GetPath()
+            ok = 1
+        else:
+            ok = 0
+    except(wx._core.PyAssertionError): #TODO: fix win64
+        filename = dlg.GetPath()
+        ok = 1
+
+    if (ok):
+        extension = "hdf5"
+        if sys.platform != 'win32':
+            if filename.split(".")[-1] != extension:
+                filename = filename + "." + extension
+
+    return filename
+
 
 # Dialog for neuronavigation markers
 def ShowSaveMarkersDialog(default_filename=None):

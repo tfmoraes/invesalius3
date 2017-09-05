@@ -337,6 +337,19 @@ class Project(object):
             measure.Load(measurements[index])
             self.measurement_dict[int(index)] = measure
 
+    def SaveHDF5(self, filepath):
+        import h5py
+        from invesalius.data.slice_ import Slice
+
+        hfile = h5py.File(filepath)
+
+        slc = Slice()
+        hfile['image'] = slc.matrix
+        hfile['spacing'] = slc.spacing
+        for index in self.mask_dict:
+            hfile['masks_%s' % index] = self.mask_dict[index].matrix
+        hfile.flush()
+
 def Compress(folder, filename, filelist):
     tmpdir, tmpdir_ = os.path.split(folder)
     current_dir = os.path.abspath(".")

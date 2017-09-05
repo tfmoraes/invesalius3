@@ -416,6 +416,8 @@ class Frame(wx.Frame):
             self.ShowSaveAsProject()
         elif id == const.ID_PROJECT_CLOSE:
             self.CloseProject()
+        elif id == const.ID_SAVE_HDF5:
+            self.SaveHDF5()
         elif id == const.ID_EXIT:
             self.OnClose(None)
         elif id == const.ID_ABOUT:
@@ -599,6 +601,12 @@ class Frame(wx.Frame):
         """
         Publisher.sendMessage('Show save dialog', True)
 
+    def SaveHDF5(self):
+        filename = dlg.ShowSaveHDF5Dialog()
+        if filename:
+            proj = prj.Project()
+            proj.SaveHDF5(filename)
+
     def ShowBitmapImporter(self):
         """
         Tiff, BMP, JPEG and PNG
@@ -672,6 +680,7 @@ class MenuBar(wx.MenuBar):
         # not. Eg. save should only be available if a project is open
         self.enable_items = [const.ID_PROJECT_SAVE,
                              const.ID_PROJECT_SAVE_AS,
+                             const.ID_SAVE_HDF5,
                              const.ID_PROJECT_CLOSE,
                              const.ID_REORIENT_IMG,
                              const.ID_FLOODFILL_MASK,
@@ -739,6 +748,7 @@ class MenuBar(wx.MenuBar):
         app(const.ID_PROJECT_OPEN, _("Open project...\tCtrl+O"))
         app(const.ID_PROJECT_SAVE, _("Save project\tCtrl+S"))
         app(const.ID_PROJECT_SAVE_AS, _("Save project as..."))
+        app(const.ID_SAVE_HDF5, _("Save HDF5"))
         app(const.ID_PROJECT_CLOSE, _("Close project"))
         file_menu.AppendSeparator()
         #app(const.ID_PROJECT_INFO, _("Project Information..."))
