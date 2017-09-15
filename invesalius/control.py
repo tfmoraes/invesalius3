@@ -408,6 +408,10 @@ class Controller():
 
     def OnLoadImportPanel(self, evt):
         patient_series = evt.data
+        if self.progress_dialog:
+            self.progress_dialog.Close()
+            self.progress_dialog = None
+
         ok = self.LoadImportPanel(patient_series)
         if ok:
             Publisher.sendMessage('Show import panel')

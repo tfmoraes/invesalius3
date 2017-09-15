@@ -633,7 +633,7 @@ class Slice(object):
                 if np.any(self.q_orientation[1::]):
                     transforms.apply_view_matrix_transform(self.matrix, self.spacing, M, slice_number, orientation, self.interp_method, self.matrix.min(), tmp_array)
                 if self._type_projection == const.PROJECTION_NORMAL:
-                    n_image = tmp_array.squeeze()
+                    n_image = tmp_array[0]
                 else:
                     if inverted:
                         tmp_array = tmp_array[::-1]
@@ -681,7 +681,7 @@ class Slice(object):
                     transforms.apply_view_matrix_transform(self.matrix, self.spacing, M, slice_number, orientation, self.interp_method, self.matrix.min(), tmp_array)
 
                 if self._type_projection == const.PROJECTION_NORMAL:
-                    n_image = tmp_array.squeeze()
+                    n_image = tmp_array[:, 0, :]
                 else:
                     #if slice_number == 0:
                         #slice_number = 1
@@ -731,7 +731,7 @@ class Slice(object):
                     transforms.apply_view_matrix_transform(self.matrix, self.spacing, M, slice_number, orientation, self.interp_method, self.matrix.min(), tmp_array)
 
                 if self._type_projection == const.PROJECTION_NORMAL:
-                    n_image = tmp_array.squeeze()
+                    n_image = tmp_array[:, :, 0]
                 else:
                     if inverted:
                         tmp_array = tmp_array[:, :, ::-1]
