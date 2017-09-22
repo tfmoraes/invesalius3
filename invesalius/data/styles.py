@@ -40,7 +40,14 @@ import numpy as np
 from scipy import ndimage
 from scipy.misc import imsave
 from scipy.ndimage import watershed_ift, generate_binary_structure
+
 from skimage.morphology import watershed
+from skimage.feature import peak_local_max
+
+try:
+    from skimage.filters import threshold_otsu
+except ImportError:
+    from skimage.filter import threshold_otsu
 
 import invesalius.gui.dialogs as dialogs
 from invesalius.data.measures import MeasureData
@@ -1041,6 +1048,13 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         Publisher.subscribe(self.set_bsize, 'Set watershed brush size')
         Publisher.subscribe(self.set_bformat, 'Set watershed brush format')
 
+        if self.orientation == 'AXIAL':
+            Publisher.subscribe(self.on_clean_foreground, 'Clean watershed foreground')
+            Publisher.subscribe(self.on_clean_background, 'Clean watershed background')
+            Publisher.subscribe(self.on_otsu_background, 'Otsu watershed background')
+            Publisher.subscribe(self.on_min_background, 'Min watershed background')
+            Publisher.subscribe(self.on_max_foreground, 'Max watershed foreground')
+
         self._set_cursor()
         self.viewer.slice_data.cursor.Show(0)
 
@@ -1099,6 +1113,54 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
     def set_bformat(self, pubsub_evt):
         self.config.cursor_type = pubsub_evt.data
         self._set_cursor()
+
+    def on_clean_foreground(self, pubsub_evt):
+        print 'Clean foreground'
+        markers = self.matrix
+        markers[markers == 1] = 0
+        self.viewer.slice_.discard_all_buffers()
+        self.viewer.slice_.current_mask.clear_history()
+        Publisher.sendMessage('Reload actual slice')
+
+    def on_clean_background(self, pubsub_evt):
+        print 'Clean background'
+        markers = self.matrix
+        markers[markers == 2] = 0
+        self.viewer.slice_.discard_all_buffers()
+        self.viewer.slice_.current_mask.clear_history()
+        Publisher.sendMessage('Reload actual slice')
+
+    def on_otsu_background(self, pubsub_evt):
+        print 'otsu background'
+        markers = self.matrix
+        image = self.viewer.slice_.matrix
+        t = threshold_otsu(image)
+        markers[image < t] = 2
+        self.viewer.slice_.discard_all_buffers()
+        self.viewer.slice_.current_mask.clear_history()
+        Publisher.sendMessage('Reload actual slice')
+
+    def on_min_background(self, pubsub_evt):
+        print 'min background'
+        markers = self.matrix
+        image = self.viewer.slice_.matrix
+        coordinates = peak_local_max(image.max() - image - image.min())
+        for z, y, x in coordinates:
+            markers[z, y, x] = 2
+        self.viewer.slice_.discard_all_buffers()
+        self.viewer.slice_.current_mask.clear_history()
+        Publisher.sendMessage('Reload actual slice')
+
+    def on_max_foreground(self, pubsub_evt):
+        print 'max foreground'
+        markers = self.matrix
+        image = self.viewer.slice_.matrix
+        coordinates = peak_local_max(image)
+        for z, y, x in coordinates:
+            markers[z, y, x] = 1
+        self.viewer.slice_.discard_all_buffers()
+        self.viewer.slice_.current_mask.clear_history()
+        Publisher.sendMessage('Reload actual slice')
 
     def OnEnterInteractor(self, obj, evt):
         if (self.viewer.slice_.buffer_slices[self.orientation].mask is None):

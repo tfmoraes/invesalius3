@@ -892,10 +892,12 @@ class WatershedTool(EditionTools):
         bmp = wx.Bitmap(os.path.join(const.ICON_DIR, "configuration.png"), wx.BITMAP_TYPE_PNG)
         self.btn_wconfig = wx.BitmapButton(self, -1, bitmap=bmp,
                                            size=(bmp.GetWidth()+10, bmp.GetHeight()+10))
+        self.btn_tools = wx.Button(self, -1, _('Tools'))
         self.btn_exp_watershed = wx.Button(self, -1, _('Expand watershed to 3D'))
 
         sizer_btns = wx.BoxSizer(wx.HORIZONTAL)
         sizer_btns.Add(self.btn_wconfig, 0, wx.ALIGN_LEFT | wx.LEFT | wx.TOP | wx.DOWN, 5)
+        sizer_btns.Add(self.btn_tools, 0, wx.ALIGN_LEFT | wx.LEFT | wx.TOP | wx.DOWN, 5)
         sizer_btns.Add(self.btn_exp_watershed, 0, wx.GROW|wx.EXPAND| wx.ALL, 5)
 
         # Add lines into main sizer
@@ -928,6 +930,7 @@ class WatershedTool(EditionTools):
         self.ww_wl_cbox.Bind(wx.EVT_CHECKBOX, self.OnCheckWWWL)
         self.btn_exp_watershed.Bind(wx.EVT_BUTTON, self.OnExpandWatershed)
         self.btn_wconfig.Bind(wx.EVT_BUTTON, self.OnConfig)
+        self.btn_tools.Bind(wx.EVT_BUTTON, self.OnTools)
 
     def __bind_pubsub_evt(self):
         Publisher.subscribe(self._set_brush_size, 'Set watershed brush size')
@@ -996,6 +999,9 @@ class WatershedTool(EditionTools):
         from invesalius.data.styles import WatershedConfig
         config = WatershedConfig()
         dlg.WatershedOptionsDialog(config).Show()
+
+    def OnTools(self, evt):
+        dlg.WatershedTools().Show()
 
     def OnExpandWatershed(self, evt):
         Publisher.sendMessage('Expand watershed to 3D AXIAL')

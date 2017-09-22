@@ -1784,6 +1784,57 @@ class WatershedOptionsDialog(wx.Dialog):
         self.wop.apply_options()
         evt.Skip()
 
+
+class WatershedTools(wx.Dialog):
+    def __init__(self):
+        pre = wx.PreDialog()
+        pre.Create(wx.GetApp().GetTopWindow(), -1, _(u'Watershed tools'), style=wx.DEFAULT_DIALOG_STYLE|wx.FRAME_FLOAT_ON_PARENT)
+        self.PostCreate(pre)
+
+        self._init_gui()
+
+    def _init_gui(self):
+        btn_clean_obj_mark = wx.Button(self, -1, _('Clean foreground marks'))
+        btn_clean_nobj_mark = wx.Button(self, -1, _('Clean backround marks'))
+        btn_otsu = wx.Button(self, -1, _('Otsu as backround'))
+        btn_max = wx.Button(self, -1, _('Maximun as foreground'))
+        btn_min = wx.Button(self, -1, _('Minimun as background'))
+
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(btn_clean_obj_mark)
+        sizer.Add(btn_clean_nobj_mark)
+        sizer.Add(btn_otsu)
+        sizer.Add(btn_max)
+        sizer.Add(btn_min)
+
+        self.SetSizer(sizer)
+        sizer.Fit(self)
+        self.Layout()
+
+        btn_clean_obj_mark.Bind(wx.EVT_BUTTON, self.OnCleanObj)
+        btn_clean_nobj_mark.Bind(wx.EVT_BUTTON, self.OnCleanNObj)
+        btn_otsu.Bind(wx.EVT_BUTTON, self.OnOtsu)
+        btn_min.Bind(wx.EVT_BUTTON, self.OnMin)
+        btn_max.Bind(wx.EVT_BUTTON, self.OnMax)
+
+        self.CenterOnScreen()
+
+    def OnCleanObj(self, evt):
+        Publisher.sendMessage('Clean watershed foreground')
+
+    def OnCleanNObj(self, evt):
+        Publisher.sendMessage('Clean watershed background')
+
+    def OnOtsu(self, evt):
+        Publisher.sendMessage('Otsu watershed background')
+
+    def OnMin(self, evt):
+        Publisher.sendMessage('Min watershed background')
+
+    def OnMax(self, evt):
+        Publisher.sendMessage('Max watershed foreground')
+
+
 class MaskBooleanDialog(wx.Dialog):
     def __init__(self, masks):
         pre = wx.PreDialog()
