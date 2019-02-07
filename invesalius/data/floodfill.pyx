@@ -105,6 +105,7 @@ def floodfill_threshold(np.ndarray[image_t, ndim=3] data, list seeds, int t0, in
     cdef int xo, yo, zo
     cdef int i, j, k
     cdef int offset_x, offset_y, offset_z
+    cdef int modified = 1
 
     dz = data.shape[0]
     dy = data.shape[1]
@@ -129,30 +130,24 @@ def floodfill_threshold(np.ndarray[image_t, ndim=3] data, list seeds, int t0, in
             stack.push_back(c)
             out[k, j, i] = fill
 
-    with nogil:
-        while stack.size():
-            c = stack.back()
-            stack.pop_back()
-
-            x = c.x
-            y = c.y
-            z = c.z
-
-            out[z, y, x] = fill
-
-            for k in xrange(odz):
-                zo = z + k - offset_z
-                for j in xrange(ody):
-                    yo = y + j - offset_y
-                    for i in xrange(odx):
-                        if strct[k, j, i]:
-                            xo = x + i - offset_x
-                            if 0 <= xo < dx and 0 <= yo < dy and 0 <= zo < dz and out[zo, yo, xo] != fill and t0 <= data[zo, yo, xo] <= t1:
-                                out[zo, yo, xo] = fill
-                                c.x = xo
-                                c.y = yo
-                                c.z = zo
-                                stack.push_back(c)
+    while modified:
+        print("modified", modified)
+        modified = 0
+        for z in prange(dz, nogil=True):
+            for y in range(dy):
+                for x in range(dx):
+                    if t0 <= data[z, y, x] <= t1 and out[z, y, x] != fill:
+                        for k in range(odz):
+                            zo = z + k - offset_z
+                            for j in range(ody):
+                                yo = y + j - offset_y
+                                for i in range(odx):
+                                    if strct[k, j, i]:
+                                        xo = x + i - offset_x
+                                        if 0 <= xo < dx and 0 <= yo < dy and 0 <= zo < dz and out[zo, yo, xo] == fill:
+                                            out[z, y, x] = fill
+                                            modified += 1
+                                            break
 
     if to_return:
         return out
