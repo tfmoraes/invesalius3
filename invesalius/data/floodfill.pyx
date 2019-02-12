@@ -92,7 +92,7 @@ def floodfill(np.ndarray[image_t, ndim=3] data, int i, int j, int k, int v, int 
 @cython.boundscheck(False) # turn of bounds-checking for entire function
 @cython.wraparound(False)
 @cython.nonecheck(False)
-def floodfill_threshold(np.ndarray[image_t, ndim=3] data, list seeds, int t0, int t1, int fill, np.ndarray[mask_t, ndim=3] strct, np.ndarray[mask_t, ndim=3] out):
+def floodfill_threshold(image_t[:, :, :] data, list seeds, int t0, int t1, int fill, mask_t[:, :, :] strct, mask_t[:, :, :] out):
 
     cdef int to_return = 0
     if out is None:
@@ -130,26 +130,25 @@ def floodfill_threshold(np.ndarray[image_t, ndim=3] data, list seeds, int t0, in
             stack.push_back(c)
             out[k, j, i] = fill
 
-    with nogil:
-        while modified:
-            modified = 0
-            for z in xrange(dz):
-                for y in prange(dy):
-                    for x in xrange(dx):
-                        if t0 <= data[z, y, x] <= t1 and out[z, y, x] != fill:
-                            for k in xrange(odz):
-                                zo = z + k - offset_z
-                                if 0 <= zo <= dz and out[z, y, x] != fill:
-                                    for j in xrange(ody):
-                                        yo = y + j - offset_y
-                                        if 0 <= yo <= dy and out[z, y, x] != fill:
-                                            for i in xrange(odx):
-                                                if strct[k, j, i]:
-                                                    xo = x + i - offset_x
-                                                    if out[zo, yo, xo] == fill:
-                                                        out[z, y, x] = fill
-                                                        modified += 1
-                                                        break
+    while modified:
+        modified = 0
+        for z in prange(dz, nogil=True):
+            for y in range(dy):
+                for x in xrange(dx):
+                    if out[z, y, x] != fill and t0 <= data[z, y, x] <= t1:
+                        for k in xrange(odz):
+                            zo = z + k - offset_z
+                            if out[z, y, x] != fill and 0 <= zo <= dz:
+                                for j in xrange(ody):
+                                    yo = y + j - offset_y
+                                    if out[z, y, x] != fill and 0 <= yo <= dy:
+                                        for i in xrange(odx):
+                                            if strct[k, j, i]:
+                                                xo = x + i - offset_x
+                                                if out[zo, yo, xo] == fill:
+                                                    out[z, y, x] = fill
+                                                    modified += 1
+                                                    break
 
     if to_return:
         return out
