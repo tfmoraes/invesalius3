@@ -388,6 +388,10 @@ class Project(with_metaclass(Singleton, object)):
                     f[key + '/visible'] = mask.is_shown
                     f[key + '/edited'] = mask.was_edited
 
+                for name in s.aux_matrices:
+                    key = 'aux/{}'.format(name)
+                    f[key + '/matrix'] = s.aux_matrices[name]
+
     def export_project_to_nifti(self, filename, save_masks=True):
         import invesalius.data.slice_ as slc
         import nibabel as nib

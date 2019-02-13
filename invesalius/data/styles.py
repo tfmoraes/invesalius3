@@ -53,6 +53,7 @@ import invesalius.data.watershed_process as watershed_process
 import invesalius.utils as utils
 import invesalius.data.transformations as transformations
 import invesalius.data.geometry as geom
+from invesalius.data import growcut
 
 ORIENTATIONS = {
         "AXIAL": const.AXIAL,
@@ -991,7 +992,7 @@ class WatershedProgressWindow(object):
 
 class WatershedConfig(with_metaclass(utils.Singleton, object)):
     def __init__(self):
-        self.algorithm = "Watershed"
+        self.algorithm = "growcut"
         self.con_2d = 4
         self.con_3d = 6
         self.mg_size = 3
@@ -1316,6 +1317,14 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
                                    get_LUT_value(image, ww, wl).astype('uint16'),
                                    self.config.mg_size)
                     tmp_mask = watershed(tmp_image, markers.astype('int16'), bstruct)
+                elif self.config.algorithm == 'growcut':
+                    tmp_image = get_LUT_value(image, ww, wl).astype('int16')
+                    tmp_mask = np.zeros_like(mask)
+                    print("\n\n\n\ndata shape teste", tmp_image.shape, tmp_image.reshape((1,) + tmp_image.shape).shape, "\n\n\n")
+                    growcut.growcut_cellular_automata(tmp_image.reshape((1,) + tmp_image.shape),
+                                                      markers.reshape((1,) + markers.shape),
+                                                      bstruct.reshape((1,) + bstruct.shape).astype('uint8'),
+                                                      tmp_mask.reshape((1,) + tmp_mask.shape))
                 else:
                     #tmp_image = ndimage.gaussian_filter(get_LUT_value(image, ww, wl).astype('uint16'), self.config.mg_size)
                     #tmp_image = ndimage.morphological_gradient(
@@ -1331,6 +1340,9 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
                 if self.config.algorithm == 'Watershed':
                     tmp_image = ndimage.morphological_gradient((image - image.min()).astype('uint16'), self.config.mg_size)
                     tmp_mask = watershed(tmp_image, markers.astype('int16'), bstruct)
+                elif self.config.algorithm == 'growcut':
+                    tmp_image = image - image.min().astype('int16')
+                    tmp_mask = growcut.growcut_cellular_automata(tmp_image, markers, bstruct, None)
                 else:
                     #tmp_image = (image - image.min()).astype('uint16')
                     #tmp_image = ndimage.gaussian_filter(tmp_image, self.config.mg_size)
