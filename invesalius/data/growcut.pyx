@@ -7,6 +7,7 @@ from collections import deque
 from cython.parallel import prange
 from libc.math cimport floor, ceil, fabs
 from libc.string cimport memcpy
+from libc.stdlib cimport malloc, free
 #  from libcpp cimport bool
 #  from libcpp.deque cimport deque as cdeque
 #  from libcpp.vector cimport vector
@@ -32,8 +33,8 @@ cdef inline float g(float x, image_t _min, image_t _max) nogil:
 @cython.wraparound(False)
 @cython.nonecheck(False)
 @cython.cdivision(True) 
-cdef int _growcut_cellular_automata(image_t[:] data, mask_t[:] mask, int dx, int dy, int dz, mask_t[:] strct, int odx, int ody, int odz, image_t _min, image_t _max, float **mweights, mask_t[:] out) nogil:
-    cdef int i, j, x, y, z, xo, yo, zo, sx, sy, sz, sj
+cdef int _growcut_cellular_automata(image_t[:] data, mask_t[:] mask, int dx, int dy, int dz, mask_t[:] strct, int odx, int ody, int odz, image_t _min, image_t _max, float **mweights, mask_t[:] out):
+    cdef int i, j, sj, x, y, z, xo, yo, zo, sx, sy, sz
     cdef int vmodified = 0
     cdef int modified = 1
     cdef int qte = 0
@@ -51,15 +52,22 @@ cdef int _growcut_cellular_automata(image_t[:] data, mask_t[:] mask, int dx, int
     cdef int aweight = 0
     cdef int nweight = 1
 
-    for i in prange(di):
+    print("di dj", di, dj)
+
+    for i in range(di):
         if mask[i]:
             mweights[0][i] = 1
             mweights[1][i] = 1
+        else:
+            mweights[0][i] = 0
+            mweights[1][i] = 0
+
+
+    print("copiei os pesos")
 
     while modified:
         modified = 0
-
-        for i in prange(di):
+        for i in range(di):
             vmodified = 0
             z = i / (dx * dy)
             y = i / (dx)
@@ -89,6 +97,7 @@ cdef int _growcut_cellular_automata(image_t[:] data, mask_t[:] mask, int dx, int
         aweight = nweight
         nweight = (nweight + 1) % 2
         qte += 1
+        print("modified", modified)
 
     return qte
 
@@ -129,8 +138,10 @@ def growcut_cellular_automata(np.ndarray[image_t, ndim=3] data, np.ndarray[mask_
         ody = strct.shape[1]
         odx = strct.shape[2]
 
-    cdef float[:] weights0 = np.zeros(shape=(dx * dy * dz), dtype='float32')
-    cdef float[:] weights1 = np.zeros(shape=(dx * dy * dz), dtype='float32')
+    print("dx, dy, dz", dx, dy, dz)
+
+    cdef float *weights0 = <float*>malloc(dx * dy * dz * 4)
+    cdef float *weights1 = <float*>malloc(dx * dy * dz * 4)
     cdef float **mweights = [&weights0[0], &weights1[0]]
 
     cdef image_t[:] _data = data.ravel()
@@ -138,10 +149,15 @@ def growcut_cellular_automata(np.ndarray[image_t, ndim=3] data, np.ndarray[mask_
     cdef mask_t[:] _strct = strct.ravel()
     cdef mask_t[:] _out = out.ravel()
 
+    print("memcpy")
     memcpy(&_out[0], &_mask[0], mask.size)
 
+    print("vou rodar")
     qte = _growcut_cellular_automata(_data, _mask, dx, dy, dz, _strct, odx, ody, odz, _min, _max, mweights, _out)
     print("Rodou", qte, "vezes")
+
+    free(weights0)
+    free(weights1)
 
     if to_return:
         return out

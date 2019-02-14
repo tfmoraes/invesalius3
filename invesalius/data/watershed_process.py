@@ -25,6 +25,7 @@ def do_watershed(image, markers,  tfile, shape, bstruct, algorithm, mg_size, use
                            mg_size)
             tmp_mask = watershed(tmp_image, markers.astype('int16'), bstruct)
         elif algorithm == 'growcut':
+            print("aqui, cara!")
             tmp_image = ndimage.morphological_gradient(
                            get_LUT_value(image, ww, wl).astype('uint16'),
                            mg_size).astype('int16')
