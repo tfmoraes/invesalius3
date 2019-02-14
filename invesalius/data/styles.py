@@ -1318,9 +1318,10 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
                                    self.config.mg_size)
                     tmp_mask = watershed(tmp_image, markers.astype('int16'), bstruct)
                 elif self.config.algorithm == 'growcut':
-                    tmp_image = get_LUT_value(image, ww, wl).astype('int16')
+                    tmp_image = ndimage.morphological_gradient(
+                                   get_LUT_value(image, ww, wl).astype('uint16'),
+                                   self.config.mg_size).astype('int16')
                     tmp_mask = np.zeros_like(mask)
-                    print("\n\n\n\ndata shape teste", tmp_image.shape, tmp_image.reshape((1,) + tmp_image.shape).shape, "\n\n\n")
                     growcut.growcut_cellular_automata(tmp_image.reshape((1,) + tmp_image.shape),
                                                       markers.reshape((1,) + markers.shape),
                                                       bstruct.reshape((1,) + bstruct.shape).astype('uint8'),

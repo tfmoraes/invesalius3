@@ -95,7 +95,6 @@ cdef int _growcut_cellular_automata(image_t[:] data, mask_t[:] mask, int dx, int
 
 @cython.boundscheck(False) # turn of bounds-checking for entire function
 @cython.wraparound(False)
-@cython.nonecheck(False)
 def growcut_cellular_automata(np.ndarray[image_t, ndim=3] data, np.ndarray[mask_t, ndim=3] mask, np.ndarray[mask_t, ndim=3] strct, np.ndarray[mask_t, ndim=3] out):
 
     cdef int to_return = 0
