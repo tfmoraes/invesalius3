@@ -2,6 +2,7 @@ import numpy as np
 from scipy import ndimage
 from scipy.ndimage import watershed_ift, generate_binary_structure
 from skimage.morphology import watershed
+from invesalius.data import growcut
 
 def get_LUT_value(data, window, level):
     shape = data.shape
@@ -16,13 +17,22 @@ def get_LUT_value(data, window, level):
 
 def do_watershed(image, markers,  tfile, shape, bstruct, algorithm, mg_size, use_ww_wl, wl, ww, q):
     mask = np.memmap(tfile, shape=shape, dtype='uint8', mode='r+')
-                
+    print("algorithm", algorithm)
     if use_ww_wl:
         if algorithm == 'Watershed':
             tmp_image = ndimage.morphological_gradient(
                            get_LUT_value(image, ww, wl).astype('uint16'),
                            mg_size)
             tmp_mask = watershed(tmp_image, markers.astype('int16'), bstruct)
+        elif algorithm == 'growcut':
+            tmp_image = ndimage.morphological_gradient(
+                           get_LUT_value(image, ww, wl).astype('uint16'),
+                           mg_size).astype('int16')
+            tmp_mask = np.zeros_like(mask)
+            growcut.growcut_cellular_automata(tmp_image,
+                                              markers,
+                                              bstruct.astype('uint8'),
+                                              tmp_mask)
         else:
             tmp_image = get_LUT_value(image, ww, wl).astype('uint16')
             #tmp_image = ndimage.gaussian_filter(tmp_image, self.config.mg_size)
