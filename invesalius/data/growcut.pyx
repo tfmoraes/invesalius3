@@ -134,10 +134,10 @@ def growcut_cellular_automata(np.ndarray[image_t, ndim=3] data, np.ndarray[mask_
     cdef float[:] weights1 = np.zeros(shape=(dx * dy * dz), dtype='float32')
     cdef float **mweights = [&weights0[0], &weights1[0]]
 
-    cdef image_t[:] _data = data.flatten()
-    cdef mask_t[:] _mask = mask.flatten()
-    cdef mask_t[:] _strct = strct.flatten()
-    cdef mask_t[:] _out = out.flatten()
+    cdef image_t[:] _data = data.ravel()
+    cdef mask_t[:] _mask = mask.ravel()
+    cdef mask_t[:] _strct = strct.ravel()
+    cdef mask_t[:] _out = out.ravel()
 
     memcpy(&_out[0], &_mask[0], mask.size)
 
