@@ -33,7 +33,7 @@ cdef inline float g(float x, image_t _min, image_t _max) nogil:
 @cython.wraparound(False)
 @cython.nonecheck(False)
 @cython.cdivision(True) 
-cdef int _growcut_cellular_automata(image_t[:] data, mask_t[:] mask, int dx, int dy, int dz, mask_t[:] strct, int odx, int ody, int odz, image_t _min, image_t _max, float **mweights, mask_t[:] out):
+cdef int _growcut_cellular_automata(image_t[:] data, mask_t[:] mask, int dx, int dy, int dz, mask_t[:] strct, int odx, int ody, int odz, image_t _min, image_t _max, float **mweights, mask_t[:] out) nogil:
     cdef int i, j, sj, x, y, z, xo, yo, zo, sx, sy, sz
     cdef int vmodified = 0
     cdef int modified = 1
@@ -52,9 +52,7 @@ cdef int _growcut_cellular_automata(image_t[:] data, mask_t[:] mask, int dx, int
     cdef int aweight = 0
     cdef int nweight = 1
 
-    print("di dj", di, dj)
-
-    for i in range(di):
+    for i in prange(di):
         if mask[i]:
             mweights[0][i] = 1
             mweights[1][i] = 1
@@ -62,20 +60,17 @@ cdef int _growcut_cellular_automata(image_t[:] data, mask_t[:] mask, int dx, int
             mweights[0][i] = 0
             mweights[1][i] = 0
 
-
-    print("copiei os pesos")
-
     while modified:
         modified = 0
-        for i in range(di):
+        for i in prange(di):
             vmodified = 0
             z = i / (dx * dy)
-            y = i / (dx)
+            y = (i / dx) % dy
             x = i % dx
             for j in range(dj):
                 if strct[j]:
                     sz = j / (odx * ody)
-                    sy = j / (odx)
+                    sy = (j / odx) % ody
                     sx = j % (odx)
 
                     zo = z + sz - offset_z
@@ -97,7 +92,6 @@ cdef int _growcut_cellular_automata(image_t[:] data, mask_t[:] mask, int dx, int
         aweight = nweight
         nweight = (nweight + 1) % 2
         qte += 1
-        print("modified", modified)
 
     return qte
 
