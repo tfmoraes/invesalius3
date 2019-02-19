@@ -45,6 +45,16 @@ def do_watershed(image, markers,  tfile, shape, bstruct, algorithm, mg_size, use
         if algorithm == 'Watershed':
             tmp_image = ndimage.morphological_gradient((image - image.min()).astype('uint16'), mg_size)
             tmp_mask = watershed(tmp_image, markers.astype('int16'), bstruct)
+        elif algorithm == 'growcut':
+            print("aqui, cara!")
+            tmp_image = ndimage.morphological_gradient(
+                           (image - image.min()).astype('uint16'),
+                           mg_size).astype('int16')
+            tmp_mask = np.zeros_like(mask)
+            growcut.growcut_cellular_automata(tmp_image,
+                                              markers,
+                                              bstruct.astype('uint8'),
+                                              tmp_mask)
         else:
             tmp_image = (image - image.min()).astype('uint16')
             #tmp_image = ndimage.gaussian_filter(tmp_image, self.config.mg_size)

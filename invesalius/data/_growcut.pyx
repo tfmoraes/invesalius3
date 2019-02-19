@@ -55,6 +55,9 @@ cdef int _growcut_cellular_automata_queue(image_t[:] data, mask_t[:] mask, int d
     cdef vector[float] mweights
     mweights.reserve(di)
 
+    cdef vector[bool] included
+    included.reserve(di)
+
     for i in range(di):
         if mask[i]:
             mweights[i] = 1
@@ -75,8 +78,9 @@ cdef int _growcut_cellular_automata_queue(image_t[:] data, mask_t[:] mask, int d
 
                     if 0 <= xo < dx and 0 <= yo < dy and 0 <= zo < dz:
                         sj = zo * dx * dy + yo * dx + xo
-                        if mask[sj] == 0:
+                        if mask[sj] == 0 and not included[i]:
                             queue.push_back(i)
+                            included[i] = True
                             break
         else:
             mweights[i] = 0
@@ -85,6 +89,7 @@ cdef int _growcut_cellular_automata_queue(image_t[:] data, mask_t[:] mask, int d
         qte += 1
         i = queue.front()
         queue.pop_front()
+        included[i] = False
         z = i / (dx * dy)
         y = (i / dx) % dy
         x = i % dx
@@ -107,7 +112,8 @@ cdef int _growcut_cellular_automata_queue(image_t[:] data, mask_t[:] mask, int d
                         out[sj] = out[i]
                         mweights[sj] = weight
 
-                        queue.push_back(sj)
+                        if not included[sj]:
+                            queue.push_back(sj)
 
     return qte
 

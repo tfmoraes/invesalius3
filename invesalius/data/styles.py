@@ -1338,7 +1338,9 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
                     tmp_image = ndimage.morphological_gradient((image - image.min()).astype('uint16'), self.config.mg_size)
                     tmp_mask = watershed(tmp_image, markers.astype('int16'), bstruct)
                 elif self.config.algorithm == 'growcut':
-                    tmp_image = image - image.min().astype('int16')
+                    tmp_image = ndimage.morphological_gradient(
+                                   (image - image.min()).astype('uint16'),
+                                   self.config.mg_size).astype('int16')
                     tmp_mask = growcut.growcut_cellular_automata(tmp_image, markers, bstruct)
                 else:
                     #tmp_image = (image - image.min()).astype('uint16')
