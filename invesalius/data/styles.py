@@ -1310,7 +1310,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
 
         if BRUSH_BACKGROUND in markers and BRUSH_FOREGROUND in markers:
             #w_algorithm = WALGORITHM[self.config.algorithm]
-            bstruct = generate_binary_structure(2, CON2D[self.config.con_2d])
+            bstruct = generate_binary_structure(2, CON2D[self.config.con_2d]).astype('uint8')
             if self.config.use_ww_wl:
                 if self.config.algorithm == 'Watershed':
                     tmp_image = ndimage.morphological_gradient(
@@ -1321,7 +1321,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
                     tmp_image = ndimage.morphological_gradient(
                                    get_LUT_value(image, ww, wl).astype('uint16'),
                                    self.config.mg_size).astype('int16')
-                    tmp_mask = growcut.growcut_cellular_automata(tmp_image markers bstruct)
+                    tmp_mask = growcut.growcut_cellular_automata(tmp_image, markers, bstruct)
                 else:
                     #tmp_image = ndimage.gaussian_filter(get_LUT_value(image, ww, wl).astype('uint16'), self.config.mg_size)
                     #tmp_image = ndimage.morphological_gradient(

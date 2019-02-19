@@ -1936,7 +1936,7 @@ class WatershedOptionsPanel(wx.Panel):
     def __init__(self, parent, config):
         wx.Panel.__init__(self, parent)
 
-        self.algorithms = ("Watershed", "Watershed IFT")
+        self.algorithms = ("Watershed", "Watershed IFT", "growcut")
         self.con2d_choices = (4, 8)
         self.con3d_choices = (6, 18, 26)
 
