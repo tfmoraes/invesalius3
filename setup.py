@@ -26,10 +26,11 @@ if sys.platform.startswith('linux'):
                                  extra_compile_args=['-fopenmp',],
                                  extra_link_args=['-fopenmp',]),
 
-                       Extension("invesalius.data.growcut", ["invesalius/data/growcut.pyx"],
+                       Extension("invesalius.data._growcut", ["invesalius/data/_growcut.pyx"],
                                  include_dirs=[numpy.get_include()],
-                                 extra_compile_args=['-fopenmp',],
-                                 extra_link_args=['-fopenmp',]),
+                                 extra_compile_args=['-fopenmp', '-std=c++11'],
+                                 extra_link_args=['-fopenmp', '-std=c++11'],
+                                 language='c++',),
 
                        Extension("invesalius.data.floodfill", ["invesalius/data/floodfill.pyx"],
                                  include_dirs=[numpy.get_include()],

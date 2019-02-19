@@ -1321,11 +1321,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
                     tmp_image = ndimage.morphological_gradient(
                                    get_LUT_value(image, ww, wl).astype('uint16'),
                                    self.config.mg_size).astype('int16')
-                    tmp_mask = np.zeros_like(mask)
-                    growcut.growcut_cellular_automata(tmp_image.reshape((1,) + tmp_image.shape),
-                                                      markers.reshape((1,) + markers.shape),
-                                                      bstruct.reshape((1,) + bstruct.shape).astype('uint8'),
-                                                      tmp_mask.reshape((1,) + tmp_mask.shape))
+                    tmp_mask = growcut.growcut_cellular_automata(tmp_image markers bstruct)
                 else:
                     #tmp_image = ndimage.gaussian_filter(get_LUT_value(image, ww, wl).astype('uint16'), self.config.mg_size)
                     #tmp_image = ndimage.morphological_gradient(
@@ -1343,7 +1339,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
                     tmp_mask = watershed(tmp_image, markers.astype('int16'), bstruct)
                 elif self.config.algorithm == 'growcut':
                     tmp_image = image - image.min().astype('int16')
-                    tmp_mask = growcut.growcut_cellular_automata(tmp_image, markers, bstruct, None)
+                    tmp_mask = growcut.growcut_cellular_automata(tmp_image, markers, bstruct)
                 else:
                     #tmp_image = (image - image.min()).astype('uint16')
                     #tmp_image = ndimage.gaussian_filter(tmp_image, self.config.mg_size)
