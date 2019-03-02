@@ -122,10 +122,13 @@ class InnerFoldPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUTEXT)
         except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUTEXT)
         self.SetBackgroundColour(default_colour)
+        self.SetForegroundColour(text_colour)
 
         self.__bind_events()
         # Fold panel and its style settings
@@ -281,10 +284,13 @@ class NeuronavigationPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUTEXT)
         except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUTEXT)
         self.SetBackgroundColour(default_colour)
+        self.SetForegroundColour(text_colour)
 
         self.SetAutoLayout(1)
 
@@ -741,10 +747,13 @@ class ObjectRegistrationPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUTEXT)
         except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUTEXT)
         self.SetBackgroundColour(default_colour)
+        self.SetForegroundColour(text_colour)
 
         self.coil_list = const.COIL
 
@@ -980,10 +989,13 @@ class MarkersPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUTEXT)
         except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUTEXT)
         self.SetBackgroundColour(default_colour)
+        self.SetForegroundColour(text_colour)
 
         self.SetAutoLayout(1)
 
@@ -1364,7 +1376,11 @@ class DbsPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUTEXT)
         except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUTEXT)
+        self.SetBackgroundColour(default_colour)
+        self.SetForegroundColour(text_colour)
 

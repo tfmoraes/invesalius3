@@ -218,10 +218,13 @@ class InnerFoldPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUTEXT)
         except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUTEXT)
         self.SetBackgroundColour(default_colour)
+        self.SetForegroundColour(text_colour)
 
         # Fold panel and its style settings
         # FIXME: If we dont insert a value in size or if we set wx.DefaultSize,
@@ -290,10 +293,13 @@ class SurfaceTools(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUTEXT)
         except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUTEXT)
         self.SetBackgroundColour(default_colour)
+        self.SetForegroundColour(text_colour)
 
         #self.SetBackgroundColour(wx.Colour(255,255,255))
         self.SetAutoLayout(1)
@@ -438,10 +444,13 @@ class SurfaceProperties(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUTEXT)
         except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUTEXT)
         self.SetBackgroundColour(default_colour)
+        self.SetForegroundColour(text_colour)
 
         self.surface_list = []
 
@@ -600,10 +609,13 @@ class QualityAdjustment(wx.Panel):
         import invesalius.constants as const
         wx.Panel.__init__(self, parent)
         try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUTEXT)
         except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUTEXT)
         self.SetBackgroundColour(default_colour)
+        self.SetForegroundColour(text_colour)
 
         # LINE 1
 

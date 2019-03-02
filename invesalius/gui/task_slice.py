@@ -113,15 +113,18 @@ class InnerTaskPanel(wx.Panel):
         #print wx.SystemSettings_GetColour(wx.SYS_COLOUR_APPWORKSPACE)
         #print wx.SystemSettings_GetColour(wx.SYS_COLOUR_BTNFACE)
         #print wx.SystemSettings_GetColour(wx.SYS_COLOUR_DESKTOP)
-        #print wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+        #print wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENU)
         #print wx.SystemSettings_GetColour(wx.SYS_COLOUR_SCROLLBAR)
         #print wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUHILIGHT)
         try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUTEXT)
         except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUTEXT)
         fold_panel = FoldPanel(self)
         fold_panel.SetBackgroundColour(default_colour)
+        fold_panel.SetForegroundColour(text_colour)
         self.fold_panel = fold_panel
 
         # Button to fold to select region task
@@ -250,10 +253,13 @@ class InnerFoldPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUTEXT)
         except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUTEXT)
         self.SetBackgroundColour(default_colour)
+        self.SetForegroundColour(text_colour)
 
         # Fold panel and its style settings
         # FIXME: If we dont insert a value in size or if we set wx.DefaultSize,
@@ -674,10 +680,13 @@ class EditionTools(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUTEXT)
         except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUTEXT)
         self.SetBackgroundColour(default_colour)
+        self.SetForegroundColour(text_colour)
 
         ## LINE 1
         text1 = wx.StaticText(self, -1, _("Choose brush type, size or operation:"))
@@ -842,10 +851,13 @@ class WatershedTool(EditionTools):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUTEXT)
         except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
+            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENU)
+            text_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUTEXT)
         self.SetBackgroundColour(default_colour)
+        self.SetForegroundColour(text_colour)
 
         ## LINE 1
         text1 = wx.StaticText(self, -1, _("Choose brush type, size or operation:"))
