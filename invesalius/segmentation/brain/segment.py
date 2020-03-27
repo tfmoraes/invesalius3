@@ -7,7 +7,7 @@ import sys
 import numpy as np
 from skimage.transform import resize
 
-sys.path.append(str(pathlib.Path(os.getcwd())))
+sys.path.append(str(pathlib.Path(__file__).parent.parent.parent.parent))
 from invesalius.segmentation.brain import utils
 
 SIZE = 48

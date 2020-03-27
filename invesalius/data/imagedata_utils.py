@@ -32,7 +32,6 @@ from wx.lib.pubsub import pub as Publisher
 from scipy.ndimage import shift, zoom
 from vtk.util import numpy_support
 
-import invesalius.constants as const
 from invesalius.data import vtk_utils as vtk_utils
 import invesalius.reader.bitmap_reader as bitmap_reader
 import invesalius.utils as utils
