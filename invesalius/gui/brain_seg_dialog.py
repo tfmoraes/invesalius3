@@ -19,6 +19,7 @@ HAS_PLAIDML = bool(importlib.util.find_spec("plaidml"))
 PLAIDML_DEVICES = {}
 
 import invesalius.data.slice_ as slc
+from invesalius.utils import new_name_by_pattern
 from invesalius.segmentation.brain import segment
 from invesalius.segmentation.brain import utils
 
@@ -63,6 +64,8 @@ class BrainSegmenterDialog(wx.Dialog):
         self.txt_threshold = wx.TextCtrl(self, wx.ID_ANY, "")
         w, h = self.CalcSizeFromTextSize("MMMMM")
         self.txt_threshold.SetMinClientSize((w, -1))
+        self.chk_new_mask = wx.CheckBox(self, wx.ID_ANY, _("Create new mask"))
+        self.chk_new_mask.SetValue(True)
         self.progress = wx.Gauge(self, -1)
         self.lbl_progress_caption = wx.StaticText(self, -1, _("Elapsed time:"))
         self.lbl_time = wx.StaticText(self, -1, _("00:00:00"))
@@ -97,6 +100,7 @@ class BrainSegmenterDialog(wx.Dialog):
         sizer_3.Add(self.sld_threshold, 1, wx.ALIGN_CENTER | wx.BOTTOM | wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
         sizer_3.Add(self.txt_threshold, 0, wx.ALL, 5)
         main_sizer.Add(sizer_3, 0, wx.EXPAND, 0)
+        main_sizer.Add(self.chk_new_mask, 0, wx.EXPAND | wx.ALL, 5)
         main_sizer.Add(self.progress, 0, wx.EXPAND | wx.ALL, 5)
         time_sizer = wx.BoxSizer(wx.HORIZONTAL)
         time_sizer.Add(self.lbl_progress_caption, 0, wx.EXPAND, 0)
@@ -130,9 +134,17 @@ class BrainSegmenterDialog(wx.Dialog):
         self.Bind(wx.EVT_CLOSE, self.OnClose)
 
     def apply_segment_threshold(self):
+        if self.chk_new_mask.GetValue():
+            if self.mask is None:
+                name = new_name_by_pattern("brainseg_mri_t1")
+                self.mask = slc.Slice().create_new_mask(name=name)
+        else:
+            self.mask = slc.Slice().current_mask
+            if self.mask is None:
+                name = new_name_by_pattern("brainseg_mri_t1")
+                self.mask = slc.Slice().create_new_mask(name=name)
+
         threshold = self.sld_threshold.GetValue() / 100.0
-        if self.mask is None:
-            self.mask = slc.Slice().create_new_mask()
         self.mask.was_edited = True
         self.mask.matrix[:] = 1
         self.mask.matrix[1:, 1:, 1:] = (self.probability_array >= threshold) * 255
@@ -195,6 +207,7 @@ class BrainSegmenterDialog(wx.Dialog):
         self.btn_close.Disable()
         self.btn_stop.Enable()
         self.btn_segment.Disable()
+        self.chk_new_mask.Disable()
 
         if self.probability_array is None:
             self.probability_array = np.memmap(tempfile.mktemp(), shape=image.shape, dtype=np.float32, mode="w+")
@@ -217,6 +230,7 @@ class BrainSegmenterDialog(wx.Dialog):
         self.btn_close.Enable()
         self.btn_stop.Disable()
         self.btn_segment.Enable()
+        self.chk_new_mask.Enable()
         self.elapsed_time_timer.Stop()
 
     def OnBtnClose(self, evt):
@@ -227,6 +241,7 @@ class BrainSegmenterDialog(wx.Dialog):
         self.btn_close.Enable()
         self.btn_stop.Disable()
         self.btn_segment.Disable()
+        self.chk_new_mask.Disable()
         self.elapsed_time_timer.Stop()
         self.apply_segment_threshold()
 
@@ -263,6 +278,7 @@ class BrainSegmenterDialog(wx.Dialog):
         #  self.segmenter.stop = True
         self.btn_stop.Disable()
         self.btn_segment.Enable()
+        self.chk_new_mask.Enable()
         self.progress.SetValue(0)
 
         if self.ps is not None:
