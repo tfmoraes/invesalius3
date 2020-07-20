@@ -19,25 +19,27 @@
 import os
 import tempfile
 
-import numpy as np
-import vtk
-from scipy import ndimage
-from pubsub import pub as Publisher
-
 import invesalius.constants as const
 import invesalius.data.converters as converters
 import invesalius.data.imagedata_utils as iu
 import invesalius.session as ses
 import invesalius.style as st
 import invesalius.utils as utils
+import numpy as np
+import vtk
 from invesalius.data import transformations
 from invesalius.data.mask import Mask
 from invesalius.project import Project
 from invesalius_cy import mips, transforms
+from pubsub import pub as Publisher
+from scipy import ndimage
+from skimage.segmentation import find_boundaries
 
 OTHER = 0
 PLIST = 1
 WIDGET = 2
+
+SHOW_BORDERS_ONLY = True
 
 
 class SliceBuffer(object):
@@ -596,16 +598,21 @@ class Slice(metaclass=utils.Singleton):
                     # Prints that during navigation causes delay in update
                     # print "Do not getting from buffer"
                     n_mask = self.get_mask_slice(orientation, slice_number)
-                    mask = converters.to_vtk(
-                        n_mask, self.spacing, slice_number, orientation
-                    )
+                    if  SHOW_BORDERS_ONLY:
+                        mask = converters.to_vtk(
+                            find_boundaries(n_mask > 127) * 255, self.spacing, slice_number, orientation
+                        )
+                    else:
+                        mask = converters.to_vtk(
+                            n_mask, self.spacing, slice_number, orientation
+                        )
                     mask = self.do_colour_mask(mask, self.opacity)
                     self.buffer_slices[orientation].mask = n_mask
                 final_image = self.do_blend(image, mask)
-                self.buffer_slices[orientation].vtk_mask = mask
+                #  self.buffer_slices[orientation].vtk_mask = mask
             else:
                 final_image = image
-            self.buffer_slices[orientation].vtk_image = image
+            #  self.buffer_slices[orientation].vtk_image = image
         else:
             n_image = self.get_image_slice(
                 orientation, slice_number, number_slices, inverted, border_size
@@ -616,9 +623,14 @@ class Slice(metaclass=utils.Singleton):
 
             if self.current_mask and self.current_mask.is_shown:
                 n_mask = self.get_mask_slice(orientation, slice_number)
-                mask = converters.to_vtk(
-                    n_mask, self.spacing, slice_number, orientation
-                )
+                if SHOW_BORDERS_ONLY:
+                    mask = converters.to_vtk(
+                        find_boundaries(n_mask > 127) * 255, self.spacing, slice_number, orientation
+                    )
+                else:
+                    mask = converters.to_vtk(
+                        n_mask, self.spacing, slice_number, orientation
+                    )
                 mask = self.do_colour_mask(mask, self.opacity)
                 final_image = self.do_blend(image, mask)
             else:
@@ -628,8 +640,8 @@ class Slice(metaclass=utils.Singleton):
 
             self.buffer_slices[orientation].index = slice_number
             self.buffer_slices[orientation].mask = n_mask
-            self.buffer_slices[orientation].vtk_image = image
-            self.buffer_slices[orientation].vtk_mask = mask
+            #  self.buffer_slices[orientation].vtk_image = image
+            #  self.buffer_slices[orientation].vtk_mask = mask
 
         if self.to_show_aux == "watershed" and self.current_mask is not None and self.current_mask.is_shown:
             m = self.get_aux_slice("watershed", orientation, slice_number)
@@ -1011,7 +1023,7 @@ class Slice(metaclass=utils.Singleton):
                 self.current_mask.matrix[1:, 1:, n],
                 dtype=self.current_mask.matrix.dtype,
             )
-
+        
         return n_mask
 
     def get_aux_slice(self, name, orientation, n):
