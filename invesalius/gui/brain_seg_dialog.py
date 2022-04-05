@@ -18,7 +18,7 @@ import invesalius.data.slice_ as slc
 from invesalius.segmentation.brain import segment, utils
 from invesalius.gui import dialogs
 
-HAS_THEANO = bool(importlib.util.find_spec("theano"))
+HAS_AESARA = bool(importlib.util.find_spec("aesara"))
 HAS_PLAIDML = bool(importlib.util.find_spec("plaidml"))
 PLAIDML_DEVICES = {}
 TORCH_DEVICES = {}
@@ -64,8 +64,8 @@ class BrainSegmenterDialog(wx.Dialog):
             backends.append("Pytorch")
         if HAS_PLAIDML:
             backends.append("PlaidML")
-        if HAS_THEANO:
-            backends.append("Theano")
+        if HAS_AESARA:
+            backends.append("Aesara")
         #  self.segmenter = segment.BrainSegmenter()
         #  self.pg_dialog = None
         self.torch_devices = TORCH_DEVICES

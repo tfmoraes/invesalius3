@@ -790,7 +790,7 @@ class Frame(wx.Frame):
 
     def OnBrainSegmentation(self):
         from invesalius.gui import brain_seg_dialog
-        if brain_seg_dialog.HAS_PLAIDML or brain_seg_dialog.HAS_THEANO or brain_seg_dialog.HAS_TORCH:
+        if brain_seg_dialog.HAS_PLAIDML or brain_seg_dialog.HAS_AESARA or brain_seg_dialog.HAS_TORCH:
             dlg = brain_seg_dialog.BrainSegmenterDialog(self)
             dlg.Show()
         else:

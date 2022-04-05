@@ -29,13 +29,13 @@ def prepare_ambient(backend, device_id, use_gpu):
         os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
         os.environ["PLAIDML_DEVICE_IDS"] = device_id
         prepare_plaidml()
-    elif backend.lower() == 'theano':
-        os.environ["KERAS_BACKEND"] = "theano"
+    elif backend.lower() == 'aesara':
+        os.environ["KERAS_BACKEND"] = "invesalius.aesara_backend"
         if use_gpu:
-            os.environ["THEANO_FLAGS"] = "device=cuda0"
-            print("Use GPU theano", os.environ["THEANO_FLAGS"])
+            os.environ["AESARA_FLAGS"] = "device=cuda0"
+            print("Use GPU aesara", os.environ["AESARA_FLAGS"])
         else:
-            os.environ["THEANO_FLAGS"] = "device=cpu"
+            os.environ["AESARA_FLAGS"] = "device=cpu"
     else:
         raise TypeError("Wrong backend")
 
