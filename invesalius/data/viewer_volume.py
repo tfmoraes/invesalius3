@@ -28,7 +28,6 @@ import numpy as np
 from numpy.core.umath_tests import inner1d
 import wx
 import vtk
-from vtk.wx.wxVTKRenderWindowInteractor import wxVTKRenderWindowInteractor
 from invesalius.pubsub import pub as Publisher
 import random
 from scipy.spatial import distance
@@ -44,6 +43,7 @@ import invesalius.data.vtk_utils as vtku
 import invesalius.project as prj
 import invesalius.style as st
 import invesalius.utils as utils
+from invesalius.gui.widgets.wxInvVTKRenderWindowInteractor import wxInvVTKRenderWindowInteractor
 
 from invesalius import inv_paths
 
@@ -74,7 +74,7 @@ class Viewer(wx.Panel):
         self.static_arrows = []
         self.style = None
 
-        interactor = wxVTKRenderWindowInteractor(self, -1, size = self.GetSize())
+        interactor = wxInvVTKRenderWindowInteractor(self, -1, size = self.GetSize())
         self.interactor = interactor
         self.interactor.SetRenderWhenDisabled(True)
 

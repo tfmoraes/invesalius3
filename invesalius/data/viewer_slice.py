@@ -26,7 +26,7 @@ import tempfile
 import numpy as np
 
 import vtk
-from vtk.wx.wxVTKRenderWindowInteractor import wxVTKRenderWindowInteractor
+from invesalius.gui.widgets.wxInvVTKRenderWindowInteractor import wxInvVTKRenderWindowInteractor
 
 import invesalius.data.styles as styles
 import wx
@@ -222,7 +222,7 @@ class Viewer(wx.Panel):
         self._flush_buffer = False
 
     def __init_gui(self):
-        self.interactor = wxVTKRenderWindowInteractor(self, -1, size=self.GetSize())
+        self.interactor = wxInvVTKRenderWindowInteractor(self, -1, size=self.GetSize())
         self.interactor.SetRenderWhenDisabled(True)
 
         scroll = wx.ScrollBar(self, -1, style=wx.SB_VERTICAL)
