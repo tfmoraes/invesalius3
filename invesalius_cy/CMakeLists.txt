@@ -1,0 +1,15 @@
+find_package(Cython REQUIRED)
+find_package(NumPy REQUIRED)
+find_package(PythonExtensions REQUIRED)
+find_package(OpenMP REQUIRED)
+include_directories(${NumPy_INCLUDE_DIRS})
+
+set(cython_modules cy_mesh floodfill interpolation mips transforms)
+
+foreach(cython_module ${cython_modules})
+  add_cython_target(${cython_module} PY3 CXX)
+  add_library(${cython_module} MODULE ${${cython_module}})
+  target_link_libraries(${cython_module} OpenMP::OpenMP_CXX)
+  python_extension_module(${cython_module})
+  install(TARGETS ${cython_module} DESTINATION invesalius_cy)
+endforeach()
