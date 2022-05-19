@@ -33,7 +33,8 @@ import invesalius.utils as utils
 from invesalius.data import transformations
 from invesalius.data.mask import Mask
 from invesalius.project import Project
-from invesalius_cy import mips, transforms
+from invesalius_cy import mips
+from invesalius_cy import transforms
 
 OTHER = 0
 PLIST = 1
