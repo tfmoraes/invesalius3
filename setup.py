@@ -97,6 +97,10 @@ setuptools.setup(
                 ["invesalius_cy/cy_mesh.pyx"],
                 language="c++",
             ),
+            setuptools.Extension(
+                "invesalius_cy.volume_cut",
+                ["invesalius_cy/volume_cut.pyx"],
+            ),
         ]
     ),
 )
