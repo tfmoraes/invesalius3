@@ -1,0 +1,56 @@
+name: Build invesalius_cy on Windows
+
+on: [push, pull_request]
+
+jobs:
+  build_wheels:
+    name: Build invesalius_cy for cp${{ matrix.python }}-${{ matrix.platform_id }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2019
+            python: '3.8'
+            platform_id: win_amd64
+            requirements: requirements.txt
+          - os: windows-2019
+            python: '3.9'
+            platform_id: win_amd64
+            requirements: requirements_m1.txt
+          - os: windows-2019
+            python: '3.10'
+            platform_id: win_amd64
+            requirements: requirements_m1.txt
+          - os: windows-2019
+            python: '3.11'
+            platform_id: win_amd64
+            requirements: requirements_m1.txt
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - uses: actions/setup-python@v4
+        name: Install Python host for cibuildwheel
+        with:
+          python-version: ${{ matrix.python }}
+
+        # Visual Studio
+      - name: Set up MSVC x64
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build invesalius_cy
+        run: |
+          $env:NUMPY = (Select-String -Path ${{ matrix.requirements }} -Pattern numpy).Line
+          $env:CYTHON = (Select-String -Path ${{ matrix.requirements }} -Pattern cython).Line
+          pip install $env:NUMPY
+          pip install $env:CYTHON
+          python setup.py build_ext --inplace
+          mkdir dist/python-${{ matrix.python }}
+          cp invesalius_cy/*.pyd dist/python-${{ matrix.python }}
+
+      - uses: actions/upload-artifact@v3
+        with:
+          path: ./dist/*
