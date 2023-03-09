@@ -32,6 +32,11 @@ jobs:
         with:
           submodules: true
 
+      - uses: actions/setup-python@v4
+        name: Install Python host for cibuildwheel
+        with:
+          python-version: ${{ matrix.python }}
+
         # Visual Studio
       - name: Set up MSVC x64
         uses: ilammy/msvc-dev-cmd@v1
