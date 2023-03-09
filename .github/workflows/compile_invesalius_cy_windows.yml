@@ -59,6 +59,9 @@ jobs:
   publish:
     needs: [build_invesalius_cy]
     runs-on: ubuntu-latest
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       contents: write
 
