@@ -3,7 +3,7 @@ name: Build invesalius_cy on Windows
 on: [push, pull_request]
 
 jobs:
-  build_wheels:
+  build_invesalius_cy:
     name: Build invesalius_cy for cp${{ matrix.python }}-${{ matrix.platform_id }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -32,11 +32,6 @@ jobs:
         with:
           submodules: true
 
-      - uses: actions/setup-python@v4
-        name: Install Python host for cibuildwheel
-        with:
-          python-version: ${{ matrix.python }}
-
         # Visual Studio
       - name: Set up MSVC x64
         uses: ilammy/msvc-dev-cmd@v1
@@ -54,3 +49,24 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           path: ./dist/*
+          name: compiled_invesalius_cy
+
+  publish:
+    needs: [build_invesalius_cy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      # Must perform checkout first, since it deletes the target directory
+      # before running, and would therefore delete the downloaded artifacts
+      - uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v3
+
+      - name: remove nightly
+        run: gh release delete nightly --yes
+
+      - name: publish nightly
+        run: |
+          gh release create nightly --prerelease --notes nightly --title "Nightly" --target $GITHUB_SHA compiled_invesalius_cy
