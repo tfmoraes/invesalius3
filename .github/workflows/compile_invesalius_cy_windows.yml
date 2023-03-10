@@ -72,10 +72,6 @@ jobs:
 
       - uses: actions/download-artifact@v3
 
-      - name: remove nightly
-        run: |
-          gh release delete nightly --yes || yes
-
       - name: publish nightly
         run: |
           gh release create nightly --prerelease --notes nightly --title "Nightly" --target $GITHUB_SHA compiled_invesalius_cy
