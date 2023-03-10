@@ -78,5 +78,6 @@ jobs:
       - uses: pyTooling/Actions/releaser@r0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          tag: nightly
           files: |
             compiled_invesalius_cy.zip
