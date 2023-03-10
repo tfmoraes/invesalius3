@@ -73,7 +73,8 @@ jobs:
       - uses: actions/download-artifact@v3
 
       - name: remove nightly
-        run: gh release delete nightly --yes
+        run: |
+          gh release delete nightly --yes || yes
 
       - name: publish nightly
         run: |
