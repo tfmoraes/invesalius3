@@ -74,4 +74,7 @@ jobs:
 
       - name: publish nightly
         run: |
-          gh release create nightly --prerelease --notes nightly --title "Nightly" --target $GITHUB_SHA compiled_invesalius_cy
+          sudo apt-get update
+          sudo apt-get install -y zip
+          zip -r compiled_invesalius_cy.zip compiled_invesalius_cy
+          gh release create nightly --prerelease --notes nightly --title "Nightly" --target $GITHUB_SHA compiled_invesalius_cy.zip
