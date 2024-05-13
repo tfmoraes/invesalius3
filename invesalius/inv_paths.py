@@ -37,7 +37,9 @@ OLD_USER_INV_DIR = HOME_DIR.joinpath(".invesalius")
 OLD_USER_PRESET_DIR = OLD_USER_INV_DIR.joinpath("presets")
 OLD_USER_LOG_DIR = OLD_USER_INV_DIR.joinpath("logs")
 
-INV_TOP_DIR = pathlib.Path(__file__).parent.parent.resolve()
+INV_TOP_DIR = pathlib.Path(__file__).parent.resolve()
+
+print(f"\n\n\n{INV_TOP_DIR}\n\n\n")
 
 PLUGIN_DIRECTORY = INV_TOP_DIR.joinpath("plugins") 
 
@@ -48,6 +50,7 @@ RAYCASTING_PRESETS_DIRECTORY = INV_TOP_DIR.joinpath("presets", "raycasting")
 RAYCASTING_PRESETS_COLOR_DIRECTORY = INV_TOP_DIR.joinpath(
     "presets", "raycasting", "color_list"
 )
+LOCALE_DIR = INV_TOP_DIR.joinpath("locale")
 
 MODELS_DIR = INV_TOP_DIR.joinpath("ai")
 LOCALE_DIR = INV_TOP_DIR.joinpath("locale")

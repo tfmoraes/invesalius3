@@ -29,6 +29,7 @@ import gettext
 import os
 import sys
 from invesalius.session import Session
+from invesalius.inv_paths import LOCALE_DIR
  
 import invesalius.utils as utl
 from invesalius.inv_paths import LOCALE_DIR

@@ -46,7 +46,6 @@ if not os.path.exists(ICON_DIR):
         os.path.join(file_path, "..", "..", "..", "..", "..", "icons")
     )
 
-
 class ComboBoxLanguage:
     def __init__(self, parent):
         """Initialize combobox bitmap"""
