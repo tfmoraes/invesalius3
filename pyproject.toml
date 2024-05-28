@@ -14,26 +14,34 @@ keywords = [
 ]
 license = { file = "LICENSE.txt" }
 dependencies = [
-  "wxpython>=4.2.1",
-  "pyopengl>=3.1.7",
-  "pyopengl-accelerate>=3.1.7",
-  "numpy>=1.26.4",
-  "scipy>=1.13.0",
-  "matplotlib>=3.8.4",
-  "pillow>=10.3.0",
-  "imageio>=2.34.1",
-  "nibabel>=5.2.1",
-  "scikit-image>=0.23.2",
-  "python-gdcm>=3.0.24.1",
-  "vtk>=9.3.0",
-  "torch>=2.3.0",
-  "cython>=3.0.10",
-  "pypubsub>=4.0.3",
-  "h5py>=3.11.0",
-  "psutil>=5.9.8",
-  "pyserial>=3.5",
-  "pyacvd>=0.2.11",
-  "setuptools>=69.5.1",
+    "wxpython>=4.2.1",
+    "pyopengl>=3.1.7",
+    "pyopengl-accelerate>=3.1.7",
+    "numpy>=1.26.4",
+    "scipy>=1.13.0",
+    "matplotlib>=3.8.4",
+    "pillow>=10.3.0",
+    "imageio>=2.34.1",
+    "nibabel>=5.2.1",
+    "scikit-image>=0.23.2",
+    "python-gdcm>=3.0.24.1",
+    "vtk>=9.3.0",
+    "torch>=2.3.0",
+    "cython>=3.0.10",
+    "pypubsub>=4.0.3",
+    "h5py>=3.11.0",
+    "psutil>=5.9.8",
+    "pyserial>=3.5",
+    "pyacvd>=0.2.11",
+    "setuptools>=69.5.1",
+    "aioconsole>=0.7.1",
+    "mido>=1.3.2",
+    "nest-asyncio>=1.6.0",
+    "python-rtmidi>=1.5.8",
+    "python-socketio[client]>=5.11.2",
+    "requests>=2.32.2",
+    "uvicorn[standard]>=0.30.0",
+    "scikit-learn>=1.5.0",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
@@ -56,7 +64,10 @@ write_to = "invesalius/version.py"
 
 [tool.rye]
 managed = true
-dev-dependencies = ["mypy>=1.10.0"]
+dev-dependencies = [
+    "mypy>=1.10.0",
+    "ruff>=0.4.5",
+]
 
 [tool.hatch.version]
 source = "vcs"
