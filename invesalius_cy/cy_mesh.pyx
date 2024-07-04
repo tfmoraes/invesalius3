@@ -10,7 +10,7 @@
 import os
 import sys
 import time
-cimport numpy as np
+cimport numpy as cnp
 
 from libc.math cimport sin, cos, acos, exp, sqrt, fabs, M_PI
 from libc.stdlib cimport abs as cabs
@@ -25,7 +25,7 @@ from libcpp.deque cimport deque as cdeque
 from cython.parallel cimport prange
 cimport openmp
 
-from .cy_my_types cimport vertex_t, normal_t, vertex_id_t
+from .cy_my_types cimport vertex_t, normal_t, vertex_id_t, image_t
 
 import numpy as np
 
@@ -40,7 +40,143 @@ cdef struct Point:
     vertex_t y
     vertex_t z
 
-ctypedef pair[vertex_id_t, vertex_id_t] key
+ctypedef pair[int, int] key
+
+
+# cdef class Mesh_INT8:
+#     cdef vertex_t[:, :] vertices
+#     cdef normal_t[:, :] normals
+#     cdef np.int8_t[:, :] faces
+#
+#     cdef unordered_map[int, vector[np.int8_t]] map_vface
+#     cdef unordered_map[np.int8_t, int] border_vertices
+#
+#     cdef bool _initialized
+#
+# cdef class Mesh_INT16:
+#     cdef vertex_t[:, :] vertices
+#     cdef np.int16_t[:, :] faces
+#     cdef normal_t[:, :] normals
+#
+#     cdef unordered_map[int, vector[np.int16_t]] map_vface
+#     cdef unordered_map[np.int16_t, int] border_vertices
+#
+#     cdef bool _initialized
+#
+#
+# cdef class Mesh_INT32:
+#     cdef vertex_t[:, :] vertices
+#     cdef np.int32_t[:, :] faces
+#     cdef normal_t[:, :] normals
+#
+#     cdef unordered_map[int, vector[np.int32_t]] map_vface
+#     cdef unordered_map[np.int32_t, int] border_vertices
+#
+#     cdef bool _initialized
+#
+#
+# cdef class Mesh_INT64:
+#     cdef vertex_t[:, :] vertices
+#     cdef np.int64_t[:, :] faces
+#     cdef normal_t[:, :] normals
+#
+#     cdef unordered_map[int, vector[np.int64_t]] map_vface
+#     cdef unordered_map[np.int64_t, int] border_vertices
+#
+#     cdef bool _initialized
+#
+#
+# cdef fused MyMesh:
+#     Mesh_INT8
+#     Mesh_INT16
+#     Mesh_INT32
+#     Mesh_INT64
+#
+#
+#
+# cdef MyMesh create_mesh_from_polydata(pd):
+#     cdef MyMesh mesh
+#     cdef int i
+#     cdef map[key, int] edge_nfaces
+#     cdef map[key, int].iterator it
+#     _vertices = numpy_support.vtk_to_numpy(pd.GetPoints().GetData())
+#     _vertices.shape = -1, 3
+#
+#     _faces = numpy_support.vtk_to_numpy(pd.GetPolys().GetData())
+#     _faces.shape = -1, 4
+#
+#     _normals = numpy_support.vtk_to_numpy(pd.GetCellData().GetArray("Normals"))
+#     _normals.shape = -1, 3
+#
+#     if _faces.dtype == np.int8:
+#         mesh = Mesh_INT8()
+#     else:
+#         mesh = Mesh_INT32()
+#
+#     mesh.vertices = _vertices
+#     mesh.faces = _faces
+#     mesh.normals = _normals
+#     mesh._initialized = True
+#
+#     for i in range(_faces.shape[0]):
+#         mesh.map_vface[mesh.faces[i, 1]].push_back(i)
+#         mesh.map_vface[mesh.faces[i, 2]].push_back(i)
+#         mesh.map_vface[mesh.faces[i, 3]].push_back(i)
+#
+#         edge_nfaces[key(min(mesh.faces[i, 1], mesh.faces[i, 2]), max(mesh.faces[i, 1], mesh.faces[i, 2]))] += 1
+#         edge_nfaces[key(min(mesh.faces[i, 2], mesh.faces[i, 3]), max(mesh.faces[i, 2], mesh.faces[i, 3]))] += 1
+#         edge_nfaces[key(min(mesh.faces[i, 1], mesh.faces[i, 3]), max(mesh.faces[i, 1], mesh.faces[i, 3]))] += 1
+#
+#     it = edge_nfaces.begin()
+#
+#     while it != edge_nfaces.end():
+#         if deref(it).second == 1:
+#             mesh.border_vertices[deref(it).first.first] = 1
+#             mesh.border_vertices[deref(it).first.second] = 1
+#
+#         inc(it)
+#     return mesh
+#
+#
+#
+cdef extern from "mesh.h":
+    cdef cppclass MeshCPP[VERTICES_TYPE, ID_TYPE]:
+        MeshCPP() except +
+        MeshCPP(size_t, size_t, VERTICES_TYPE*, VERTICES_TYPE*, ID_TYPE*) except +
+        void print_vertices()
+        void populate_maps()
+        void multiply_two()
+        void multiply_two_par()
+        void multiply_two_for()
+        void multiply_two_for_openmp()
+
+
+cdef MeshCPP[int, int] MeshCPPInt
+
+
+def test_mesh_cpp():
+    cdef cnp.float64_t[:, :] vertices = np.random.randn(10000000, 3)
+    cdef cnp.float64_t[:, :]  normals = np.random.randn(10000000, 3)
+    cdef cnp.int64_t[:, :] faces = np.random.randint(0, 10, (10000000, 4))
+
+
+    # print(np.asarray(vertices))
+    # print(np.asarray(normals))
+    # print(np.asarray(faces))
+
+    my_mesh = new MeshCPP[cnp.float64_t, cnp.int64_t](10000000, 10000000, &vertices[0, 0], &normals[0, 0], &faces[0, 0])
+
+    # my_mesh.print_vertices()
+
+    my_mesh.multiply_two_par()
+    my_mesh.multiply_two()
+    my_mesh.multiply_two_for()
+    my_mesh.multiply_two_for_openmp()
+
+    # print(np.asarray(vertices))
+    # print(np.asarray(normals))
+    # print(np.asarray(faces))
+
 
 
 cdef class Mesh:
@@ -48,8 +184,8 @@ cdef class Mesh:
     cdef vertex_id_t[:, :] faces
     cdef normal_t[:, :] normals
 
-    cdef unordered_map[int, vector[vertex_id_t]] map_vface
-    cdef unordered_map[vertex_id_t, int] border_vertices
+    cdef unordered_map[int, vector[int]] map_vface
+    cdef unordered_map[int, int] border_vertices
 
     cdef bool _initialized
 
@@ -96,8 +232,8 @@ cdef class Mesh:
             self.vertices = _other.vertices.copy()
             self.faces = _other.faces.copy()
             self.normals = _other.normals.copy()
-            self.map_vface = unordered_map[int, vector[vertex_id_t]](_other.map_vface)
-            self.border_vertices = unordered_map[vertex_id_t, int](_other.border_vertices)
+            self.map_vface = unordered_map[int, vector[int]](_other.map_vface)
+            self.border_vertices = unordered_map[int, int](_other.border_vertices)
         else:
             self._initialized = False
 
@@ -109,8 +245,8 @@ cdef class Mesh:
             other.vertices[:] = self.vertices
             other.faces[:] = self.faces
             other.normals[:] = self.normals
-            other.map_vface = unordered_map[int, vector[vertex_id_t]](self.map_vface)
-            other.border_vertices = unordered_map[vertex_id_t, int](self.border_vertices)
+            other.map_vface = unordered_map[int, vector[int]](self.map_vface)
+            other.border_vertices = unordered_map[int, int](self.border_vertices)
         else:
             other.vertices = self.vertices.copy()
             other.faces = self.faces.copy()
@@ -140,19 +276,19 @@ cdef class Mesh:
 
         return pd
 
-    cdef vector[vertex_id_t]* get_faces_by_vertex(self, int v_id) noexcept nogil:
+    cdef vector[int]* get_faces_by_vertex(self, int v_id) noexcept nogil:
         """
         Returns the faces whose vertex `v_id' is part.
         """
         return &self.map_vface[v_id]
 
-    cdef set[vertex_id_t]* get_ring1(self, vertex_id_t v_id) noexcept nogil:
+    cdef set[int]* get_ring1(self, int v_id) noexcept nogil:
         """
         Returns the ring1 of vertex `v_id'
         """
-        cdef vertex_id_t f_id
-        cdef set[vertex_id_t]* ring1 = new set[vertex_id_t]()
-        cdef vector[vertex_id_t].iterator it = self.map_vface[v_id].begin()
+        cdef int f_id
+        cdef set[int]* ring1 = new set[int]()
+        cdef vector[int].iterator it = self.map_vface[v_id].begin()
 
         while it != self.map_vface[v_id].end():
             f_id = deref(it)
@@ -166,13 +302,13 @@ cdef class Mesh:
 
         return ring1
 
-    cdef bool is_border(self, vertex_id_t v_id) noexcept nogil:
+    cdef bool is_border(self, int v_id) noexcept nogil:
         """
         Check if vertex `v_id' is a vertex border.
         """
         return self.border_vertices.find(v_id) != self.border_vertices.end()
 
-    cdef vector[vertex_id_t]* get_near_vertices_to_v(self, vertex_id_t v_id, float dmax) noexcept nogil:
+    cdef vector[int]* get_near_vertices_to_v(self, int v_id, float dmax) noexcept nogil:
         """
         Returns all vertices with distance at most `d' to the vertex `v_id'
 
@@ -180,19 +316,19 @@ cdef class Mesh:
             v_id: id of the vertex
             dmax: the maximum distance.
         """
-        cdef vector[vertex_id_t]* idfaces
-        cdef vector[vertex_id_t]* near_vertices = new vector[vertex_id_t]()
+        cdef vector[int]* idfaces
+        cdef vector[int]* near_vertices = new vector[int]()
 
-        cdef cdeque[vertex_id_t] to_visit
-        cdef unordered_map[vertex_id_t, bool] status_v
-        cdef unordered_map[vertex_id_t, bool] status_f
+        cdef cdeque[int] to_visit
+        cdef unordered_map[int, bool] status_v
+        cdef unordered_map[int, bool] status_f
 
         cdef vertex_t *vip
         cdef vertex_t *vjp
 
         cdef float distance
         cdef int nf, nid, j
-        cdef vertex_id_t f_id, vj
+        cdef int f_id, vj
 
         vip = &self.vertices[v_id, 0]
         to_visit.push_back(v_id)
@@ -226,7 +362,38 @@ cdef class Mesh:
         return near_vertices
 
 
-cdef vector[weight_t]* calc_artifacts_weight(Mesh mesh, vector[vertex_id_t]& vertices_staircase, float tmax, float bmin) noexcept nogil:
+# cdef class Mesh_16(Mesh):
+#     cdef vertex_t[:, :] vertices
+#     cdef np.int16_t[:, :] faces
+#     cdef normal_t[:, :] normals
+#
+#     cdef unordered_map[int, vector[int]] map_vface
+#     cdef unordered_map[int, int] border_vertices
+#
+#     cdef bool _initialized
+#
+# cdef class Mesh_32(Mesh):
+#     cdef vertex_t[:, :] vertices
+#     cdef np.int32_t[:, :] faces
+#     cdef normal_t[:, :] normals
+#
+#     cdef unordered_map[int, vector[int]] map_vface
+#     cdef unordered_map[int, int] border_vertices
+#
+#     cdef bool _initialized
+#
+# cdef class Mesh_64(Mesh):
+#     cdef vertex_t[:, :] vertices
+#     cdef np.int64_t[:, :] faces
+#     cdef normal_t[:, :] normals
+#
+#     cdef unordered_map[int, vector[int]] map_vface
+#     cdef unordered_map[int, int] border_vertices
+#
+#     cdef bool _initialized
+
+
+cdef vector[weight_t]* calc_artifacts_weight(Mesh mesh, vector[int]& vertices_staircase, float tmax, float bmin) noexcept nogil:
     """
     Calculate the artifact weight based on distance of each vertex to its
     nearest staircase artifact vertex.
@@ -239,7 +406,7 @@ cdef vector[weight_t]* calc_artifacts_weight(Mesh mesh, vector[vertex_id_t]& ver
         bmin: The minimum weight.
     """
     cdef int vi_id, vj_id, nnv, n_ids, i, j
-    cdef vector[vertex_id_t]* near_vertices
+    cdef vector[int]* near_vertices
     cdef weight_t value
     cdef float d
     n_ids = vertices_staircase.size()
@@ -299,16 +466,16 @@ cdef vector[weight_t]* calc_artifacts_weight(Mesh mesh, vector[vertex_id_t]& ver
     return weights
 
 
-cdef inline Point calc_d(Mesh mesh, vertex_id_t v_id) noexcept nogil:
+cdef inline Point calc_d(Mesh mesh, int v_id) noexcept nogil:
     cdef Point D
     cdef int nf, f_id, nid
     cdef float n=0
     cdef int i
     cdef vertex_t* vi
     cdef vertex_t* vj
-    cdef set[vertex_id_t]* vertices
-    cdef set[vertex_id_t].iterator it
-    cdef vertex_id_t vj_id
+    cdef set[int]* vertices
+    cdef set[int].iterator it
+    cdef int vj_id
 
     D.x = 0.0
     D.y = 0.0
@@ -350,7 +517,7 @@ cdef inline Point calc_d(Mesh mesh, vertex_id_t v_id) noexcept nogil:
     D.z = D.z / n
     return D
 
-cdef vector[vertex_id_t]* find_staircase_artifacts(Mesh mesh, double[3] stack_orientation, double T) noexcept nogil:
+cdef vector[int]* find_staircase_artifacts(Mesh mesh, double[3] stack_orientation, double T) noexcept nogil:
     """
     This function is used to find vertices at staircase artifacts, which are
     those vertices whose incident faces' orientation differences are
@@ -364,10 +531,10 @@ cdef vector[vertex_id_t]* find_staircase_artifacts(Mesh mesh, double[3] stack_or
     """
     cdef int nv, nf, f_id, v_id
     cdef double of_z, of_y, of_x, min_z, max_z, min_y, max_y, min_x, max_x;
-    cdef vector[vertex_id_t]* f_ids
+    cdef vector[int]* f_ids
     cdef normal_t* normal
 
-    cdef vector[vertex_id_t]* output = new vector[vertex_id_t]()
+    cdef vector[int]* output = new vector[int]()
     cdef int i
 
     nv = mesh.vertices.shape[0]
@@ -462,7 +629,7 @@ def ca_smoothing(Mesh mesh, double T, double tmax, double bmin, int n_iters):
     cdef double[3] stack_orientation = [0.0, 0.0, 1.0]
 
     t0 = time.time()
-    cdef vector[vertex_id_t]* vertices_staircase =  find_staircase_artifacts(mesh, stack_orientation, T)
+    cdef vector[int]* vertices_staircase =  find_staircase_artifacts(mesh, stack_orientation, T)
     print("vertices staircase", time.time() - t0)
 
     t0 = time.time()
