@@ -1,4 +1,3 @@
-import setuptools
 import logging
 import os
 import pathlib
@@ -6,18 +5,15 @@ import subprocess
 import sys
 
 import numpy
-from Cython.Build import cythonize, build_ext
+import setuptools
+from Cython.Build import build_ext, cythonize
 
 if sys.platform == "darwin":
     unix_copt = ["-Xpreprocessor", "-fopenmp", "-lomp"]
     unix_lopt = ["-Xpreprocessor", "-fopenmp", "-lomp"]
 else:
-    unix_copt = [
-        "-fopenmp",
-    ]
-    unix_lopt = [
-        "-fopenmp",
-    ]
+    unix_copt = ["-fopenmp", "-std=c++20"]
+    unix_lopt = ["-fopenmp", "-lomp"]
 
 
 copt = {"msvc": ["/openmp"], "mingw32": ["-fopenmp"], "unix": unix_copt}
@@ -62,9 +58,7 @@ class BuildPluginsCommand(setuptools.Command):
             plugin_folder = plugins_folder.joinpath(p)
             self.announce("Compiling plugin: {}".format(p))
             os.chdir(plugin_folder)
-            subprocess.check_call(
-                [sys.executable, "setup.py", "build_ext", "--inplace"]
-            )
+            subprocess.check_call([sys.executable, "setup.py", "build_ext", "--inplace"])
             os.chdir(inv_folder)
 
 
