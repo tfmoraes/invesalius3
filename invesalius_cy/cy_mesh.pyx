@@ -23,6 +23,8 @@ from libcpp.pair cimport pair
 from libcpp cimport bool
 from libcpp.deque cimport deque as cdeque
 from cython.parallel cimport prange
+
+from libc.stdint cimport uint32_t
 cimport openmp
 
 from .cy_my_types cimport vertex_t, normal_t, vertex_id_t, image_t
@@ -150,8 +152,27 @@ cdef extern from "mesh.h":
         void multiply_two_for()
         void multiply_two_for_openmp()
 
+    cdef void ca_smoothing_cpp[VERTICES_TYPE, ID_TYPE](MeshCPP[VERTICES_TYPE, ID_TYPE]&, double, double, double, uint32_t)
 
-cdef MeshCPP[int, int] MeshCPPInt
+ctypedef fused vertex_t_:
+    cnp.float32_t
+    cnp.float64_t
+
+
+ctypedef fused face_t_:
+    cnp.int32_t
+    cnp.int64_t
+
+
+
+def create_mesh_cpp(vertex_t_[:, :] vertices, vertex_t_[:, :] normals, face_t_ [:, :] faces):
+    cdef size_t number_of_points = vertices.shape[0]
+    cdef size_t  number_of_faces = faces.shape[0]
+    cdef MeshCPP[vertex_t_, face_t_] mesh = MeshCPP[vertex_t_, face_t_](number_of_points, number_of_faces, &vertices[0, 0], &normals[0, 0], &faces[0,0])
+
+    ca_smoothing_cpp(mesh, 0.75, 2.0, 0.65, 10)
+
+
 
 
 def test_mesh_cpp():
@@ -631,6 +652,8 @@ def ca_smoothing(Mesh mesh, double T, double tmax, double bmin, int n_iters):
     t0 = time.time()
     cdef vector[int]* vertices_staircase =  find_staircase_artifacts(mesh, stack_orientation, T)
     print("vertices staircase", time.time() - t0)
+
+    print("Numero de staircase vertices", vertices_staircase.size())
 
     t0 = time.time()
     cdef vector[weight_t]* weights = calc_artifacts_weight(mesh, deref(vertices_staircase), tmax, bmin)
