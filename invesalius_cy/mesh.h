@@ -5,9 +5,11 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <deque>
 #include <execution>
 #include <iostream>
+#include <limits>
 #include <mutex>
 #include <omp.h>
 #include <span>
@@ -16,7 +18,6 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
-#include <limits>
 
 template <typename T> struct Vertex_t {
   T x;
@@ -106,7 +107,8 @@ public:
     std::cout << "Number of available threads: "
               << std::thread::hardware_concurrency() << " "
               << std::this_thread::get_id() << std::endl;
-    std::cout << "Number of points: " << this->number_of_points << ". Number of faces: " << this->number_of_faces << std::endl;
+    std::cout << "Number of points: " << this->number_of_points
+              << ". Number of faces: " << this->number_of_faces << std::endl;
   }
 
   MeshCPP(MeshCPP &other) {
@@ -168,13 +170,13 @@ public:
     other.border_vertices = this->border_vertices;
   }
 
-  const std::vector<ID_TYPE>& get_faces_by_vertex(ID_TYPE v_id) const {
+  const std::vector<ID_TYPE> &get_faces_by_vertex(ID_TYPE v_id) const {
     return this->map_vface.at(v_id);
   }
 
   const std::unordered_set<ID_TYPE> get_ring1(ID_TYPE v_id) const {
     std::unordered_set<ID_TYPE> ring1;
-    for (auto f_id : this->map_vface[v_id]) {
+    for (auto f_id : this->map_vface.at(v_id)) {
       if (this->faces[f_id].vertex_0 != v_id) {
         ring1.insert(this->faces[f_id].vertex_0);
       }
@@ -347,11 +349,9 @@ find_staircase_artifacts(const MeshCPP<VERTICES_TYPE, ID_TYPE> &mesh,
       of_z = 1 - std::abs(face_normal.x * stack_orientation[0] +
                           face_normal.y * stack_orientation[1] +
                           face_normal.z * stack_orientation[2]);
-      of_y = 1 - std::abs(face_normal.x * 0 + 
-                          face_normal.y * 1 +
+      of_y = 1 - std::abs(face_normal.x * 0 + face_normal.y * 1 +
                           face_normal.z * 0);
-      of_x = 1 - std::abs(face_normal.x * 1 +
-                          face_normal.y * 0 +
+      of_x = 1 - std::abs(face_normal.x * 1 + face_normal.y * 0 +
                           face_normal.z * 0);
       min_x = std::min(of_x, min_x);
       min_y = std::min(of_y, min_y);
@@ -371,10 +371,10 @@ find_staircase_artifacts(const MeshCPP<VERTICES_TYPE, ID_TYPE> &mesh,
 }
 
 template <typename VERTICES_TYPE, typename ID_TYPE>
-const std::shared_ptr<std::vector<float>>
-calc_artifacts_weight(const MeshCPP<VERTICES_TYPE, ID_TYPE> &mesh,
-                      const std::shared_ptr<std::vector<ID_TYPE>> vertices_staircase,
-                      float tmax, float bmin) {
+const std::shared_ptr<std::vector<float>> calc_artifacts_weight(
+    const MeshCPP<VERTICES_TYPE, ID_TYPE> &mesh,
+    const std::shared_ptr<std::vector<ID_TYPE>> vertices_staircase, float tmax,
+    float bmin) {
   auto weights = std::make_shared<std::vector<float>>(mesh.vertices.size());
   weights->assign(weights->size(), bmin);
   float distance;
@@ -394,22 +394,89 @@ calc_artifacts_weight(const MeshCPP<VERTICES_TYPE, ID_TYPE> &mesh,
 }
 
 template <typename VERTICES_TYPE, typename ID_TYPE>
-void ca_smoothing_cpp(MeshCPP<VERTICES_TYPE, ID_TYPE> &mesh, double T, double tmax,
-                  double bmin, uint32_t n_iters) {
-  std::array<double, 3> stack_orientation {0.0, 0.0, 1.0};
+Vertex_t<VERTICES_TYPE> calc_d(MeshCPP<VERTICES_TYPE, ID_TYPE> &mesh,
+                               ID_TYPE v_id) {
+  Vertex_t<VERTICES_TYPE> D;
+  int n = 0.0;
+  auto vi = mesh.vertices[v_id];
+  auto vertices = mesh.get_ring1(v_id);
+  if (mesh.is_border(v_id)) {
+    for (auto vj_id : vertices) {
+      auto vj = mesh.vertices[vj_id];
+      if (mesh.is_border(vj_id)) {
+        D.x = D.x + (vi.x - vj.x);
+        D.y = D.y + (vi.y - vj.y);
+        D.z = D.z + (vi.z - vj.z);
+        n += 1;
+      }
+    }
+  } else {
+    for (auto vj_id : vertices) {
+      auto vj = mesh.vertices[vj_id];
+      D.x = D.x + (vi.x - vj.x);
+      D.y = D.y + (vi.y - vj.y);
+      D.z = D.z + (vi.z - vj.z);
+      n += 1;
+    }
+  }
+
+  D.x /= n;
+  D.y /= n;
+  D.z /= n;
+  return D;
+}
+
+template <typename VERTICES_TYPE, typename ID_TYPE>
+void taubin_smooth(MeshCPP<VERTICES_TYPE, ID_TYPE> &mesh,
+                   const std::shared_ptr<std::vector<float>> weights, float l,
+                   float m, uint32_t steps) {
+  auto D = std::vector<Vertex_t<VERTICES_TYPE>>(mesh.number_of_points);
+  for (size_t s = 0; s < steps; s++) {
+    for (size_t v_id = 0; v_id < mesh.number_of_points; v_id++) {
+      D[v_id] = calc_d(mesh, static_cast<ID_TYPE>(v_id));
+    }
+    for (size_t v_id = 0; v_id < mesh.number_of_points; v_id++) {
+      mesh.vertices[v_id].x += (*weights)[v_id] * l * D[v_id].x;
+      mesh.vertices[v_id].y += (*weights)[v_id] * l * D[v_id].y;
+      mesh.vertices[v_id].z += (*weights)[v_id] * l * D[v_id].z;
+    }
+
+    for (size_t v_id = 0; v_id < mesh.number_of_points; v_id++) {
+      D[v_id] = calc_d(mesh, static_cast<ID_TYPE>(v_id));
+    }
+    for (size_t v_id = 0; v_id < mesh.number_of_points; v_id++) {
+      mesh.vertices[v_id].x += (*weights)[v_id] * m * D[v_id].x;
+      mesh.vertices[v_id].y += (*weights)[v_id] * m * D[v_id].y;
+      mesh.vertices[v_id].z += (*weights)[v_id] * m * D[v_id].z;
+    }
+  }
+}
+
+template <typename VERTICES_TYPE, typename ID_TYPE>
+void ca_smoothing_cpp(MeshCPP<VERTICES_TYPE, ID_TYPE> &mesh, double T,
+                      double tmax, double bmin, uint32_t n_iters) {
+  std::array<double, 3> stack_orientation{0.0, 0.0, 1.0};
   auto t0 = std::chrono::system_clock::now();
   auto vertices_staircase =
       find_staircase_artifacts(mesh, stack_orientation, T);
   auto t1 = std::chrono::system_clock::now();
-  std::cout << "1. Find artifacts: " << std::chrono::duration<double>(t1 - t0) << std::endl;
+  std::cout << "1. Find artifacts: " << std::chrono::duration<double>(t1 - t0)
+            << std::endl;
 
-  std::cout << "Number of staircase artifacts: " << vertices_staircase->size() << std::endl;
+  std::cout << "Number of staircase artifacts: " << vertices_staircase->size()
+            << std::endl;
 
   auto t2 = std::chrono::system_clock::now();
-  auto weights =
-      calc_artifacts_weight(mesh, vertices_staircase, tmax, bmin);
+  auto weights = calc_artifacts_weight(mesh, vertices_staircase, tmax, bmin);
   auto t3 = std::chrono::system_clock::now();
-  std::cout << "2. Calc weights: " << std::chrono::duration<double>(t3 - t2) << std::endl;
+  std::cout << "2. Calc weights: " << std::chrono::duration<double>(t3 - t2)
+            << std::endl;
+
+  auto t4 = std::chrono::system_clock::now();
+  taubin_smooth(mesh, weights, 0.5, -0.53, n_iters);
+  auto t5 = std::chrono::system_clock::now();
+  std::cout << "3. Taubin: " << std::chrono::duration<double>(t5 - t4)
+            << std::endl;
 }
 
 #endif
