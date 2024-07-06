@@ -394,7 +394,7 @@ const std::shared_ptr<std::vector<float>> calc_artifacts_weight(
 }
 
 template <typename VERTICES_TYPE, typename ID_TYPE>
-Vertex_t<VERTICES_TYPE> calc_d(MeshCPP<VERTICES_TYPE, ID_TYPE> &mesh,
+inline Vertex_t<VERTICES_TYPE> calc_d(MeshCPP<VERTICES_TYPE, ID_TYPE> &mesh,
                                ID_TYPE v_id) {
   Vertex_t<VERTICES_TYPE> D;
   int n = 0.0;
