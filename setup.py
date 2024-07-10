@@ -9,8 +9,8 @@ import setuptools
 from Cython.Build import build_ext, cythonize
 
 if sys.platform == "darwin":
-    unix_copt = ["-Xpreprocessor", "-fopenmp", "-lomp"]
-    unix_lopt = ["-Xpreprocessor", "-fopenmp", "-lomp"]
+    unix_copt = ["-Xpreprocessor", "-fopenmp", "-lomp", "--std=c++20", "-fexperimental-library"]
+    unix_lopt = ["-Xpreprocessor", "-fopenmp", "-lomp", "--std=c++20", "-fexperimental-library"]
 else:
     unix_copt = ["-fopenmp", "-std=c++20"]
     unix_lopt = ["-fopenmp", "-lomp"]
