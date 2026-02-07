@@ -104,54 +104,56 @@ where
     let n_vertices = vertices.shape()[0];
     let stack_orientation = Vector3::from_row_slice(&stack_orientation);
 
-    let mut output = Vec::new();
+    let output = (0..n_vertices)
+        .into_par_iter()
+        .filter_map(|v_id: usize| {
+            let mut max_z = f64::MIN;
+            let mut min_z = f64::MAX;
+            let mut max_y = f64::MIN;
+            let mut min_y = f64::MAX;
+            let mut max_x = f64::MIN;
+            let mut min_x = f64::MAX;
 
-    for v_id in 0..n_vertices {
-        let mut max_z = f64::MIN;
-        let mut min_z = f64::MAX;
-        let mut max_y = f64::MIN;
-        let mut min_y = f64::MAX;
-        let mut max_x = f64::MIN;
-        let mut min_x = f64::MAX;
+            if let Some(f_ids) = map_vface.get(&v_id) {
+                for &f_id in f_ids {
+                    let normal = normals.row(f_id);
+                    let normal_vec =
+                        Vector3::new(normal[0].as_(), normal[1].as_(), normal[2].as_());
 
-        if let Some(f_ids) = map_vface.get(&v_id) {
-            for &f_id in f_ids {
-                let normal = normals.row(f_id);
-                let normal_vec = Vector3::new(normal[0].as_(), normal[1].as_(), normal[2].as_());
+                    let of_z = 1.0 - (normal_vec.dot(&stack_orientation)).abs();
+                    let of_y = 1.0 - (normal_vec.dot(&Vector3::new(0.0, 1.0, 0.0))).abs();
+                    let of_x = 1.0 - (normal_vec.dot(&Vector3::new(1.0, 0.0, 0.0))).abs();
 
-                let of_z = 1.0 - (normal_vec.dot(&stack_orientation)).abs();
-                let of_y = 1.0 - (normal_vec.dot(&Vector3::new(0.0, 1.0, 0.0))).abs();
-                let of_x = 1.0 - (normal_vec.dot(&Vector3::new(1.0, 0.0, 0.0))).abs();
+                    if of_z > max_z {
+                        max_z = of_z;
+                    }
+                    if of_z < min_z {
+                        min_z = of_z;
+                    }
+                    if of_y > max_y {
+                        max_y = of_y;
+                    }
+                    if of_y < min_y {
+                        min_y = of_y;
+                    }
+                    if of_x > max_x {
+                        max_x = of_x;
+                    }
+                    if of_x < min_x {
+                        min_x = of_x;
+                    }
 
-                if of_z > max_z {
-                    max_z = of_z;
-                }
-                if of_z < min_z {
-                    min_z = of_z;
-                }
-                if of_y > max_y {
-                    max_y = of_y;
-                }
-                if of_y < min_y {
-                    min_y = of_y;
-                }
-                if of_x > max_x {
-                    max_x = of_x;
-                }
-                if of_x < min_x {
-                    min_x = of_x;
-                }
-
-                if (max_z - min_z).abs() >= t
-                    || (max_y - min_y).abs() >= t
-                    || (max_x - min_x).abs() >= t
-                {
-                    output.push(v_id);
-                    break;
+                    if (max_z - min_z).abs() >= t
+                        || (max_y - min_y).abs() >= t
+                        || (max_x - min_x).abs() >= t
+                    {
+                        return Some(v_id);
+                    }
                 }
             }
-        }
-    }
+            None
+        })
+        .collect::<Vec<usize>>();
     output
 }
 
