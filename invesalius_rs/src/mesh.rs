@@ -1,11 +1,16 @@
 use core::{f64, hash};
+use crossbeam_deque::{Injector, Steal, Stealer, Worker};
 use nalgebra::{Point3, Vector3};
 use ndarray::parallel::prelude::*;
+use ndarray::{Array, Array1, Dim};
 use ndarray::{Array2, ArrayView2, ArrayViewMut2};
 use num_traits::{AsPrimitive, NumCast};
 use numpy::ndarray;
 use pyo3::prelude::*;
+use rayon::Scope;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
+use std::sync::Arc;
 use std::sync::Mutex;
 
 use crate::types::{FaceArray, VertexArray};
@@ -42,6 +47,7 @@ pub fn context_aware_smoothing_internal<V, F, N>(
     N: Vertex,
 {
     let map_vface = build_map_vface(&faces.view());
+    let vertex_connectivity = build_vertex_connectivity(&faces.view());
     let _edge_nfaces: HashMap<(F, F), i32> = HashMap::new();
     let _border_vertices: HashSet<F> = HashSet::new();
 
@@ -54,11 +60,19 @@ pub fn context_aware_smoothing_internal<V, F, N>(
         stack_orientation,
         t,
     );
-    let weights = calc_artifacts_weight(
+    // let weights = calc_artifacts_weight(
+    //     &vertices.view(),
+    //     &faces.view(),
+    //     &normals.view(),
+    //     &map_vface,
+    //     &vertices_staircase,
+    //     tmax,
+    //     bmin,
+    // );
+    let weights = floodfill_mesh(
         &vertices.view(),
         &faces.view(),
-        &normals.view(),
-        &map_vface,
+        &vertex_connectivity,
         &vertices_staircase,
         tmax,
         bmin,
@@ -86,6 +100,27 @@ where
         }
     }
     map_vface
+}
+
+fn build_vertex_connectivity<F>(faces: &ArrayView2<F>) -> HashMap<usize, Vec<usize>>
+where
+    F: Face,
+{
+    let mut vertex_connectivity: HashMap<usize, Vec<usize>> = HashMap::with_capacity(faces.nrows());
+
+    for (f_id, face) in faces.outer_iter().enumerate() {
+        for &v_i in face.iter() {
+            for &v_j in face.iter() {
+                if v_i != v_j {
+                    vertex_connectivity
+                        .entry(v_i.as_())
+                        .or_default()
+                        .push(v_j.as_());
+                }
+            }
+        }
+    }
+    vertex_connectivity
 }
 
 pub fn find_staircase_artifacts<V, F, N>(
@@ -200,6 +235,100 @@ where
     });
 
     weights.into_inner().unwrap()
+}
+
+pub fn floodfill_mesh<V, F>(
+    vertices: &ArrayView2<V>,
+    faces: &ArrayView2<F>,
+    vertex_connectivity: &HashMap<usize, Vec<usize>>,
+    vertices_staircase: &Vec<usize>,
+    tmax: f64,
+    bmin: f64,
+) -> Array1<f64>
+where
+    V: Vertex,
+    F: Face,
+{
+    let mut visited = Arc::new(
+        (0..vertices.shape()[0])
+            .map(|_| AtomicBool::new(false))
+            .collect::<Vec<_>>(),
+    );
+    let mut injector = Arc::new(Injector::new());
+    let mut map_vstaircase = Arc::new((0..vertices.shape()[0]).map(|_| AtomicI64::new(-1)).collect::<Vec<_>>());
+    let mut weights = Array1::from_elem(vertices.shape()[0], bmin);
+
+    for &v_id in vertices_staircase.iter() {
+        if !visited[v_id].swap(true, Ordering::AcqRel) {
+            injector.push((v_id));
+            map_vstaircase[v_id].store(v_id as i64, Ordering::Release);
+        }
+    }
+    rayon::scope(|scope| {
+        let n_threads = rayon::current_num_threads();
+        let workers: Vec<_> = (0..n_threads).map(|_| Worker::new_fifo()).collect();
+
+        let stealers: Vec<Stealer<usize>> = workers.iter().map(|w| w.stealer()).collect();
+        for worker in workers {
+            let visited = visited.clone();
+            let injector = injector.clone();
+            let stealers = stealers.clone();
+            let map_vstaircase = map_vstaircase.clone();
+            scope.spawn(move |_| {
+                loop {
+                    let v = worker.pop()
+                        .or_else(|| match injector.steal_batch_and_pop(&worker) {
+                            Steal::Success(x) => Some(x),
+                            _ => None,
+                        })
+                        .or_else(|| {
+                            stealers.iter().find_map(|s| match s.steal() {
+                                Steal::Success(x) => Some(x),
+                                _ => None,
+                            })
+                        });
+                        let v = match v {
+                            Some(x) => x,
+                            None => break,
+                        };
+
+                        for &vj in vertex_connectivity.get(&v).unwrap_or(&vec![]) {
+                            let pi = Vector3::new(vertices.row(v)[0].as_(), vertices.row(v)[1].as_(), vertices.row(v)[2].as_());
+                            let pj = Vector3::new(vertices.row(vj)[0].as_(), vertices.row(vj)[1].as_(), vertices.row(vj)[2].as_());
+                            let dist_sq = (pi - pj).norm_squared();
+                            if dist_sq > tmax * tmax {
+                                continue;
+                            }
+                            let value = (1.0 - dist_sq / tmax) * (1.0 - bmin) + bmin;
+                            let old_value = map_vstaircase[vj].load(Ordering::Acquire);
+                            if old_value > -1 {
+                                let old_pi = Vector3::new(vertices.row(old_value as usize)[0].as_(), vertices.row(old_value as usize)[1].as_(), vertices.row(old_value as usize)[2].as_());
+                                let old_distance = (pi - old_pi).norm_squared();
+                                if dist_sq > old_distance {
+                                    continue;
+                                }
+                            }
+                            map_vstaircase[vj].store(map_vstaircase[v].load(Ordering::Acquire), Ordering::Release);
+                            if !visited[vj].swap(true, Ordering::AcqRel) {
+                                injector.push((vj));
+                        }
+                }
+            }
+            });
+        }
+
+    });
+    for v_id in 0..vertices.shape()[0] {
+        let value = map_vstaircase[v_id].load(Ordering::Acquire);
+        if value > -1 {
+            let pi = Vector3::new(vertices.row(v_id)[0].as_(), vertices.row(v_id)[1].as_(), vertices.row(v_id)[2].as_());
+            let pj = Vector3::new(vertices.row(value as usize)[0].as_(), vertices.row(value as usize)[1].as_(), vertices.row(value as usize)[2].as_());
+            let d = (pi - pj).norm();
+            let value = (1.0 - d / tmax) * (1.0 - bmin) + bmin;
+            weights[v_id] = weights[v_id].max(value);
+        }
+    }
+    weights
 }
 
 fn calc_d<V, F>(
@@ -326,7 +455,7 @@ fn taubin_smooth<V, F>(
     mut vertices: ArrayViewMut2<V>,
     faces: &ArrayView2<F>,
     map_vface: &HashMap<usize, Vec<usize>>,
-    weights: &[f64],
+    weights: &Array1<f64>,
     l: f64,
     m: f64,
     steps: u32,
