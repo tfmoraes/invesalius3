@@ -46,12 +46,19 @@ pub fn context_aware_smoothing_internal<V, F, N>(
     F: Face,
     N: Vertex,
 {
+    let t0 = std::time::Instant::now();
     let map_vface = build_map_vface(&faces.view());
-    let vertex_connectivity = build_vertex_connectivity(&faces.view());
+    let t1 = std::time::Instant::now();
+    println!("build_map_vface time: {:?}", t1.duration_since(t0));
+    let t0 = std::time::Instant::now();
+    let vertex_connectivity = build_vertex_connectivity(&faces.view(), &vertices.view());
+    let t1 = std::time::Instant::now();
+    println!("build_vertex_connectivity time: {:?}", t1.duration_since(t0));
     let _edge_nfaces: HashMap<(F, F), i32> = HashMap::new();
     let _border_vertices: HashSet<F> = HashSet::new();
 
     let stack_orientation = [0.0, 0.0, 1.0];
+    let t0 = std::time::Instant::now();
     let vertices_staircase = find_staircase_artifacts(
         &vertices.view(),
         &faces.view(),
@@ -60,6 +67,8 @@ pub fn context_aware_smoothing_internal<V, F, N>(
         stack_orientation,
         t,
     );
+    let t1 = std::time::Instant::now();
+    println!("find_staircase_artifacts time: {:?}", t1.duration_since(t0));
     // let weights = calc_artifacts_weight(
     //     &vertices.view(),
     //     &faces.view(),
@@ -69,6 +78,7 @@ pub fn context_aware_smoothing_internal<V, F, N>(
     //     tmax,
     //     bmin,
     // );
+    let t0 = std::time::Instant::now();
     let weights = floodfill_mesh(
         &vertices.view(),
         &faces.view(),
@@ -77,15 +87,19 @@ pub fn context_aware_smoothing_internal<V, F, N>(
         tmax,
         bmin,
     );
+    let t1 = std::time::Instant::now();
+    println!("floodfill_mesh time: {:?}", t1.duration_since(t0));
+    let t0 = std::time::Instant::now();
     taubin_smooth(
         vertices,
-        &faces.view(),
-        &map_vface,
+        &vertex_connectivity,
         &weights,
         0.5,
         -0.53,
         n_iters,
     );
+    let t1 = std::time::Instant::now();
+    println!("taubin_smooth time: {:?}", t1.duration_since(t0));
 }
 
 fn build_map_vface<F>(faces: &ArrayView2<F>) -> HashMap<usize, Vec<usize>>
@@ -102,15 +116,16 @@ where
     map_vface
 }
 
-fn build_vertex_connectivity<F>(faces: &ArrayView2<F>) -> HashMap<usize, Vec<usize>>
+fn build_vertex_connectivity<F, V>(faces: &ArrayView2<F>, vertices: &ArrayView2<V>) -> HashMap<usize, Vec<usize>>
 where
     F: Face,
+    V: Vertex,
 {
-    let mut vertex_connectivity: HashMap<usize, Vec<usize>> = HashMap::with_capacity(faces.nrows());
+    let mut vertex_connectivity: HashMap<usize, Vec<usize>> = HashMap::with_capacity(vertices.nrows());
 
     for (f_id, face) in faces.outer_iter().enumerate() {
-        for &v_i in face.iter() {
-            for &v_j in face.iter() {
+        for &v_i in face.iter().skip(1) {
+            for &v_j in face.iter().skip(1) {
                 if v_i != v_j {
                     vertex_connectivity
                         .entry(v_i.as_())
@@ -331,43 +346,41 @@ where
     weights
 }
 
-fn calc_d<V, F>(
+#[inline]
+fn calc_d<V>(
     vertices: &ArrayView2<V>,
-    faces: &ArrayView2<F>,
-    map_vface: &HashMap<usize, Vec<usize>>,
+    vertex_connectivity: &HashMap<usize, Vec<usize>>,
     v_id: usize,
 ) -> Vector3<f64>
 where
     V: Vertex,
-    F: Face,
 {
     let vi = vertices.row(v_id);
     let p_vi = Vector3::new(vi[0].as_(), vi[1].as_(), vi[2].as_());
 
-    let ring1 = get_ring1(faces, map_vface, v_id);
     let mut d = Vector3::zeros();
-    let mut n = 0.0f64;
+    let mut n = 0usize;
 
     if is_border(v_id) {
-        for &vj_id in &ring1 {
+        for &vj_id in vertex_connectivity.get(&v_id).unwrap_or(&vec![]) {
             if is_border(vj_id) {
                 let vj = vertices.row(vj_id);
                 let p_vj = Vector3::new(vj[0].as_(), vj[1].as_(), vj[2].as_());
                 d += p_vi - p_vj;
-                n += 1.0;
+                n += 1;
             }
         }
     } else {
-        for &vj_id in &ring1 {
+        for &vj_id in vertex_connectivity.get(&v_id).unwrap_or(&vec![]).iter() {
             let vj = vertices.row(vj_id);
             let p_vj = Vector3::new(vj[0].as_(), vj[1].as_(), vj[2].as_());
             d += p_vi - p_vj;
-            n += 1.0;
+            n += 1;
         }
     }
 
-    if n > 0.0 {
-        d / n
+    if n > 0 {
+        d / n as f64
     } else {
         d
     }
@@ -451,17 +464,15 @@ where
     near_vertices
 }
 
-fn taubin_smooth<V, F>(
+fn taubin_smooth<V>(
     mut vertices: ArrayViewMut2<V>,
-    faces: &ArrayView2<F>,
-    map_vface: &HashMap<usize, Vec<usize>>,
+    vertex_connectivity: &HashMap<usize, Vec<usize>>,
     weights: &Array1<f64>,
     l: f64,
     m: f64,
     steps: u32,
 ) where
     V: Vertex,
-    F: Face,
 {
     let n_vertices = vertices.shape()[0];
     let mut d_values: Array2<f64> = Array2::zeros((n_vertices, 3));
@@ -470,7 +481,7 @@ fn taubin_smooth<V, F>(
         // Calculate D for all vertices
 
         par_azip!((index i, mut d in d_values.outer_iter_mut()) {
-            let d_vec = calc_d(&vertices.view(), faces, map_vface, i);
+            let d_vec = calc_d(&vertices.view(), &vertex_connectivity, i);
             d[0] = d_vec.x;
             d[1] = d_vec.y;
             d[2] = d_vec.z;
@@ -487,7 +498,7 @@ fn taubin_smooth<V, F>(
         });
 
         par_azip!((index i, mut d in d_values.outer_iter_mut()) {
-            let d_vec = calc_d(&vertices.view(), faces, map_vface, i);
+            let d_vec = calc_d(&vertices.view(),  &vertex_connectivity, i);
             d[0] = d_vec.x;
             d[1] = d_vec.y;
             d[2] = d_vec.z;
