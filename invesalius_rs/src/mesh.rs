@@ -53,7 +53,10 @@ pub fn context_aware_smoothing_internal<V, F, N>(
     let t0 = std::time::Instant::now();
     let vertex_connectivity = build_vertex_connectivity(&faces.view(), &vertices.view());
     let t1 = std::time::Instant::now();
-    println!("build_vertex_connectivity time: {:?}", t1.duration_since(t0));
+    println!(
+        "build_vertex_connectivity time: {:?}",
+        t1.duration_since(t0)
+    );
     let _edge_nfaces: HashMap<(F, F), i32> = HashMap::new();
     let _border_vertices: HashSet<F> = HashSet::new();
 
@@ -116,12 +119,16 @@ where
     map_vface
 }
 
-fn build_vertex_connectivity<F, V>(faces: &ArrayView2<F>, vertices: &ArrayView2<V>) -> HashMap<usize, Vec<usize>>
+fn build_vertex_connectivity<F, V>(
+    faces: &ArrayView2<F>,
+    vertices: &ArrayView2<V>,
+) -> HashMap<usize, Vec<usize>>
 where
     F: Face,
     V: Vertex,
 {
-    let mut vertex_connectivity: HashMap<usize, Vec<usize>> = HashMap::with_capacity(vertices.nrows());
+    let mut vertex_connectivity: HashMap<usize, Vec<usize>> =
+        HashMap::with_capacity(vertices.nrows());
 
     for (f_id, face) in faces.outer_iter().enumerate() {
         for &v_i in face.iter().skip(1) {
@@ -177,19 +184,19 @@ where
                     if of_z > max_z {
                         max_z = of_z;
                     }
-                    if of_z < min_z {
+                    else if of_z < min_z {
                         min_z = of_z;
                     }
                     if of_y > max_y {
                         max_y = of_y;
                     }
-                    if of_y < min_y {
+                    else if of_y < min_y {
                         min_y = of_y;
                     }
                     if of_x > max_x {
                         max_x = of_x;
                     }
-                    if of_x < min_x {
+                    else if of_x < min_x {
                         min_x = of_x;
                     }
 
@@ -270,7 +277,11 @@ where
             .collect::<Vec<_>>(),
     );
     let mut injector = Arc::new(Injector::new());
-    let mut map_vstaircase = Arc::new((0..vertices.shape()[0]).map(|_| AtomicI64::new(-1)).collect::<Vec<_>>());
+    let mut map_vstaircase = Arc::new(
+        (0..vertices.shape()[0])
+            .map(|_| AtomicI64::new(-1))
+            .collect::<Vec<_>>(),
+    );
     let mut weights = Array1::from_elem(vertices.shape()[0], bmin);
 
     for &v_id in vertices_staircase.iter() {
@@ -289,55 +300,74 @@ where
             let injector = injector.clone();
             let stealers = stealers.clone();
             let map_vstaircase = map_vstaircase.clone();
-            scope.spawn(move |_| {
-                loop {
-                    let v = worker.pop()
-                        .or_else(|| match injector.steal_batch_and_pop(&worker) {
+            scope.spawn(move |_| loop {
+                let v = worker
+                    .pop()
+                    .or_else(|| match injector.steal_batch_and_pop(&worker) {
+                        Steal::Success(x) => Some(x),
+                        _ => None,
+                    })
+                    .or_else(|| {
+                        stealers.iter().find_map(|s| match s.steal() {
                             Steal::Success(x) => Some(x),
                             _ => None,
                         })
-                        .or_else(|| {
-                            stealers.iter().find_map(|s| match s.steal() {
-                                Steal::Success(x) => Some(x),
-                                _ => None,
-                            })
-                        });
-                        let v = match v {
-                            Some(x) => x,
-                            None => break,
-                        };
+                    });
+                let v = match v {
+                    Some(x) => x,
+                    None => break,
+                };
 
-                        for &vj in vertex_connectivity.get(&v).unwrap_or(&vec![]) {
-                            let pi = Vector3::new(vertices.row(v)[0].as_(), vertices.row(v)[1].as_(), vertices.row(v)[2].as_());
-                            let pj = Vector3::new(vertices.row(vj)[0].as_(), vertices.row(vj)[1].as_(), vertices.row(vj)[2].as_());
-                            let dist_sq = (pi - pj).norm_squared();
-                            if dist_sq > tmax * tmax {
-                                continue;
-                            }
-                            let value = (1.0 - dist_sq / tmax) * (1.0 - bmin) + bmin;
-                            let old_value = map_vstaircase[vj].load(Ordering::Acquire);
-                            if old_value > -1 {
-                                let old_pi = Vector3::new(vertices.row(old_value as usize)[0].as_(), vertices.row(old_value as usize)[1].as_(), vertices.row(old_value as usize)[2].as_());
-                                let old_distance = (pi - old_pi).norm_squared();
-                                if dist_sq > old_distance {
-                                    continue;
-                                }
-                            }
-                            map_vstaircase[vj].store(map_vstaircase[v].load(Ordering::Acquire), Ordering::Release);
-                            if !visited[vj].swap(true, Ordering::AcqRel) {
-                                injector.push((vj));
+                for &vj in vertex_connectivity.get(&v).unwrap_or(&vec![]) {
+                    let pi = Vector3::new(
+                        vertices.row(v)[0].as_(),
+                        vertices.row(v)[1].as_(),
+                        vertices.row(v)[2].as_(),
+                    );
+                    let pj = Vector3::new(
+                        vertices.row(vj)[0].as_(),
+                        vertices.row(vj)[1].as_(),
+                        vertices.row(vj)[2].as_(),
+                    );
+                    let dist_sq = (pi - pj).norm_squared();
+                    if dist_sq > tmax * tmax {
+                        continue;
+                    }
+                    let value = (1.0 - dist_sq / tmax) * (1.0 - bmin) + bmin;
+                    let old_value = map_vstaircase[vj].load(Ordering::Acquire);
+                    if old_value > -1 {
+                        let old_pi = Vector3::new(
+                            vertices.row(old_value as usize)[0].as_(),
+                            vertices.row(old_value as usize)[1].as_(),
+                            vertices.row(old_value as usize)[2].as_(),
+                        );
+                        let old_distance = (pi - old_pi).norm_squared();
+                        if dist_sq > old_distance {
+                            continue;
                         }
+                    }
+                    map_vstaircase[vj]
+                        .store(map_vstaircase[v].load(Ordering::Acquire), Ordering::Release);
+                    if !visited[vj].swap(true, Ordering::AcqRel) {
+                        injector.push((vj));
+                    }
                 }
-            }
             });
         }
-
     });
     for v_id in 0..vertices.shape()[0] {
         let value = map_vstaircase[v_id].load(Ordering::Acquire);
         if value > -1 {
-            let pi = Vector3::new(vertices.row(v_id)[0].as_(), vertices.row(v_id)[1].as_(), vertices.row(v_id)[2].as_());
-            let pj = Vector3::new(vertices.row(value as usize)[0].as_(), vertices.row(value as usize)[1].as_(), vertices.row(value as usize)[2].as_());
+            let pi = Vector3::new(
+                vertices.row(v_id)[0].as_(),
+                vertices.row(v_id)[1].as_(),
+                vertices.row(v_id)[2].as_(),
+            );
+            let pj = Vector3::new(
+                vertices.row(value as usize)[0].as_(),
+                vertices.row(value as usize)[1].as_(),
+                vertices.row(value as usize)[2].as_(),
+            );
             let d = (pi - pj).norm();
             let value = (1.0 - d / tmax) * (1.0 - bmin) + bmin;
             weights[v_id] = weights[v_id].max(value);
