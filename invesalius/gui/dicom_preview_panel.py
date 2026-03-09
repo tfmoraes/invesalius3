@@ -19,17 +19,29 @@
 
 # -*- coding: UTF-8 -*-
 
-# TODO: To create a beautiful API
 import sys
 import time
 
-import wx
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QImage, QPainter, QPalette, QPixmap
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QScrollBar,
+    QSlider,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
+from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from vtkmodules.vtkImagingColor import vtkImageMapToWindowLevelColors
 from vtkmodules.vtkImagingCore import vtkImageFlip
 from vtkmodules.vtkInteractionStyle import vtkInteractorStyleImage
 from vtkmodules.vtkIOImage import vtkPNGReader
 from vtkmodules.vtkRenderingCore import vtkImageActor, vtkRenderer
-from vtkmodules.wx.wxVTKRenderWindowInteractor import wxVTKRenderWindowInteractor
 
 import invesalius.constants as const
 import invesalius.data.vtk_utils as vtku
@@ -64,54 +76,7 @@ STR_LOCAL = _("Location: %.2f")
 STR_PATIENT = "%s\n%s"
 STR_ACQ = _("%s %s\nMade in InVesalius")
 
-myEVT_PREVIEW_CLICK = wx.NewEventType()
-EVT_PREVIEW_CLICK = wx.PyEventBinder(myEVT_PREVIEW_CLICK, 1)
-
-myEVT_PREVIEW_DBLCLICK = wx.NewEventType()
-EVT_PREVIEW_DBLCLICK = wx.PyEventBinder(myEVT_PREVIEW_DBLCLICK, 1)
-
-myEVT_CLICK_SLICE = wx.NewEventType()
-# This event occurs when the user select a preview
-EVT_CLICK_SLICE = wx.PyEventBinder(myEVT_CLICK_SLICE, 1)
-
-myEVT_CLICK_SERIE = wx.NewEventType()
-# This event occurs when the user select a preview
-EVT_CLICK_SERIE = wx.PyEventBinder(myEVT_CLICK_SERIE, 1)
-
-myEVT_CLICK = wx.NewEventType()
-EVT_CLICK = wx.PyEventBinder(myEVT_CLICK, 1)
-
-
-class SelectionEvent(wx.PyCommandEvent):
-    pass
-
-
-class PreviewEvent(wx.PyCommandEvent):
-    def __init__(self, evtType, id):
-        super().__init__(evtType, id)
-
-    def GetSelectID(self):
-        return self.SelectedID
-
-    def SetSelectedID(self, id):
-        self.SelectedID = id
-
-    def GetItemData(self):
-        return self.data
-
-    def GetPressedShift(self):
-        return self.pressed_shift
-
-    def SetItemData(self, data):
-        self.data = data
-
-    def SetShiftStatus(self, status):
-        self.pressed_shift = status
-
-
-class SerieEvent(PreviewEvent):
-    def __init__(self, evtType, id):
-        super().__init__(evtType, id)
+FONTSIZE_SMALL = 2
 
 
 class DicomInfo:
@@ -133,124 +98,92 @@ class DicomInfo:
     def preview(self):
         if not self._preview:
             if isinstance(self.dicom.image.thumbnail_path, list):
-                bmp = wx.Bitmap(self.dicom.image.thumbnail_path[self._slice], wx.BITMAP_TYPE_PNG)
+                self._preview = QImage(self.dicom.image.thumbnail_path[self._slice])
             else:
-                bmp = wx.Bitmap(self.dicom.image.thumbnail_path, wx.BITMAP_TYPE_PNG)
-            self._preview = bmp.ConvertToImage()
+                self._preview = QImage(self.dicom.image.thumbnail_path)
         return self._preview
 
     def release_thumbnail(self):
         self._preview = None
 
 
-class DicomPaintPanel(wx.Panel):
+class DicomPaintPanel(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
-        self._bind_events()
         self.image = None
         self.last_size = (10, 10)
-
-    def _bind_events(self):
-        self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(wx.EVT_SIZE, self.OnSize)
-
-    def _build_bitmap(self, image):
-        bmp = wx.Bitmap(image)
-        return bmp
+        self.pixmap = None
 
     def _image_resize(self, image):
-        self.Update()
-        self.Layout()
-        new_size = self.GetSize()
-        # This is necessary due to darwin problem #
-        if new_size != (0, 0):
-            self.last_size = new_size
-            return image.Scale(*new_size)
+        new_size = self.size()
+        w, h = new_size.width(), new_size.height()
+        if w > 0 and h > 0:
+            self.last_size = (w, h)
+            return image.scaled(w, h, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
         else:
-            return image.Scale(*self.last_size)
+            return image.scaled(
+                self.last_size[0],
+                self.last_size[1],
+                Qt.IgnoreAspectRatio,
+                Qt.SmoothTransformation,
+            )
 
     def SetImage(self, image):
         self.image = image
         r_img = self._image_resize(image)
-        self.bmp = self._build_bitmap(r_img)
-        self.Refresh()
+        self.pixmap = QPixmap.fromImage(r_img)
+        self.update()
 
-    def OnPaint(self, evt):
+    def paintEvent(self, event):
+        if self.image and self.pixmap:
+            painter = QPainter(self)
+            painter.drawPixmap(0, 0, self.pixmap)
+            painter.end()
+
+    def resizeEvent(self, event):
         if self.image:
-            dc = wx.PaintDC(self)
-            dc.Clear()
-            dc.DrawBitmap(self.bmp, 0, 0)
-
-    def OnSize(self, evt):
-        if self.image:
-            self.bmp = self._build_bitmap(self._image_resize(self.image))
-        self.Refresh()
-        evt.Skip()
+            r_img = self._image_resize(self.image)
+            self.pixmap = QPixmap.fromImage(r_img)
+        self.update()
+        super().resizeEvent(event)
 
 
-class Preview(wx.Panel):
+class Preview(QWidget):
     """
     The little previews.
     """
 
+    preview_clicked = Signal(object, object, bool)
+    preview_dblclicked = Signal(object, object)
+
     def __init__(self, parent):
         super().__init__(parent)
-        # Will it be white?
         self.select_on = False
         self.dicom_info = None
         self._init_ui()
-        self._bind_events()
 
     def _init_ui(self):
-        self.SetBackgroundColour(PREVIEW_BACKGROUND)
+        self._set_background(PREVIEW_BACKGROUND)
 
-        self.title = wx.StaticText(self, -1, _("Image"))
-        self.subtitle = wx.StaticText(self, -1, _("Image"))
+        self.title = QLabel(_("Image"), self)
+        self.title.setAlignment(Qt.AlignHCenter)
+        self.subtitle = QLabel(_("Image"), self)
+        self.subtitle.setAlignment(Qt.AlignHCenter)
         self.image_viewer = DicomPaintPanel(self)
 
-        self.sizer = wx.BoxSizer(wx.VERTICAL)
-        self.sizer.Add(self.title, 0, wx.ALIGN_CENTER_HORIZONTAL)
-        self.sizer.Add(self.subtitle, 0, wx.ALIGN_CENTER_HORIZONTAL)
-        self.sizer.Add(self.image_viewer, 1, wx.ALIGN_CENTRE_HORIZONTAL | wx.SHAPED | wx.ALL, 5)
-        self.sizer.Fit(self)
+        self.sizer = QVBoxLayout(self)
+        self.sizer.setContentsMargins(0, 0, 0, 0)
+        self.sizer.addWidget(self.title, 0, Qt.AlignHCenter)
+        self.sizer.addWidget(self.subtitle, 0, Qt.AlignHCenter)
+        self.sizer.addWidget(self.image_viewer, 1)
 
-        self.SetSizer(self.sizer)
-
-        self.Layout()
-        self.Update()
-        self.Fit()
-        self.SetAutoLayout(1)
-
-    def _bind_events(self):
-        self.Bind(wx.EVT_LEFT_DCLICK, self.OnDClick)
-        # self.interactor.Bind( wx.EVT_LEFT_DCLICK, self.OnDClick)
-        # self.panel.Bind( wx.EVT_LEFT_DCLICK, self.OnDClick)
-        # self.title.Bind( wx.EVT_LEFT_DCLICK, self.OnDClick)
-        # self.subtitle.Bind( wx.EVT_LEFT_DCLICK, self.OnDClick)
-
-        self.Bind(wx.EVT_ENTER_WINDOW, self.OnEnter)
-        # self.interactor.Bind(wx.EVT_ENTER_WINDOW, self.OnEnter)
-        # self.panel.Bind(wx.EVT_ENTER_WINDOW, self.OnEnter)
-        # self.title.Bind(wx.EVT_ENTER_WINDOW, self.OnEnter)
-        # self.subtitle.Bind(wx.EVT_ENTER_WINDOW, self.OnEnter)
-
-        self.Bind(wx.EVT_LEAVE_WINDOW, self.OnLeave)
-        # self.interactor.Bind(wx.EVT_LEAVE_WINDOW, self.OnLeave)
-        # self.panel.Bind(wx.EVT_LEAVE_WINDOW, self.OnLeave)
-        # self.title.Bind(wx.EVT_LEAVE_WINDOW, self.OnLeave)
-        # self.subtitle.Bind(wx.EVT_LEAVE_WINDOW, self.OnLeave)
-
-        self.Bind(wx.EVT_LEFT_DOWN, self.OnSelect)
-        self.title.Bind(wx.EVT_LEFT_DOWN, self.OnSelect)
-        self.subtitle.Bind(wx.EVT_LEFT_DOWN, self.OnSelect)
-        self.image_viewer.Bind(wx.EVT_LEFT_DOWN, self.OnSelect)
-
-        # self.Bind(wx.EVT_SIZE, self.OnSize)
+    def _set_background(self, color):
+        pal = self.palette()
+        pal.setColor(QPalette.Window, QColor(*color))
+        self.setPalette(pal)
+        self.setAutoFillBackground(True)
 
     def SetDicomToPreview(self, dicom_info):
-        """
-        Set a dicom to preview.
-        """
         if self.dicom_info:
             self.dicom_info.release_thumbnail()
 
@@ -258,96 +191,57 @@ class Preview(wx.Panel):
         self.SetTitle(dicom_info.title)
         self.SetSubtitle(dicom_info.subtitle)
         self.ID = dicom_info.id
-        dicom_info.size = self.image_viewer.GetSize()
         image = dicom_info.preview
         self.image_viewer.SetImage(image)
         self.data = dicom_info.id
         self.select_on = dicom_info.selected
         self.Select()
-        self.Update()
 
     def SetTitle(self, title):
-        self.title.SetLabel(title)
+        self.title.setText(title)
 
     def SetSubtitle(self, subtitle):
-        self.subtitle.SetLabel(subtitle)
+        self.subtitle.setText(subtitle)
 
-    def OnEnter(self, evt):
+    def enterEvent(self, event):
         if not self.select_on:
-            # c = wx.SystemSettings_GetColour(wx.SYS_COLOUR_3DHILIGHT)
-            c = wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE)
+            c = self.palette().color(QPalette.Button)
+            self._set_background((c.red(), c.green(), c.blue()))
 
-            self.SetBackgroundColour(c)
-
-    def OnLeave(self, evt):
+    def leaveEvent(self, event):
         if not self.select_on:
-            c = PREVIEW_BACKGROUND
-            self.SetBackgroundColour(c)
+            self._set_background(PREVIEW_BACKGROUND)
 
-    def OnSelect(self, evt):
-        shift_pressed = False
-        if evt.shiftDown:
-            shift_pressed = True
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            shift_pressed = bool(event.modifiers() & Qt.ShiftModifier)
+            self.select_on = True
+            self.dicom_info.selected = True
+            self.Select()
+            self.preview_clicked.emit(self.dicom_info.id, self.dicom_info.dicom, shift_pressed)
+        super().mousePressEvent(event)
 
-        # dicom_id = self.dicom_info.id
-        self.select_on = True
-        self.dicom_info.selected = True
-        ##c = wx.SystemSettings_GetColour(wx.SYS_COLOUR_BTNHIGHLIGHT)
-        ##c = wx.SystemSettings_GetColour(wx.SYS_COLOUR_HOTLIGHT)
-        # c = wx.SystemSettings_GetColour(wx.SYS_COLOUR_HIGHLIGHT)
-        ##c = wx.SystemSettings_GetColour(wx.SYS_COLOUR_GRADIENTACTIVECAPTION)
-        # c = wx.SystemSettings_GetColour(wx.SYS_COLOUR_BTNSHADOW)
-        # c = wx.SystemSettings_GetColour(wx.SYS_COLOUR_ACTIVEBORDER)
-        # *c = wx.SystemSettings_GetColour(wx.SYS_COLOUR_3DLIGHT)
-        # *c = wx.SystemSettings_GetColour(wx.SYS_COLOUR_3DHILIGHT)
-        # c = wx.SystemSettings_GetColour(wx.SYS_COLOUR_3DHIGHLIGHT)
-        # c = wx.SystemSettings_GetColour(wx.SYS_COLOUR_3DDKSHADOW)
-        # c = wx.SystemSettings_GetColour(wx.SYS_COLOUR_3DSHADOW)
-        # self.SetBackgroundColour(c)
-        self.Select()
-
-        # Generating a EVT_PREVIEW_CLICK event
-        my_evt = SerieEvent(myEVT_PREVIEW_CLICK, self.GetId())
-        my_evt.SetSelectedID(self.dicom_info.id)
-        my_evt.SetItemData(self.dicom_info.dicom)
-        my_evt.SetShiftStatus(shift_pressed)
-        my_evt.SetEventObject(self)
-        self.GetEventHandler().ProcessEvent(my_evt)
-        evt.Skip()
-
-    def OnSize(self, evt):
-        if self.dicom_info:
-            self.SetDicomToPreview(self.dicom_info)
-        evt.Skip()
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.preview_dblclicked.emit(self.dicom_info.id, self.dicom_info.dicom)
+        super().mouseDoubleClickEvent(event)
 
     def Select(self, on=True):
         if self.select_on:
-            try:
-                c = wx.SystemSettings_GetColour(wx.SYS_COLOUR_HIGHLIGHT)
-            except AttributeError:
-                c = wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT)
+            c = self.palette().color(QPalette.Highlight)
+            self._set_background((c.red(), c.green(), c.blue()))
         else:
-            c = PREVIEW_BACKGROUND
-        self.SetBackgroundColour(c)
-        self.Refresh()
-
-    def OnDClick(self, evt):
-        my_evt = SerieEvent(myEVT_PREVIEW_DBLCLICK, self.GetId())
-        my_evt.SetSelectedID(self.dicom_info.id)
-        my_evt.SetItemData(self.dicom_info.dicom)
-        my_evt.SetEventObject(self)
-        self.GetEventHandler().ProcessEvent(my_evt)
+            self._set_background(PREVIEW_BACKGROUND)
+        self.update()
 
 
-class DicomPreviewSeries(wx.Panel):
+class DicomPreviewSeries(QWidget):
     """A dicom series preview panel"""
+
+    serie_clicked = Signal(object, object)
 
     def __init__(self, parent):
         super().__init__(parent)
-        # TODO: 3 pixels between the previews is a good idea?
-        # I have to test.
-        # self.sizer = wx.BoxSizer(wx.HORIZONTAL)
-        # self.SetSizer(self.sizer)
         self.displayed_position = 0
         self.nhidden_last_display = 0
         self.selected_dicom = None
@@ -355,25 +249,20 @@ class DicomPreviewSeries(wx.Panel):
         self._init_ui()
 
     def _init_ui(self):
-        scroll = wx.ScrollBar(self, -1, style=wx.SB_VERTICAL)
-        self.scroll = scroll
+        self.scroll = QScrollBar(Qt.Vertical, self)
 
-        self.grid = wx.GridSizer(rows=NROWS, cols=NCOLS, vgap=3, hgap=3)
+        self.grid = QGridLayout()
+        self.grid.setSpacing(3)
 
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self.grid, 1, wx.EXPAND | wx.GROW | wx.ALL, 2)
+        grid_widget = QWidget(self)
+        grid_layout = QHBoxLayout(grid_widget)
+        grid_layout.setContentsMargins(2, 2, 2, 2)
+        grid_layout.addLayout(self.grid, 1)
 
-        background_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        background_sizer.Add(sizer, 1, wx.EXPAND | wx.GROW | wx.ALL, 2)
-        background_sizer.Add(scroll, 0, wx.EXPAND | wx.GROW)
-        self.SetSizer(background_sizer)
-        background_sizer.Fit(self)
-
-        self.Layout()
-        self.Update()
-        self.SetAutoLayout(1)
-
-        self.sizer = background_sizer
+        background_sizer = QHBoxLayout(self)
+        background_sizer.setContentsMargins(2, 2, 2, 2)
+        background_sizer.addWidget(grid_widget, 1)
+        background_sizer.addWidget(self.scroll, 0)
 
         self._Add_Panels_Preview()
         self._bind_events()
@@ -383,33 +272,34 @@ class DicomPreviewSeries(wx.Panel):
         for i in range(NROWS):
             for j in range(NCOLS):
                 p = Preview(self)
-                p.Bind(EVT_PREVIEW_CLICK, self.OnSelect)
-                # if (i == j == 0):
-                # self._show_shadow(p)
-                # p.Hide()
+                p.preview_clicked.connect(self._on_preview_click)
                 self.previews.append(p)
-                self.grid.Add(p, 1, flag=wx.EXPAND)
+                self.grid.addWidget(p, i, j)
 
-    # def _show_shadow(self, preview):
-    #    preview.ShowShadow()
+    def _on_preview_click(self, selected_id, item_data, shift_pressed):
+        sender = self.sender()
+        if self.selected_dicom:
+            self.selected_dicom.selected = self.selected_dicom is sender.dicom_info
+            self.selected_panel.select_on = self.selected_panel is sender
+            self.selected_panel.Select()
+        self.selected_panel = sender
+        self.selected_dicom = self.selected_panel.dicom_info
+        self.serie_clicked.emit(selected_id, item_data)
 
     def _bind_events(self):
-        # When the user scrolls the window
-        self.Bind(wx.EVT_SCROLL, self.OnScroll)
-        self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
+        self.scroll.valueChanged.connect(self._on_scroll)
 
-    def OnSelect(self, evt):
-        my_evt = SerieEvent(myEVT_CLICK_SERIE, self.GetId())
-        my_evt.SetSelectedID(evt.GetSelectID())
-        my_evt.SetItemData(evt.GetItemData())
+    def wheelEvent(self, event):
+        delta = event.angleDelta().y()
+        if delta > 0:
+            self.scroll.setValue(self.scroll.value() - 1)
+        elif delta < 0:
+            self.scroll.setValue(self.scroll.value() + 1)
 
-        if self.selected_dicom:
-            self.selected_dicom.selected = self.selected_dicom is evt.GetEventObject().dicom_info
-            self.selected_panel.select_on = self.selected_panel is evt.GetEventObject()
-            self.selected_panel.Select()
-        self.selected_panel = evt.GetEventObject()
-        self.selected_dicom = self.selected_panel.dicom_info
-        self.GetEventHandler().ProcessEvent(my_evt)
+    def _on_scroll(self, value):
+        if self.displayed_position != value:
+            self.displayed_position = value
+            self._display_previews()
 
     def SetPatientGroups(self, patient):
         self.files = []
@@ -431,7 +321,8 @@ class DicomPreviewSeries(wx.Panel):
         scroll_range = len(self.files) // NCOLS
         if scroll_range * NCOLS < len(self.files):
             scroll_range += 1
-        self.scroll.SetScrollbar(0, NROWS, scroll_range, NCOLS)
+        self.scroll.setRange(0, max(0, scroll_range - NROWS))
+        self.scroll.setPageStep(NROWS)
         self._display_previews()
 
     def _display_previews(self):
@@ -440,19 +331,17 @@ class DicomPreviewSeries(wx.Panel):
         if len(self.files) < final:
             for i in range(final - len(self.files)):
                 try:
-                    self.previews[-i - 1].Hide()
+                    self.previews[-i - 1].hide()
                 except IndexError:
                     utils.debug("doesn't exist!")
-                    pass
             self.nhidden_last_display = final - len(self.files)
         else:
             if self.nhidden_last_display:
                 for i in range(self.nhidden_last_display):
                     try:
-                        self.previews[-i - 1].Show()
+                        self.previews[-i - 1].show()
                     except IndexError:
                         utils.debug("doesn't exist!")
-                        pass
                 self.nhidden_last_display = 0
 
         for f, p in zip(self.files[initial:final], self.previews):
@@ -461,30 +350,16 @@ class DicomPreviewSeries(wx.Panel):
                 self.selected_panel = p
 
         for f, p in zip(self.files[initial:final], self.previews):
-            p.Show()
-
-    def OnScroll(self, evt=None):
-        if evt:
-            if self.displayed_position != evt.GetPosition():
-                self.displayed_position = evt.GetPosition()
-        else:
-            if self.displayed_position != self.scroll.GetThumbPosition():
-                self.displayed_position = self.scroll.GetThumbPosition()
-        self._display_previews()
-
-    def OnWheel(self, evt):
-        d = evt.GetWheelDelta() // evt.GetWheelRotation()
-        self.scroll.SetThumbPosition(self.scroll.GetThumbPosition() - d)
-        self.OnScroll()
+            p.show()
 
 
-class DicomPreviewSlice(wx.Panel):
+class DicomPreviewSlice(QWidget):
     """A dicom preview panel"""
+
+    slice_clicked = Signal(object, object)
 
     def __init__(self, parent):
         super().__init__(parent)
-        # TODO: 3 pixels between the previews is a good idea?
-        # I have to test.
         self.displayed_position = 0
         self.nhidden_last_display = 0
         self.selected_dicom = None
@@ -494,25 +369,20 @@ class DicomPreviewSlice(wx.Panel):
         self._init_ui()
 
     def _init_ui(self):
-        scroll = wx.ScrollBar(self, -1, style=wx.SB_VERTICAL)
-        self.scroll = scroll
+        self.scroll = QScrollBar(Qt.Vertical, self)
 
-        self.grid = wx.GridSizer(rows=NROWS, cols=NCOLS, vgap=3, hgap=3)
+        self.grid = QGridLayout()
+        self.grid.setSpacing(3)
 
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self.grid, 1, wx.EXPAND | wx.GROW | wx.ALL, 2)
+        grid_widget = QWidget(self)
+        grid_layout = QHBoxLayout(grid_widget)
+        grid_layout.setContentsMargins(2, 2, 2, 2)
+        grid_layout.addLayout(self.grid, 1)
 
-        background_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        background_sizer.Add(sizer, 1, wx.EXPAND | wx.GROW | wx.ALL, 2)
-        background_sizer.Add(scroll, 0, wx.EXPAND | wx.GROW)
-        self.SetSizer(background_sizer)
-        background_sizer.Fit(self)
-
-        self.Layout()
-        self.Update()
-        self.SetAutoLayout(1)
-
-        self.sizer = background_sizer
+        background_sizer = QHBoxLayout(self)
+        background_sizer.setContentsMargins(2, 2, 2, 2)
+        background_sizer.addWidget(grid_widget, 1)
+        background_sizer.addWidget(self.scroll, 0)
 
         self._Add_Panels_Preview()
         self._bind_events()
@@ -522,15 +392,24 @@ class DicomPreviewSlice(wx.Panel):
         for i in range(NROWS):
             for j in range(NCOLS):
                 p = Preview(self)
-                p.Bind(EVT_PREVIEW_CLICK, self.OnPreviewClick)
-                # p.Hide()
+                p.preview_clicked.connect(self.OnPreviewClick)
                 self.previews.append(p)
-                self.grid.Add(p, 1, flag=wx.EXPAND)
+                self.grid.addWidget(p, i, j)
 
     def _bind_events(self):
-        # When the user scrolls the window
-        self.Bind(wx.EVT_SCROLL, self.OnScroll)
-        self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
+        self.scroll.valueChanged.connect(self._on_scroll)
+
+    def wheelEvent(self, event):
+        delta = event.angleDelta().y()
+        if delta > 0:
+            self.scroll.setValue(self.scroll.value() - 1)
+        elif delta < 0:
+            self.scroll.setValue(self.scroll.value() + 1)
+
+    def _on_scroll(self, value):
+        if self.displayed_position != value:
+            self.displayed_position = value
+            self._display_previews()
 
     def SetDicomDirectory(self, directory):
         utils.debug(f"Setting Dicom Directory {directory}")
@@ -546,7 +425,6 @@ class DicomPreviewSlice(wx.Panel):
         self.nhidden_last_display = 0
         group = self.group_list[pos]
         self.group = group
-        # dicom_files = group.GetList()
         dicom_files = group.GetHandSortedList()
         n = 0
         for dicom in dicom_files:
@@ -573,7 +451,8 @@ class DicomPreviewSlice(wx.Panel):
         scroll_range = len(self.files) / NCOLS
         if scroll_range * NCOLS < len(self.files):
             scroll_range += 1
-        self.scroll.SetScrollbar(0, NROWS, scroll_range, NCOLS)
+        self.scroll.setRange(0, max(0, int(scroll_range) - NROWS))
+        self.scroll.setPageStep(NROWS)
 
         self._display_previews()
 
@@ -581,7 +460,6 @@ class DicomPreviewSlice(wx.Panel):
         self.files = []
         self.displayed_position = 0
         self.nhidden_last_display = 0
-        # dicom_files = group.GetList()
         dicom_files = group.GetHandSortedList()
         n = 0
         for dicom in dicom_files:
@@ -608,7 +486,8 @@ class DicomPreviewSlice(wx.Panel):
         scroll_range = len(self.files) // NCOLS
         if scroll_range * NCOLS < len(self.files):
             scroll_range += 1
-        self.scroll.SetScrollbar(0, NROWS, scroll_range, NCOLS)
+        self.scroll.setRange(0, max(0, scroll_range - NROWS))
+        self.scroll.setPageStep(NROWS)
 
         self._display_previews()
 
@@ -618,7 +497,7 @@ class DicomPreviewSlice(wx.Panel):
         if len(self.files) < final:
             for i in range(final - len(self.files)):
                 try:
-                    self.previews[-i - 1].Hide()
+                    self.previews[-i - 1].hide()
                 except IndexError:
                     utils.debug("doesn't exist!")
             self.nhidden_last_display = final - len(self.files)
@@ -626,7 +505,7 @@ class DicomPreviewSlice(wx.Panel):
             if self.nhidden_last_display:
                 for i in range(self.nhidden_last_display):
                     try:
-                        self.previews[-i - 1].Show()
+                        self.previews[-i - 1].show()
                     except IndexError:
                         utils.debug("doesn't exist!")
                 self.nhidden_last_display = 0
@@ -635,13 +514,12 @@ class DicomPreviewSlice(wx.Panel):
             p.SetDicomToPreview(f)
             if f.selected:
                 self.selected_panel = p
-            # p.interactor.Render()
 
         for f, p in zip(self.files[initial:final], self.previews):
-            p.Show()
+            p.show()
 
-    def OnPreviewClick(self, evt):
-        dicom_id = evt.GetSelectID()
+    def OnPreviewClick(self, dicom_id, item_data, shift_pressed):
+        sender = self.sender()
 
         if self.first_selection is None:
             self.first_selection = dicom_id
@@ -649,7 +527,7 @@ class DicomPreviewSlice(wx.Panel):
         if self.last_selection is None:
             self.last_selection = dicom_id
 
-        if evt.GetPressedShift():
+        if shift_pressed:
             if dicom_id < self.first_selection and dicom_id < self.last_selection:
                 self.first_selection = dicom_id
             else:
@@ -664,13 +542,9 @@ class DicomPreviewSlice(wx.Panel):
                 else:
                     self.files[i].selected = False
 
-        my_evt = SerieEvent(myEVT_CLICK_SLICE, self.GetId())
-        my_evt.SetSelectedID(evt.GetSelectID())
-        my_evt.SetItemData(evt.GetItemData())
-
         if self.selected_dicom:
-            self.selected_dicom.selected = self.selected_dicom is evt.GetEventObject().dicom_info
-            self.selected_panel.select_on = self.selected_panel is evt.GetEventObject()
+            self.selected_dicom.selected = self.selected_dicom is sender.dicom_info
+            self.selected_panel.select_on = self.selected_panel is sender
 
             if self.first_selection != self.last_selection:
                 for i in range(len(self.files)):
@@ -678,37 +552,22 @@ class DicomPreviewSlice(wx.Panel):
                         self.files[i].selected = True
                     else:
                         self.files[i].selected = False
-
             else:
                 self.selected_panel.Select()
 
         self._display_previews()
-        self.selected_panel = evt.GetEventObject()
+        self.selected_panel = sender
         self.selected_dicom = self.selected_panel.dicom_info
-        self.GetEventHandler().ProcessEvent(my_evt)
+        self.slice_clicked.emit(dicom_id, item_data)
 
         Publisher.sendMessage(
             "Selected Import Images", selection=(self.first_selection, self.last_selection)
         )
 
-    def OnScroll(self, evt=None):
-        if evt:
-            if self.displayed_position != evt.GetPosition():
-                self.displayed_position = evt.GetPosition()
-        else:
-            if self.displayed_position != self.scroll.GetThumbPosition():
-                self.displayed_position = self.scroll.GetThumbPosition()
-        self._display_previews()
 
-    def OnWheel(self, evt):
-        d = evt.GetWheelDelta() // evt.GetWheelRotation()
-        self.scroll.SetThumbPosition(self.scroll.GetThumbPosition() - d)
-        self.OnScroll()
-
-
-class SingleImagePreview(wx.Panel):
+class SingleImagePreview(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, -1)
+        super().__init__(parent)
         self.actor = None
         self.__init_gui()
         self.__bind_evt_gui()
@@ -717,38 +576,35 @@ class SingleImagePreview(wx.Panel):
         self.current_index = 0
         self.window_width = const.WINDOW_LEVEL[_("Bone")][0]
         self.window_level = const.WINDOW_LEVEL[_("Bone")][1]
+        self.ischecked = False
 
     def __init_vtk(self):
         text_image_size = vtku.TextZero()
         text_image_size.SetPosition(const.TEXT_POS_LEFT_UP)
         text_image_size.SetValue("")
-        text_image_size.SetSymbolicSize(wx.FONTSIZE_SMALL)
+        text_image_size.SetSymbolicSize(FONTSIZE_SMALL)
         self.text_image_size = text_image_size
 
         text_image_location = vtku.TextZero()
-        #  text_image_location.SetVerticalJustificationToBottom()
         text_image_location.SetPosition(const.TEXT_POS_LEFT_DOWN)
         text_image_location.SetValue("")
         text_image_location.bottom_pos = True
-        text_image_location.SetSymbolicSize(wx.FONTSIZE_SMALL)
+        text_image_location.SetSymbolicSize(FONTSIZE_SMALL)
         self.text_image_location = text_image_location
 
         text_patient = vtku.TextZero()
-        #  text_patient.SetJustificationToRight()
         text_patient.SetPosition(const.TEXT_POS_RIGHT_UP)
         text_patient.SetValue("")
         text_patient.right_pos = True
-        text_patient.SetSymbolicSize(wx.FONTSIZE_SMALL)
+        text_patient.SetSymbolicSize(FONTSIZE_SMALL)
         self.text_patient = text_patient
 
         text_acquisition = vtku.TextZero()
-        #  text_acquisition.SetJustificationToRight()
-        #  text_acquisition.SetVerticalJustificationToBottom()
         text_acquisition.SetPosition(const.TEXT_POS_RIGHT_DOWN)
         text_acquisition.SetValue("")
         text_acquisition.right_pos = True
         text_acquisition.bottom_pos = True
-        text_acquisition.SetSymbolicSize(wx.FONTSIZE_SMALL)
+        text_acquisition.SetSymbolicSize(FONTSIZE_SMALL)
         self.text_acquisition = text_acquisition
 
         self.renderer = vtkRenderer()
@@ -777,65 +633,49 @@ class SingleImagePreview(wx.Panel):
         self.canvas.draw_list.append(self.text_acquisition)
 
     def __init_gui(self):
-        slider = wx.Slider(
-            self, id=-1, value=0, minValue=0, maxValue=99, style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS
-        )
-        slider.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
-        slider.SetTickFreq(1)
-        self.slider = slider
+        self.slider = QSlider(Qt.Horizontal, self)
+        self.slider.setRange(0, 99)
+        self.slider.setValue(0)
+        self.slider.setTickPosition(QSlider.TicksBelow)
+        self.slider.setTickInterval(1)
 
-        checkbox = wx.CheckBox(self, -1, _("Auto-play"))
-        self.checkbox = checkbox
+        self.checkbox = QCheckBox(_("Auto-play"), self)
 
-        self.interactor = wxVTKRenderWindowInteractor(self, -1)
-        self.interactor.SetRenderWhenDisabled(True)
+        self.interactor = QVTKRenderWindowInteractor(self)
+        if hasattr(self.interactor, "SetRenderWhenDisabled"):
+            self.interactor.SetRenderWhenDisabled(True)
 
-        in_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        in_sizer.Add(slider, 1, wx.GROW | wx.EXPAND)
-        in_sizer.Add(checkbox, 0)
+        in_sizer = QHBoxLayout()
+        in_sizer.addWidget(self.slider, 1)
+        in_sizer.addWidget(self.checkbox, 0)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.interactor, 1, wx.GROW | wx.EXPAND)
-        sizer.Add(in_sizer, 0, wx.GROW | wx.EXPAND)
-        sizer.Fit(self)
-
-        self.SetSizer(sizer)
-        self.Layout()
-        self.Update()
-        self.SetAutoLayout(1)
+        sizer = QVBoxLayout(self)
+        sizer.addWidget(self.interactor, 1)
+        sizer.addLayout(in_sizer, 0)
 
     def __bind_evt_gui(self):
-        self.slider.Bind(wx.EVT_SLIDER, self.OnSlider)
-        self.checkbox.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        self.slider.valueChanged.connect(self.OnSlider)
+        self.checkbox.stateChanged.connect(self.OnCheckBox)
 
-    def OnSlider(self, evt):
-        pos = evt.GetInt()
+    def OnSlider(self, pos):
         self.ShowSlice(pos)
-        evt.Skip()
 
-    def OnCheckBox(self, evt):
-        self.ischecked = evt.IsChecked()
-        if evt.IsChecked():
-            wx.CallAfter(self.OnRun)
-        evt.Skip()
+    def OnCheckBox(self, state):
+        self.ischecked = state == Qt.Checked.value if hasattr(Qt.Checked, "value") else bool(state)
+        if self.ischecked:
+            QTimer.singleShot(0, self.OnRun)
 
     def OnRun(self):
-        pos = self.slider.GetValue()
+        pos = self.slider.value()
         pos += 1
         if not (self.nimages - pos):
             pos = 0
-        self.slider.SetValue(pos)
+        self.slider.setValue(pos)
         self.ShowSlice(pos)
         time.sleep(0.2)
         if self.ischecked:
-            try:
-                wx.Yield()
-            # TODO: temporary fix necessary in the Windows XP 64 Bits
-            # BUG in wxWidgets http://trac.wxwidgets.org/ticket/10896
-            except wx.PyAssertionError:
-                utils.debug("wx._core.PyAssertionError")
-            finally:
-                wx.CallAfter(self.OnRun)
+            QApplication.processEvents()
+            QTimer.singleShot(0, self.OnRun)
 
     def SetDicomGroup(self, group):
         self.dicom_list = group.GetHandSortedList()
@@ -844,10 +684,9 @@ class SingleImagePreview(wx.Panel):
             self.nimages = len(self.dicom_list)
         else:
             self.nimages = self.dicom_list[0].image.number_of_frames
-        # GUI
-        self.slider.SetMax(self.nimages - 1)
-        self.slider.SetValue(0)
-        self.slider.SetTickFreq(1)
+        self.slider.setMaximum(self.nimages - 1)
+        self.slider.setValue(0)
+        self.slider.setTickInterval(1)
         self.ShowSlice()
 
     def ShowSlice(self, index=0):
@@ -859,12 +698,9 @@ class SingleImagePreview(wx.Panel):
         if self.actor is None:
             self.__init_vtk()
 
-        # UPDATE GUI
-        ## Text related to size
         value = STR_SIZE % (dicom.image.size[0], dicom.image.size[1])
         self.text_image_size.SetValue(value)
 
-        ## Text related to slice position
         if not (dicom.image.spacing):
             value1 = ""
         else:
@@ -882,11 +718,9 @@ class SingleImagePreview(wx.Panel):
         value = f"{value1}\n{value2}"
         self.text_image_location.SetValue(value)
 
-        ## Text related to patient/ acquisiiton data
         value = STR_PATIENT % (dicom.patient.id, dicom.acquisition.protocol_name)
         self.text_patient.SetValue(value)
 
-        ## Text related to acquisition date and time
         value = STR_ACQ % (dicom.acquisition.date, dicom.acquisition.time)
         self.text_acquisition.SetValue(value)
 
@@ -911,7 +745,6 @@ class SingleImagePreview(wx.Panel):
             np_image = imagedata_utils.read_dcm_slice_as_np2(filename)
             vtk_image = converters.to_vtk(np_image, dicom.image.spacing, 0, "AXIAL")
 
-            # ADJUST CONTRAST
             window_level = dicom.image.level
             window_width = dicom.image.window
             colorer = vtkImageMapToWindowLevelColors()
@@ -935,10 +768,8 @@ class SingleImagePreview(wx.Panel):
 
         self.canvas.modified = True
 
-        # PLOT IMAGE INTO VIEWER
         self.actor.SetInputData(flip.GetOutput())
         self.renderer.ResetCamera()
         self.interactor.Render()
 
-        # Setting slider position
-        self.slider.SetValue(index)
+        self.slider.setValue(index)

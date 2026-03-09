@@ -25,12 +25,23 @@ try:
 except ImportError:
     from PIL import Image
 
-import wx
-import wx.grid
-
-#  import invesalius.gui.widgets.listctrl as listmix
-import wx.lib.platebtn as pbtn
-import wx.lib.scrolledpanel as scrolled
+from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtGui import QCursor, QIcon, QImage, QPixmap
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QCheckBox,
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QMenu,
+    QPushButton,
+    QScrollArea,
+    QTabWidget,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 import invesalius.constants as const
 import invesalius.data.slice_ as slice_
@@ -38,10 +49,6 @@ import invesalius.gui.dialogs as dlg
 from invesalius import inv_paths, project
 from invesalius.i18n import tr as _
 from invesalius.pubsub import pub as Publisher
-
-BTN_NEW, BTN_REMOVE, BTN_DUPLICATE, BTN_OPEN, BTN_IMPORT_MASK, BTN_EXPORT_MASK = (
-    wx.NewIdRef() for i in range(6)
-)
 
 TYPE = {
     const.LINEAR: _("Linear"),
@@ -58,30 +65,23 @@ LOCATION = {
 }
 
 
-# Panel that initializes notebook and related tabs
-class NotebookPanel(wx.Panel):
+class NotebookPanel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
-        book = wx.Notebook(self, -1, style=wx.BK_DEFAULT)
-        # TODO: check under Windows and Linux
-        # this was necessary under cOS:
-        # if wx.Platform == "__WXMAC__":
-        if sys.platform != "win32":
-            book.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
+        book = QTabWidget(self)
 
-        book.AddPage(MaskPage(book), _("Masks"))
-        book.AddPage(SurfacePage(book), _("3D surfaces"))
-        book.AddPage(MeasurePage(book), _("Measures"))
-        # book.AddPage(AnnotationsListCtrlPanel(book), _("Notes"))
+        book.addTab(MaskPage(book), _("Masks"))
+        book.addTab(SurfacePage(book), _("3D surfaces"))
+        book.addTab(MeasurePage(book), _("Measures"))
+        # book.addTab(AnnotationsListCtrlPanel(book), _("Notes"))
 
-        book.SetSelection(0)
+        book.setCurrentIndex(0)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(book, 0, wx.EXPAND)
-        self.SetSizer(sizer)
+        sizer = QVBoxLayout(self)
+        sizer.setContentsMargins(0, 0, 0, 0)
+        sizer.addWidget(book)
 
-        book.Refresh()
         self.book = book
 
         self.__bind_events()
@@ -97,110 +97,87 @@ class NotebookPanel(wx.Panel):
         """
         Fold surface notebook page.
         """
-        self.book.SetSelection(1)
+        self.book.setCurrentIndex(1)
 
     def _FoldMeasure(self):
         """
         Fold measure notebook page.
         """
-        self.book.SetSelection(2)
+        self.book.setCurrentIndex(2)
 
     def _FoldMask(self):
         """
         Fold mask notebook page.
         """
-        self.book.SetSelection(0)
+        self.book.setCurrentIndex(0)
 
 
-class MeasurePage(wx.Panel):
+class MeasurePage(QWidget):
     """
     Page related to mask items.
     """
 
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
         self.__init_gui()
 
     def __init_gui(self):
-        # listctrl were existing masks will be listed
-        self.listctrl = MeasuresListCtrlPanel(self, size=wx.Size(256, 100))
-        # button control with tools (eg. remove, add new, etc)
+        self.listctrl = MeasuresListCtrlPanel(self)
         self.buttonctrl = MeasureButtonControlPanel(self)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.listctrl, 0, wx.EXPAND)
-        sizer.Add(self.buttonctrl, 0, wx.EXPAND | wx.TOP, 2)
-        self.SetSizer(sizer)
-        self.Fit()
+        sizer = QVBoxLayout(self)
+        sizer.setContentsMargins(0, 0, 0, 0)
+        sizer.addWidget(self.listctrl, 1)
+        sizer.addWidget(self.buttonctrl, 0)
 
 
-class MeasureButtonControlPanel(wx.Panel):
+class MeasureButtonControlPanel(QWidget):
     """
     Button control panel that includes data notebook operations.
     TODO: Enhace interface with parent class - it is really messed up
     """
 
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, pos=wx.Point(0, 50), size=wx.Size(256, 22))
+        super().__init__(parent)
         self.parent = parent
         self.__init_gui()
 
     def __init_gui(self):
-        # Bitmaps to be used in plate buttons
-        BMP_NEW = wx.Bitmap(os.path.join(inv_paths.ICON_DIR, "data_new.png"), wx.BITMAP_TYPE_PNG)
-        BMP_REMOVE = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "data_remove.png"), wx.BITMAP_TYPE_PNG
-        )
-        BMP_DUPLICATE = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "data_duplicate.png"), wx.BITMAP_TYPE_PNG
-        )
+        icon_new = QIcon(os.path.join(inv_paths.ICON_DIR, "data_new.png"))
+        icon_remove = QIcon(os.path.join(inv_paths.ICON_DIR, "data_remove.png"))
+        icon_duplicate = QIcon(os.path.join(inv_paths.ICON_DIR, "data_duplicate.png"))
 
-        # Plate buttons based on previous bitmaps
-        button_style = pbtn.PB_STYLE_SQUARE | pbtn.PB_STYLE_DEFAULT
-        button_new = pbtn.PlateButton(
-            self, BTN_NEW, "", BMP_NEW, style=button_style, size=wx.Size(24, 20)
-        )
-        button_new.SetToolTip(_("Create a new measure"))
+        button_new = QPushButton(icon_new, "", self)
+        button_new.setFixedSize(QSize(24, 20))
+        button_new.setToolTip(_("Create a new measure"))
+        button_new.clicked.connect(self.OnNew)
 
-        button_remove = pbtn.PlateButton(
-            self, BTN_REMOVE, "", BMP_REMOVE, style=button_style, size=wx.Size(24, 20)
-        )
-        button_remove.SetToolTip(_("Remove measure"))
+        button_remove = QPushButton(icon_remove, "", self)
+        button_remove.setFixedSize(QSize(24, 20))
+        button_remove.setToolTip(_("Remove measure"))
+        button_remove.clicked.connect(self.OnRemove)
 
-        button_duplicate = pbtn.PlateButton(
-            self, BTN_DUPLICATE, "", BMP_DUPLICATE, style=button_style, size=wx.Size(24, 20)
-        )
-        button_duplicate.SetToolTip(_("Duplicate measure"))
-        button_duplicate.Disable()
+        button_duplicate = QPushButton(icon_duplicate, "", self)
+        button_duplicate.setFixedSize(QSize(24, 20))
+        button_duplicate.setToolTip(_("Duplicate measure"))
+        button_duplicate.setEnabled(False)
+        button_duplicate.clicked.connect(self.OnDuplicate)
 
-        # Add all controls to gui
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(button_new, 0, wx.GROW | wx.EXPAND | wx.LEFT)
-        sizer.Add(button_remove, 0, wx.GROW | wx.EXPAND)
-        sizer.Add(button_duplicate, 0, wx.GROW | wx.EXPAND)
-        self.SetSizer(sizer)
-        self.Fit()
+        sizer = QHBoxLayout(self)
+        sizer.setContentsMargins(0, 0, 0, 0)
+        sizer.addWidget(button_new)
+        sizer.addWidget(button_remove)
+        sizer.addWidget(button_duplicate)
+        sizer.addStretch()
 
-        menu = wx.Menu()
-        menu.Append(const.MEASURE_LINEAR, _("Measure distance"))
-        menu.Append(const.MEASURE_ANGULAR, _("Measure angle"))
-        menu.Bind(wx.EVT_MENU, self.OnMenu)
-        self.menu = menu
-
-        # Bindings
-        self.Bind(wx.EVT_BUTTON, self.OnButton)
-
-    def OnButton(self, evt):
-        id = evt.GetId()
-        if id == BTN_NEW:
-            self.OnNew()
-        elif id == BTN_REMOVE:
-            self.OnRemove()
-        elif id == BTN_DUPLICATE:
-            self.OnDuplicate()
+        self.menu = QMenu(self)
+        action_linear = self.menu.addAction(_("Measure distance"))
+        action_angular = self.menu.addAction(_("Measure angle"))
+        action_linear.triggered.connect(lambda: Publisher.sendMessage("Set tool linear measure"))
+        action_angular.triggered.connect(lambda: Publisher.sendMessage("Set tool angular measure"))
 
     def OnNew(self):
-        self.PopupMenu(self.menu)
+        self.menu.exec(QCursor.pos())
 
     def OnMenu(self, evt):
         id = evt.GetId()
@@ -220,16 +197,16 @@ class MeasureButtonControlPanel(wx.Panel):
             dlg.MaskSelectionRequiredForDuplication()
 
 
-class MaskPage(wx.Panel):
+class MaskPage(QWidget):
     """
     Page related to mask items.
     """
 
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
         self.categories = {}
-        self.sizer = wx.BoxSizer(wx.VERTICAL)
-        self.SetSizer(self.sizer)
+        self.sizer = QVBoxLayout(self)
+        self.sizer.setContentsMargins(0, 0, 0, 0)
         self.__init_gui()
 
         Publisher.subscribe(self.AddMask, "Add mask")
@@ -244,49 +221,52 @@ class MaskPage(wx.Panel):
         Publisher.subscribe(self.update_selection_state, "Update mask selection state")
 
     def __init_gui(self):
-        # button control with tools (eg. remove, add new, etc)
         self.buttonctrl = ButtonControlPanel(self)
 
-        self.scroll_panel = scrolled.ScrolledPanel(self)
-        self.scroll_panel.SetupScrolling()
+        self.scroll_area = QScrollArea(self)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_widget = QWidget()
+        self.scroll_layout = QVBoxLayout(self.scroll_widget)
+        self.scroll_layout.setContentsMargins(2, 2, 2, 2)
+        self.scroll_layout.addStretch()
+        self.scroll_area.setWidget(self.scroll_widget)
 
-        # sizer for scrollable content
-        self.scroll_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.scroll_panel.SetSizer(self.scroll_sizer)
-
-        self.sizer.Add(self.scroll_panel, 1, wx.EXPAND | wx.ALL, 2)
-        self.sizer.Add(self.buttonctrl, 0, wx.EXPAND | wx.TOP, 2)
+        self.sizer.addWidget(self.scroll_area, 1)
+        self.sizer.addWidget(self.buttonctrl, 0)
 
         self.create_category("General")
 
     def create_category_header(self, parent, category):
         """Create header panel with category controls"""
-        header_panel = wx.Panel(parent)
-        header_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        header_panel = QWidget(parent)
+        header_layout = QHBoxLayout(header_panel)
+        header_layout.setContentsMargins(2, 0, 0, 0)
 
-        expand_btn = wx.Button(header_panel, size=(20, 20), label="▼")
-        expand_btn.Bind(wx.EVT_BUTTON, lambda evt: self.toggle_category_expansion(category))
+        expand_btn = QPushButton("\u25bc", header_panel)
+        expand_btn.setFixedSize(20, 20)
+        expand_btn.clicked.connect(
+            lambda checked, cat=category: self.toggle_category_expansion(cat)
+        )
 
-        category_label = wx.StaticText(header_panel, label=category)
-        category_label.SetFont(category_label.GetFont().Bold())
+        category_label = QLabel(category, header_panel)
+        font = category_label.font()
+        font.setBold(True)
+        category_label.setFont(font)
 
-        header_sizer.Add(expand_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 2)
-        header_sizer.Add(category_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
-
-        header_panel.SetSizer(header_sizer)
+        header_layout.addWidget(expand_btn)
+        header_layout.addWidget(category_label, 1)
 
         return header_panel, expand_btn
 
     def create_category(self, category):
-        header_panel, expand_btn = self.create_category_header(self.scroll_panel, category)
+        header_panel, expand_btn = self.create_category_header(self.scroll_widget, category)
 
-        # content panel that will be shown/hidden manually
-        content_panel = wx.Panel(self.scroll_panel)
-        listctrl = MasksListCtrlPanel(content_panel, size=wx.Size(256, 100))
+        content_panel = QWidget(self.scroll_widget)
+        listctrl = MasksListCtrlPanel(content_panel)
         listctrl.category = category
-        content_sizer = wx.BoxSizer(wx.VERTICAL)
-        content_sizer.Add(listctrl, 1, wx.EXPAND)
-        content_panel.SetSizer(content_sizer)
+        content_layout = QVBoxLayout(content_panel)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.addWidget(listctrl)
 
         self.categories[category] = {
             "header": header_panel,
@@ -296,8 +276,10 @@ class MaskPage(wx.Panel):
             "expanded": True,
         }
 
-        self.scroll_sizer.Add(header_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 2)
-        self.scroll_sizer.Add(content_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 2)
+        stretch_item = self.scroll_layout.takeAt(self.scroll_layout.count() - 1)
+        self.scroll_layout.addWidget(header_panel)
+        self.scroll_layout.addWidget(content_panel)
+        self.scroll_layout.addStretch()
 
         return listctrl
 
@@ -311,36 +293,31 @@ class MaskPage(wx.Panel):
         is_expanded = category_info["expanded"]
 
         if is_expanded:
-            content_panel.Hide()
-            expand_btn.SetLabel("▶")
+            content_panel.hide()
+            expand_btn.setText("\u25b6")
             self.categories[category]["expanded"] = False
         else:
-            content_panel.Show()
-            expand_btn.SetLabel("▼")
+            content_panel.show()
+            expand_btn.setText("\u25bc")
             self.categories[category]["expanded"] = True
 
         self.update_scroll_layout()
 
     def update_selection_state(self, category=None):
         """Limit selection to a single category and notify other components."""
-        # Without a category, default to no selection broadcast
         if not category or category not in self.categories:
             Publisher.sendMessage("Update selected masks list", indices=[])
             Publisher.sendMessage("Select all masks changed", select_all_active=False)
             return
 
-        # Clear selections in all other categories
         for cat, info in self.categories.items():
             if cat != category:
                 lst = info["list"]
                 if hasattr(lst, "ClearSelection"):
                     lst.ClearSelection()
-        # Collect selection only from the given category
         listctrl = self.categories[category]["list"]
         selected_indices = list(listctrl.GetSelected())
-        # Notify slice controller about selection changes
         Publisher.sendMessage("Update selected masks list", indices=selected_indices)
-        # Notify task panel about batch mode state for "Create All Surfaces"
         is_batch_mode = len(selected_indices) > 1
         Publisher.sendMessage("Select all masks changed", select_all_active=is_batch_mode)
 
@@ -356,8 +333,16 @@ class MaskPage(wx.Panel):
 
     def RefreshMasks(self, clear_project=False):
         """Destroy all components and clear sizer"""
+        old_widget = self.scroll_area.takeWidget()
+        if old_widget:
+            old_widget.deleteLater()
 
-        self.scroll_sizer.Clear(delete_windows=True)
+        self.scroll_widget = QWidget()
+        self.scroll_layout = QVBoxLayout(self.scroll_widget)
+        self.scroll_layout.setContentsMargins(2, 2, 2, 2)
+        self.scroll_layout.addStretch()
+        self.scroll_area.setWidget(self.scroll_widget)
+
         self.categories.clear()
 
         self.create_category("General")
@@ -374,11 +359,8 @@ class MaskPage(wx.Panel):
 
     def update_scroll_layout(self):
         """Update scroll panel layout"""
-        self.scroll_sizer.Layout()
-        min_size = self.scroll_sizer.GetMinSize()
-        self.scroll_panel.SetVirtualSize(min_size)
-        self.scroll_panel.FitInside()
-        self.Layout()
+        self.scroll_widget.updateGeometry()
+        self.scroll_widget.adjustSize()
 
     def update_current_colour(self, colour):
         """Handle updating the current mask colour in the respective category list"""
@@ -444,115 +426,82 @@ class MaskPage(wx.Panel):
                 return
 
     def OnCloseProject(self):
-        wx.CallAfter(self.RefreshMasks, True)
+        QTimer.singleShot(0, lambda: self.RefreshMasks(True))
 
 
-class ButtonControlPanel(wx.Panel):
+class ButtonControlPanel(QWidget):
     """
     Button control panel that includes data notebook operations.
     TODO: Enhace interface with parent class - it is really messed up
     """
 
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, pos=wx.Point(0, 50), size=wx.Size(256, 22))
+        super().__init__(parent)
         self.parent = parent
         self.__init_gui()
 
     def __init_gui(self):
-        # Bitmaps to be used in plate buttons
-        BMP_NEW = wx.Bitmap(os.path.join(inv_paths.ICON_DIR, "data_new.png"), wx.BITMAP_TYPE_PNG)
-        BMP_REMOVE = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "data_remove.png"), wx.BITMAP_TYPE_PNG
-        )
-        BMP_DUPLICATE = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "data_duplicate.png"), wx.BITMAP_TYPE_PNG
-        )
-        BMP_IMPORT = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "object_add.png"), wx.BITMAP_TYPE_PNG
-        )
-        export_icon_path = os.path.join(inv_paths.ICON_DIR, "surface_export.png")
-        image = wx.Image(export_icon_path, wx.BITMAP_TYPE_PNG)
-        if not image.HasAlpha():
-            image.InitAlpha()
-        # Scale rigidly to 22x22 to match exactly with the 'object_add.png' import icon size.
-        # This prevents PlateButton from clipping transparent corners of large images.
-        image = image.Scale(22, 22, wx.IMAGE_QUALITY_HIGH)
-        BMP_EXPORT = image.ConvertToBitmap()
-        if not BMP_EXPORT.IsOk():
-            print("Failed to load export icon:", export_icon_path)
+        icon_new = QIcon(os.path.join(inv_paths.ICON_DIR, "data_new.png"))
+        icon_remove = QIcon(os.path.join(inv_paths.ICON_DIR, "data_remove.png"))
+        icon_duplicate = QIcon(os.path.join(inv_paths.ICON_DIR, "data_duplicate.png"))
+        icon_import = QIcon(os.path.join(inv_paths.ICON_DIR, "object_add.png"))
+        icon_export = QIcon(os.path.join(inv_paths.ICON_DIR, "surface_export.png"))
 
-        # Plate buttons based on previous bitmaps
-        button_style = pbtn.PB_STYLE_SQUARE | pbtn.PB_STYLE_DEFAULT
-        button_new = pbtn.PlateButton(
-            self, BTN_NEW, "", BMP_NEW, style=button_style, size=wx.Size(24, 20)
-        )
-        button_new.SetToolTip(_("Create a new mask"))
+        button_new = QPushButton(icon_new, "", self)
+        button_new.setFixedSize(QSize(24, 20))
+        button_new.setToolTip(_("Create a new mask"))
+        button_new.clicked.connect(self.OnNew)
 
-        button_remove = pbtn.PlateButton(
-            self, BTN_REMOVE, "", BMP_REMOVE, style=button_style, size=wx.Size(24, 20)
-        )
-        button_remove.SetToolTip(_("Remove mask"))
+        button_remove = QPushButton(icon_remove, "", self)
+        button_remove.setFixedSize(QSize(24, 20))
+        button_remove.setToolTip(_("Remove mask"))
+        button_remove.clicked.connect(self.OnRemove)
 
-        button_duplicate = pbtn.PlateButton(
-            self, BTN_DUPLICATE, "", BMP_DUPLICATE, style=button_style, size=wx.Size(24, 20)
-        )
-        button_duplicate.SetToolTip(_("Duplicate mask"))
+        button_duplicate = QPushButton(icon_duplicate, "", self)
+        button_duplicate.setFixedSize(QSize(24, 20))
+        button_duplicate.setToolTip(_("Duplicate mask"))
+        button_duplicate.clicked.connect(self.OnDuplicate)
 
-        button_import = pbtn.PlateButton(
-            self, BTN_IMPORT_MASK, "", BMP_IMPORT, style=button_style, size=wx.Size(24, 20)
-        )
-        button_import.SetToolTip(_("Import mask"))
+        button_import = QPushButton(icon_import, "", self)
+        button_import.setFixedSize(QSize(24, 20))
+        button_import.setToolTip(_("Import mask"))
+        button_import.clicked.connect(self.OnImportMask)
 
-        button_export = pbtn.PlateButton(
-            self, BTN_EXPORT_MASK, "", BMP_EXPORT, style=button_style, size=wx.Size(24, 20)
-        )
-        button_export.SetToolTip(_("Export mask"))
+        button_export = QPushButton(icon_export, "", self)
+        button_export.setFixedSize(QSize(24, 20))
+        button_export.setIconSize(QSize(22, 22))
+        button_export.setToolTip(_("Export mask"))
+        button_export.clicked.connect(self.OnExportMask)
 
-        # Add all controls to gui
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(button_new, 0, wx.GROW | wx.EXPAND | wx.LEFT)
-        sizer.Add(button_remove, 0, wx.GROW | wx.EXPAND)
-        sizer.Add(button_duplicate, 0, wx.GROW | wx.EXPAND)
-        sizer.Add(button_import, 0, wx.GROW | wx.EXPAND)
-        sizer.Add(button_export, 0, wx.GROW | wx.EXPAND)
-        self.SetSizer(sizer)
-        self.Fit()
-        self.Layout()
-
-        # Bindings
-        self.Bind(wx.EVT_BUTTON, self.OnButton)
-
-    def OnButton(self, evt):
-        id = evt.GetId()
-        if id == BTN_NEW:
-            self.OnNew()
-        elif id == BTN_REMOVE:
-            self.OnRemove()
-        elif id == BTN_DUPLICATE:
-            self.OnDuplicate()
-        elif id == BTN_IMPORT_MASK:
-            self.OnImportMask()
-        elif id == BTN_EXPORT_MASK:
-            self.OnExportMask()
+        sizer = QHBoxLayout(self)
+        sizer.setContentsMargins(0, 0, 0, 0)
+        sizer.addWidget(button_new)
+        sizer.addWidget(button_remove)
+        sizer.addWidget(button_duplicate)
+        sizer.addWidget(button_import)
+        sizer.addWidget(button_export)
+        sizer.addStretch()
 
     def OnNew(self):
         dialog = dlg.NewMask()
 
         try:
-            if dialog.ShowModal() == wx.ID_OK:
+            if dialog.exec() == QDialog.DialogCode.Accepted:
                 ok = 1
             else:
                 ok = 0
-        except wx.PyAssertionError:  # TODO FIX: win64
+        except Exception:
             ok = 1
 
         if ok:
             mask_name, thresh, colour = dialog.GetValue()
             if mask_name:
                 Publisher.sendMessage(
-                    "Create new mask", mask_name=mask_name, thresh=thresh, colour=colour
+                    "Create new mask",
+                    mask_name=mask_name,
+                    thresh=thresh,
+                    colour=colour,
                 )
-        dialog.Destroy()
 
     def OnImportMask(self):
         Publisher.sendMessage("Show import mask dialog")
@@ -571,9 +520,7 @@ class ButtonControlPanel(wx.Panel):
 
     def OnRemove(self):
         all_selected_indices = []
-        # Snapshot to avoid "dictionary changed size during iteration"
         categories_snapshot = list(self.parent.categories.values())
-        # First pass: collect selections
         selections = []
         for category_info in categories_snapshot:
             listctrl = category_info["list"]
@@ -581,7 +528,6 @@ class ButtonControlPanel(wx.Panel):
             all_selected_indices.extend(selected)
             if selected:
                 selections.append((listctrl, selected))
-        # Second pass: perform removals (delete highest index first)
         for listctrl, selected in selections:
             listctrl.RemoveMasks(sorted(set(selected), reverse=True))
 
@@ -598,25 +544,31 @@ class ButtonControlPanel(wx.Panel):
             dlg.MaskSelectionRequiredForDuplication()
 
 
-class InvListCtrl(wx.ListCtrl):
-    def __init__(
-        self,
-        parent,
-        ID=-1,
-        pos=wx.DefaultPosition,
-        size=wx.DefaultSize,
-        style=wx.LC_REPORT | wx.LC_EDIT_LABELS,
-    ):
-        wx.ListCtrl.__init__(self, parent, ID, pos, size, style=style)
-        self.__bind_events_wx()
+class InvListCtrl(QTreeWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setRootIsDecorated(False)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.setAllColumnsShowFocus(True)
+        self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 
-    def __bind_events_wx(self):
-        self.Bind(wx.EVT_LEFT_DOWN, self.OnClickItem)
-        self.Bind(wx.EVT_LEFT_DCLICK, self.OnDblClickItem)
+        self._programmatic_update = False
+        self.icon_invisible = None
+        self.icon_visible = None
+        self.image_gray = None
+
+        self.itemClicked.connect(self._on_item_clicked)
+        self.itemDoubleClicked.connect(self._on_item_double_clicked)
+
+    def _load_icons(self):
+        """Load visibility icons and grayscale template."""
+        self.icon_invisible = QIcon(os.path.join(inv_paths.ICON_DIR, "object_invisible.png"))
+        self.icon_visible = QIcon(os.path.join(inv_paths.ICON_DIR, "object_visible.png"))
+        self.image_gray = Image.open(os.path.join(inv_paths.ICON_DIR, "object_colour.png"))
 
     def CreateColourBitmap(self, colour):
         """
-        Create a wx Image with a mask colour.
+        Create a QIcon with a mask colour.
         colour: colour in rgb format(0 - 1)
         """
         image = self.image_gray
@@ -626,33 +578,27 @@ class InvListCtrl(wx.ListCtrl):
                 pixel_colour = [int(i * image.getpixel((x, y))) for i in colour]
                 new_image.putpixel((x, y), tuple(pixel_colour))
 
-        wx_image = wx.Image(new_image.size[0], new_image.size[1])
-        try:
-            wx_image.SetData(new_image.tostring())
-        except Exception:
-            wx_image.SetData(new_image.tobytes())
-        return wx.Bitmap(wx_image.Scale(16, 16))
+        new_image = new_image.resize((16, 16), Image.LANCZOS)
+        data = new_image.tobytes()
+        qimage = QImage(data, 16, 16, 16 * 3, QImage.Format.Format_RGB888)
+        return QIcon(QPixmap.fromImage(qimage.copy()))
 
-    def OnClickItem(self, evt):
-        self._click_check = False
-        item_idx, flag = self.HitTest(evt.GetPosition())
-        if item_idx > -1:
-            column_clicked = self.get_column_clicked(evt.GetPosition())
-            if column_clicked == 0:
-                self._click_check = True
-                item = self.GetItem(item_idx, 0)
-                flag = not bool(item.GetImage())
-                self.SetItemImage(item_idx, int(flag))
-                self.OnCheckItem(item_idx, flag)
-                return
-            elif column_clicked == 1:
-                self.OnChangeColor(item_idx)
-                return
-            elif column_clicked == 5:
-                self.OnChangeTransparency(item_idx)
-                return
-            if evt:
-                evt.Skip()
+    def _on_item_clicked(self, item, column):
+        index = self.indexOfTopLevelItem(item)
+        if index < 0:
+            return
+        if column == 0:
+            visible = not bool(item.data(0, Qt.ItemDataRole.UserRole))
+            self.SetItemImage(index, int(visible))
+            self.OnCheckItem(index, visible)
+        elif column == 1:
+            self.OnChangeColor(index)
+        elif column == 5:
+            self.OnChangeTransparency(index)
+
+    def _on_item_double_clicked(self, item, column):
+        if column == 2:
+            self.editItem(item, 2)
 
     def OnChangeColor(self, item_idx):
         pass
@@ -660,47 +606,27 @@ class InvListCtrl(wx.ListCtrl):
     def OnChangeTransparency(self, item_idx):
         pass
 
-    def OnDblClickItem(self, evt):
-        self._click_check = False
-        item_idx, flag = self.HitTest(evt.GetPosition())
-        if item_idx > -1:
-            column_clicked = self.get_column_clicked(evt.GetPosition())
-            if column_clicked == 2:
-                item = self.GetItem(item_idx, 2)
-                item.SetId(item_idx)
-                self.enter_edition(item)
-                return
-        evt.Skip()
+    def OnCheckItem(self, index, flag):
+        pass
 
-    def enter_edition(self, item):
-        ctrl = self.EditLabel(item.GetId())
-        w, h = ctrl.GetClientSize()
-        w = self.GetColumnWidth(2)
-        ctrl.SetClientSize(w, h)
-        ctrl.SetValue(item.GetText())
-        ctrl.SelectAll()
+    def SetItemImage(self, index, flag):
+        """Set the visibility icon on column 0."""
+        item = self.topLevelItem(index)
+        if item:
+            item.setIcon(0, self.icon_visible if flag else self.icon_invisible)
+            item.setData(0, Qt.ItemDataRole.UserRole, bool(flag))
 
-    def get_column_clicked(self, position):
-        epx, epy = position
-        wpx, wpy = self.GetPosition()
-        width_sum = 0
-        for i in range(self.GetColumnCount()):
-            width_sum += self.GetColumnWidth(i)
-            if (epx - wpx) <= width_sum:
-                return i
-        return -1
+    def GetItemImage(self, index):
+        """Get visibility state: 1=visible, 0=invisible."""
+        item = self.topLevelItem(index)
+        if item:
+            return 1 if item.data(0, Qt.ItemDataRole.UserRole) else 0
+        return 0
 
 
 class MasksListCtrlPanel(InvListCtrl):
-    def __init__(
-        self,
-        parent,
-        ID=-1,
-        pos=wx.DefaultPosition,
-        size=wx.DefaultSize,
-        style=wx.LC_REPORT | wx.LC_EDIT_LABELS,
-    ):
-        super().__init__(parent, ID, pos, size, style=style)
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent)
         self._click_check = False
         self.mask_list_index = {}
         self.current_index = 0
@@ -711,54 +637,63 @@ class MasksListCtrlPanel(InvListCtrl):
         self.__bind_events()
 
     def __bind_events_wx(self):
-        self.Bind(wx.EVT_LIST_END_LABEL_EDIT, self.OnEditLabel)
-        self.Bind(wx.EVT_KEY_UP, self.OnKeyEvent)
-        # TODO: fix right click dropdown menu
-        # self.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK, self.on_mouse_right_click)
-        self.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_selection_changed)
-        self.Bind(wx.EVT_LIST_ITEM_DESELECTED, self.on_selection_changed)
+        self.itemChanged.connect(self._on_item_changed)
+        self.itemSelectionChanged.connect(self.on_selection_changed)
 
     def __bind_events(self):
         Publisher.subscribe(self.OnCloseProject, "Close project data")
 
-    def on_selection_changed(self, evt):
+    def keyPressEvent(self, event):
+        key = event.key()
+        if (sys.platform == "darwin") and (key == Qt.Key.Key_Backspace):
+            self.RemoveMasks()
+        elif key == Qt.Key.Key_Delete:
+            self.RemoveMasks()
+        else:
+            super().keyPressEvent(event)
+
+    def _on_item_changed(self, item, column):
+        if self._programmatic_update:
+            return
+        if column == 2:
+            index = self.indexOfTopLevelItem(item)
+            Publisher.sendMessage("Change mask name", index=index, name=item.text(2))
+
+    def on_selection_changed(self):
         """Handle selection changes in the mask list"""
         if hasattr(self, "category"):
             Publisher.sendMessage("Update mask selection state", category=self.category)
         else:
             print("Selection changed but 'category' attribute not found on self.")
-        if evt:
-            evt.Skip()
 
-    def on_mouse_right_click(self, event):
-        start_idx = 1
-        focused_item = self.GetFocusedItem()
+    def on_mouse_right_click(self, pos):
+        item = self.itemAt(pos)
+        if not item:
+            return
+        focused_item_idx = self.indexOfTopLevelItem(item)
 
-        # Create the context menu and add all the menu items
-        mask_context_menu = wx.Menu()
+        menu = QMenu(self)
 
-        colour_id = mask_context_menu.Append(start_idx, _("Change color"))
-        mask_context_menu.Bind(wx.EVT_MENU, self.change_mask_color, colour_id)
+        action_colour = menu.addAction(_("Change color"))
+        action_colour.triggered.connect(lambda: self.change_mask_color(None))
 
-        duplicate_id = mask_context_menu.Append(start_idx + 1, _("Duplicate"))
-        mask_context_menu.Bind(wx.EVT_MENU, self.duplicate_masks, duplicate_id)
+        action_duplicate = menu.addAction(_("Duplicate"))
+        action_duplicate.triggered.connect(lambda: self.duplicate_masks(None))
 
-        mask_context_menu.AppendSeparator()
+        menu.addSeparator()
 
-        delete_id = mask_context_menu.Append(start_idx + 2, _("Delete"))
-        mask_context_menu.Bind(wx.EVT_MENU, self.delete_mask, delete_id)
+        action_delete = menu.addAction(_("Delete"))
+        action_delete.triggered.connect(lambda: self.delete_mask(None))
 
-        mask_context_menu.AppendSeparator()
+        menu.addSeparator()
 
-        export_id = mask_context_menu.Append(start_idx + 3, _("Export as NIfTI"))
-        mask_context_menu.Bind(wx.EVT_MENU, self.export_mask_nifti, export_id)
+        action_export = menu.addAction(_("Export as NIfTI"))
+        action_export.triggered.connect(lambda: self.export_mask_nifti(None))
 
-        # Select the focused mask and show it in the slice viewer
-        Publisher.sendMessage("Change mask selected", index=focused_item)
-        Publisher.sendMessage("Show mask", index=focused_item, value=True)
+        Publisher.sendMessage("Change mask selected", index=focused_item_idx)
+        Publisher.sendMessage("Show mask", index=focused_item_idx, value=True)
 
-        self.PopupMenu(mask_context_menu)
-        mask_context_menu.Destroy()
+        menu.exec(self.viewport().mapToGlobal(pos))
 
     def update_current_colour(self, colour):
         self.current_colour = colour
@@ -796,7 +731,7 @@ class MasksListCtrlPanel(InvListCtrl):
 
     def delete_mask(self, event):
         result = dlg.ShowConfirmationDialog(msg=_("Delete mask?"))
-        if result != wx.ID_OK:
+        if result != QDialog.DialogCode.Accepted:
             return
         self.RemoveMasks()
 
@@ -804,14 +739,6 @@ class MasksListCtrlPanel(InvListCtrl):
         selected_items = self.GetSelected()
         if selected_items:
             Publisher.sendMessage("Export masks to nifti", mask_indexes=selected_items)
-
-    def OnKeyEvent(self, event):
-        keycode = event.GetKeyCode()
-        # Delete key
-        if (sys.platform == "darwin") and (keycode == wx.WXK_BACK):
-            self.RemoveMasks()
-        elif keycode == wx.WXK_DELETE:
-            self.RemoveMasks()
 
     def RemoveMasks(self, selected_items=None):
         """
@@ -822,20 +749,19 @@ class MasksListCtrlPanel(InvListCtrl):
 
         if selected_items:
             Publisher.sendMessage("Remove masks", mask_indexes=selected_items)
-            wx.CallAfter(Publisher.sendMessage, "Refresh Masks")
+            QTimer.singleShot(0, lambda: Publisher.sendMessage("Refresh Masks"))
         else:
             dlg.MaskSelectionRequiredForRemoval()
 
     def OnCloseProject(self):
-        self.DeleteAllItems()
+        self.clear()
         self.mask_list_index = {}
 
     def OnChangeCurrentMask(self, index):
         try:
             self.SetItemImage(index, 1)
             self.current_index = index
-        except wx.PyAssertionError:
-            # in SetItem(): invalid item index in SetItem
+        except Exception:
             pass
         for local_idx in self.mask_list_index.values():
             if local_idx != index:
@@ -850,51 +776,19 @@ class MasksListCtrlPanel(InvListCtrl):
             self.SetItemImage(self.current_index, 1)
 
     def __init_columns(self):
-        self.InsertColumn(0, "", wx.LIST_FORMAT_CENTER)
-        self.InsertColumn(1, "", wx.LIST_FORMAT_CENTER)
-        self.InsertColumn(2, _("Name"))
-        self.InsertColumn(3, _("Threshold"), wx.LIST_FORMAT_RIGHT)
-
-        self.SetColumnWidth(0, 25)
-        self.SetColumnWidth(1, 25)
-        self.SetColumnWidth(2, 95)
-        self.SetColumnWidth(3, 90)
-
-        # Set tooltip to inform users about color clicking
-        self.SetToolTip(_("Change mask color"))
+        self.setHeaderLabels(["", "", _("Name"), _("Threshold")])
+        self.setColumnWidth(0, 25)
+        self.setColumnWidth(1, 25)
+        self.setColumnWidth(2, 95)
+        self.setColumnWidth(3, 90)
+        self.setToolTip(_("Change mask color"))
 
     def __init_image_list(self):
-        self.imagelist = wx.ImageList(16, 16)
-
-        image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_invisible.png"))
-        bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
-        self.imagelist.Add(bitmap)
-
-        image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_visible.png"))
-        bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
-        self.imagelist.Add(bitmap)
-
-        self.SetImageList(self.imagelist, wx.IMAGE_LIST_SMALL)
-
-        self.image_gray = Image.open(os.path.join(inv_paths.ICON_DIR, "object_colour.png"))
-
-    def OnEditLabel(self, evt):
-        if not evt.IsEditCancelled():
-            index = evt.GetIndex()
-            self.SetItem(index, 2, evt.GetLabel())
-            Publisher.sendMessage("Change mask name", index=evt.GetIndex(), name=evt.GetLabel())
-        evt.Skip()
+        self._load_icons()
 
     def ClearSelection(self):
         """Unselect all items in this list control."""
-        count = self.GetItemCount()
-        for i in range(count):
-            # Clear the SELECTED state bit
-            self.SetItemState(i, 0, wx.LIST_STATE_SELECTED)
+        self.clearSelection()
 
     def OnCheckItem(self, index, flag):
         global_idx = -1
@@ -915,48 +809,58 @@ class MasksListCtrlPanel(InvListCtrl):
 
         Publisher.sendMessage("Show mask", index=global_idx, value=flag)
 
-        # Also trigger selection update since this affects the overall selection state
-        self.on_selection_changed(None)
+        self.on_selection_changed()
 
     def InsertNewItem(self, index=0, label=_("Mask"), threshold="(1000, 4500)", colour=None):
-        image = self.CreateColourBitmap(colour)
-        image_index = self.imagelist.Add(image)
+        colour_icon = self.CreateColourBitmap(colour)
 
-        self.InsertItem(index, "")
-        self.SetItemImage(index, 0)
-        self.SetItem(index, 1, "", imageId=image_index)
-        self.SetItem(index, 2, label)
-        self.SetItem(index, 3, threshold)
-        #  self.SetItemImage(index, 1)
-        #  for key in self.mask_list_index.keys():
-        #  if key != index:
-        #  self.SetItemImage(key, 0)
-        #  self.current_index = index
+        item = QTreeWidgetItem()
+        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+        item.setIcon(0, self.icon_invisible)
+        item.setData(0, Qt.ItemDataRole.UserRole, False)
+        item.setIcon(1, colour_icon)
+        item.setText(2, label)
+        item.setText(3, threshold)
+        item.setTextAlignment(3, Qt.AlignmentFlag.AlignRight)
+
+        self._programmatic_update = True
+        self.insertTopLevelItem(index, item)
+        self._programmatic_update = False
 
     def AddMask(self, mask):
         if mask.index not in self.mask_list_index:
             local_position = len(self.mask_list_index)
             self.mask_list_index[mask.index] = local_position
-            self.InsertNewItem(local_position, mask.name, str(mask.threshold_range), mask.colour)
+            self.InsertNewItem(
+                local_position,
+                mask.name,
+                str(mask.threshold_range),
+                mask.colour,
+            )
 
     def EditMaskThreshold(self, global_mask_id, threshold_range):
         if global_mask_id in self.mask_list_index:
             local_pos = self.mask_list_index[global_mask_id]
             try:
-                if 0 <= local_pos < self.GetItemCount():
-                    self.SetItem(local_pos, 3, str(threshold_range))
-            except wx.wxAssertionError:
-                pass  # ignore assertion errors for invalid indices
+                if 0 <= local_pos < self.topLevelItemCount():
+                    item = self.topLevelItem(local_pos)
+                    if item:
+                        self._programmatic_update = True
+                        item.setText(3, str(threshold_range))
+                        self._programmatic_update = False
+            except Exception:
+                pass
 
     def EditMaskColour(self, global_mask_id, colour):
         if global_mask_id in self.mask_list_index:
             local_pos = self.mask_list_index[global_mask_id]
             try:
-                if 0 <= local_pos < self.GetItemCount():
-                    self.imagelist.Replace(local_pos + 2, self.CreateColourBitmap(colour))
-                    self.RefreshItem(local_pos)
-            except wx.wxAssertionError:
-                pass  # ignore assertion errors for invalid indices
+                if 0 <= local_pos < self.topLevelItemCount():
+                    item = self.topLevelItem(local_pos)
+                    if item:
+                        item.setIcon(1, self.CreateColourBitmap(colour))
+            except Exception:
+                pass
 
     def GetSelected(self):
         """
@@ -964,7 +868,8 @@ class MasksListCtrlPanel(InvListCtrl):
         """
         selected = []
         for global_mask_id, local_pos in self.mask_list_index.items():
-            if self.IsSelected(local_pos):
+            item = self.topLevelItem(local_pos)
+            if item and item.isSelected():
                 selected.append(global_mask_id)
         selected.sort(reverse=True)
         return selected
@@ -972,16 +877,16 @@ class MasksListCtrlPanel(InvListCtrl):
 
 # -------------------------------------------------
 # -------------------------------------------------
-class SurfacePage(wx.Panel):
+class SurfacePage(QWidget):
     """
     Page related to surface items.
     """
 
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
         self.categories = {}
-        self.sizer = wx.BoxSizer(wx.VERTICAL)
-        self.SetSizer(self.sizer)
+        self.sizer = QVBoxLayout(self)
+        self.sizer.setContentsMargins(0, 0, 0, 0)
 
         self.__init_gui()
 
@@ -996,70 +901,68 @@ class SurfacePage(wx.Panel):
         Publisher.subscribe(self.update_select_all_checkbox, "Update surface select all checkbox")
 
     def __init_gui(self):
-        # button control with tools (eg. remove, add new, etc)
         self.buttonctrl = SurfaceButtonControlPanel(self)
 
-        # Create scrolled panel for categories
-        self.scroll_panel = scrolled.ScrolledPanel(self)
-        self.scroll_panel.SetupScrolling()
+        self.scroll_area = QScrollArea(self)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_widget = QWidget()
+        self.scroll_layout = QVBoxLayout(self.scroll_widget)
+        self.scroll_layout.setContentsMargins(2, 2, 2, 2)
+        self.scroll_layout.addStretch()
+        self.scroll_area.setWidget(self.scroll_widget)
 
-        # Sizer for scrollable content
-        self.scroll_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.scroll_panel.SetSizer(self.scroll_sizer)
-
-        self.sizer.Add(self.scroll_panel, 1, wx.EXPAND | wx.ALL, 2)
-        self.sizer.Add(self.buttonctrl, 0, wx.EXPAND | wx.TOP, 2)
+        self.sizer.addWidget(self.scroll_area, 1)
+        self.sizer.addWidget(self.buttonctrl, 0)
 
         self.create_category("General")
 
     def create_category_header(self, parent, category):
         """Create header panel with category controls"""
-        header_panel = wx.Panel(parent)
-        header_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        header_panel = QWidget(parent)
+        header_layout = QHBoxLayout(header_panel)
+        header_layout.setContentsMargins(2, 0, 2, 0)
 
-        expand_btn = wx.Button(header_panel, size=(20, 20), label="▼")
-        expand_btn.Bind(wx.EVT_BUTTON, lambda evt: self.toggle_category_expansion(category))
-
-        # Category label
-        category_label = wx.StaticText(header_panel, label=category)
-        category_label.SetFont(category_label.GetFont().Bold())
-
-        # Create image list for visibility icons
-        visibility_imagelist = wx.ImageList(16, 16)
-        invisible_image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_invisible.png"))
-        invisible_bitmap = wx.Bitmap(invisible_image.Scale(16, 16))
-        visible_image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_visible.png"))
-        visible_bitmap = wx.Bitmap(visible_image.Scale(16, 16))
-        visibility_imagelist.Add(invisible_bitmap)
-        visibility_imagelist.Add(visible_bitmap)
-
-        # Visibility toggle button with icon
-        visibility_btn = wx.BitmapButton(header_panel, size=(24, 24))
-        visibility_btn.SetBitmap(visible_bitmap)
-        visibility_btn.SetToolTip("Toggle visibility for all surfaces in this category")
-        visibility_btn.Bind(wx.EVT_BUTTON, lambda evt: self.on_category_visibility_toggle(category))
-
-        # Select all checkbox
-        select_all_cb = wx.CheckBox(header_panel, label="", style=wx.CHK_3STATE)
-        select_all_cb.SetToolTip("Select/Unselect all surfaces in this category")
-        select_all_cb.Bind(
-            wx.EVT_CHECKBOX, lambda evt: self.on_category_select_all(category, evt.IsChecked())
+        expand_btn = QPushButton("\u25bc", header_panel)
+        expand_btn.setFixedSize(20, 20)
+        expand_btn.clicked.connect(
+            lambda checked, cat=category: self.toggle_category_expansion(cat)
         )
 
-        header_sizer.Add(expand_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 2)
-        header_sizer.Add(category_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
-        header_sizer.Add(visibility_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 2)
-        header_sizer.Add(select_all_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        category_label = QLabel(category, header_panel)
+        font = category_label.font()
+        font.setBold(True)
+        category_label.setFont(font)
 
-        header_panel.SetSizer(header_sizer)
+        invisible_icon = QIcon(os.path.join(inv_paths.ICON_DIR, "object_invisible.png"))
+        visible_icon = QIcon(os.path.join(inv_paths.ICON_DIR, "object_visible.png"))
+
+        visibility_btn = QPushButton(header_panel)
+        visibility_btn.setFixedSize(24, 24)
+        visibility_btn.setIcon(visible_icon)
+        visibility_btn.setToolTip("Toggle visibility for all surfaces in this category")
+        visibility_btn.clicked.connect(
+            lambda checked, cat=category: self.on_category_visibility_toggle(cat)
+        )
+
+        select_all_cb = QCheckBox("", header_panel)
+        select_all_cb.setTristate(True)
+        select_all_cb.setToolTip("Select/Unselect all surfaces in this category")
+        select_all_cb.clicked.connect(
+            lambda checked, cat=category: self.on_category_select_all(cat, checked)
+        )
+
+        header_layout.addWidget(expand_btn)
+        header_layout.addWidget(category_label, 1)
+        header_layout.addWidget(visibility_btn)
+        header_layout.addWidget(select_all_cb)
 
         return (
             header_panel,
             expand_btn,
             visibility_btn,
             select_all_cb,
-            invisible_bitmap,
-            visible_bitmap,
+            invisible_icon,
+            visible_icon,
         )
 
     def create_category(self, category):
@@ -1068,17 +971,16 @@ class SurfacePage(wx.Panel):
             expand_btn,
             visibility_btn,
             select_all_cb,
-            invisible_bitmap,
-            visible_bitmap,
-        ) = self.create_category_header(self.scroll_panel, category)
+            invisible_icon,
+            visible_icon,
+        ) = self.create_category_header(self.scroll_widget, category)
 
-        content_panel = wx.Panel(self.scroll_panel)
-        listctrl = SurfacesListCtrlPanel(content_panel, size=wx.Size(256, 100), category=category)
-        content_sizer = wx.BoxSizer(wx.VERTICAL)
-        content_sizer.Add(listctrl, 1, wx.EXPAND)
-        content_panel.SetSizer(content_sizer)
+        content_panel = QWidget(self.scroll_widget)
+        listctrl = SurfacesListCtrlPanel(content_panel, category=category)
+        content_layout = QVBoxLayout(content_panel)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.addWidget(listctrl)
 
-        # Store references
         self.categories[category] = {
             "header": header_panel,
             "content": content_panel,
@@ -1086,13 +988,15 @@ class SurfacePage(wx.Panel):
             "visibility_btn": visibility_btn,
             "select_all_cb": select_all_cb,
             "list": listctrl,
-            "invisible_bitmap": invisible_bitmap,
-            "visible_bitmap": visible_bitmap,
+            "invisible_icon": invisible_icon,
+            "visible_icon": visible_icon,
             "expanded": True,
         }
 
-        self.scroll_sizer.Add(header_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 2)
-        self.scroll_sizer.Add(content_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 2)
+        stretch_item = self.scroll_layout.takeAt(self.scroll_layout.count() - 1)
+        self.scroll_layout.addWidget(header_panel)
+        self.scroll_layout.addWidget(content_panel)
+        self.scroll_layout.addStretch()
 
         return listctrl
 
@@ -1106,12 +1010,12 @@ class SurfacePage(wx.Panel):
         is_expanded = category_info["expanded"]
 
         if is_expanded:
-            content_panel.Hide()
-            expand_btn.SetLabel("▶")
+            content_panel.hide()
+            expand_btn.setText("\u25b6")
             self.categories[category]["expanded"] = False
         else:
-            content_panel.Show()
-            expand_btn.SetLabel("▼")
+            content_panel.show()
+            expand_btn.setText("\u25bc")
             self.categories[category]["expanded"] = True
 
         self.update_scroll_layout()
@@ -1123,31 +1027,29 @@ class SurfacePage(wx.Panel):
 
         listctrl = self.categories[category]["list"]
         visibility_btn = self.categories[category]["visibility_btn"]
-        invisible_bitmap = self.categories[category]["invisible_bitmap"]
-        visible_bitmap = self.categories[category]["visible_bitmap"]
+        invisible_icon = self.categories[category]["invisible_icon"]
+        visible_icon = self.categories[category]["visible_icon"]
 
         is_visible = False
         for local_pos in listctrl.surface_list_index.values():
-            try:
-                item = listctrl.GetItem(local_pos, 0)
-                if item.GetImage() == 1:  # 1 = visible
-                    is_visible = True
-                    break
-            except wx.wxAssertionError:
-                continue
+            item = listctrl.topLevelItem(local_pos)
+            if item and item.data(0, Qt.ItemDataRole.UserRole):
+                is_visible = True
+                break
 
+        new_visibility = not is_visible
         for global_surface_id, local_pos in listctrl.surface_list_index.items():
-            new_visibility = not is_visible
             listctrl.SetItemImage(local_pos, int(new_visibility))
             Publisher.sendMessage(
-                "Show surface", index=global_surface_id, visibility=new_visibility
+                "Show surface",
+                index=global_surface_id,
+                visibility=new_visibility,
             )
 
-        # Update the button icon based on the new visibility state
         if new_visibility:
-            visibility_btn.SetBitmap(visible_bitmap)
+            visibility_btn.setIcon(visible_icon)
         else:
-            visibility_btn.SetBitmap(invisible_bitmap)
+            visibility_btn.setIcon(invisible_icon)
 
     def on_category_select_all(self, category, select_all):
         """Select or unselect all surfaces in the given category"""
@@ -1157,10 +1059,9 @@ class SurfacePage(wx.Panel):
         listctrl = self.categories[category]["list"]
 
         for local_pos in listctrl.surface_list_index.values():
-            if select_all:
-                listctrl.SetItemState(local_pos, wx.LIST_STATE_SELECTED, wx.LIST_STATE_SELECTED)
-            else:
-                listctrl.SetItemState(local_pos, 0, wx.LIST_STATE_SELECTED)
+            item = listctrl.topLevelItem(local_pos)
+            if item:
+                item.setSelected(select_all)
 
     def update_select_all_checkbox(self, category):
         """Update the select all checkbox state based on current selection"""
@@ -1172,17 +1073,17 @@ class SurfacePage(wx.Panel):
 
         total_items = len(listctrl.surface_list_index)
         if total_items == 0:
-            select_all_cb.Set3StateValue(wx.CHK_UNCHECKED)
+            select_all_cb.setCheckState(Qt.CheckState.Unchecked)
             return
 
         selected_items = len(listctrl.GetSelected())
 
         if selected_items == 0:
-            select_all_cb.Set3StateValue(wx.CHK_UNCHECKED)
+            select_all_cb.setCheckState(Qt.CheckState.Unchecked)
         elif selected_items == total_items:
-            select_all_cb.Set3StateValue(wx.CHK_CHECKED)
+            select_all_cb.setCheckState(Qt.CheckState.Checked)
         else:
-            select_all_cb.Set3StateValue(wx.CHK_UNDETERMINED)
+            select_all_cb.setCheckState(Qt.CheckState.PartiallyChecked)
 
     def _update_visibility_button_icon(self, category):
         """Update the visibility button icon based on current visibility state"""
@@ -1191,25 +1092,20 @@ class SurfacePage(wx.Panel):
 
         listctrl = self.categories[category]["list"]
         visibility_btn = self.categories[category]["visibility_btn"]
-        invisible_bitmap = self.categories[category]["invisible_bitmap"]
-        visible_bitmap = self.categories[category]["visible_bitmap"]
+        invisible_icon = self.categories[category]["invisible_icon"]
+        visible_icon = self.categories[category]["visible_icon"]
 
-        # Check if any items are visible
         any_visible = False
         for local_pos in listctrl.surface_list_index.values():
-            try:
-                item = listctrl.GetItem(local_pos, 0)
-                if item.GetImage() == 1:  # 1 = visible
-                    any_visible = True
-                    break
-            except wx.wxAssertionError:
-                continue
+            item = listctrl.topLevelItem(local_pos)
+            if item and item.data(0, Qt.ItemDataRole.UserRole):
+                any_visible = True
+                break
 
-        # Update button icon
         if any_visible:
-            visibility_btn.SetBitmap(visible_bitmap)
+            visibility_btn.setIcon(visible_icon)
         else:
-            visibility_btn.SetBitmap(invisible_bitmap)
+            visibility_btn.setIcon(invisible_icon)
 
     def AddSurface(self, surface):
         category = getattr(surface, "category", "General")
@@ -1220,12 +1116,19 @@ class SurfacePage(wx.Panel):
         self.update_scroll_layout()
         self.update_select_all_checkbox(category)
 
-        # Update visibility button icon
         self._update_visibility_button_icon(category)
 
     def RepopulateSurfaces(self, clear_project=False):
-        # Properly destroy all components and clear sizer
-        self.scroll_sizer.Clear(delete_windows=True)
+        old_widget = self.scroll_area.takeWidget()
+        if old_widget:
+            old_widget.deleteLater()
+
+        self.scroll_widget = QWidget()
+        self.scroll_layout = QVBoxLayout(self.scroll_widget)
+        self.scroll_layout.setContentsMargins(2, 2, 2, 2)
+        self.scroll_layout.addStretch()
+        self.scroll_area.setWidget(self.scroll_widget)
+
         self.categories.clear()
 
         if not clear_project:
@@ -1235,7 +1138,6 @@ class SurfacePage(wx.Panel):
                 surface = surface_dict[i]
                 self.AddSurface(surface)
         else:
-            # Just create an empty General category for clean state
             self.create_category("General")
 
         self.update_scroll_layout()
@@ -1245,11 +1147,8 @@ class SurfacePage(wx.Panel):
 
     def update_scroll_layout(self):
         """Update scroll panel layout"""
-        self.scroll_sizer.Layout()
-        min_size = self.scroll_sizer.GetMinSize()
-        self.scroll_panel.SetVirtualSize(min_size)
-        self.scroll_panel.FitInside()
-        self.Layout()
+        self.scroll_widget.updateGeometry()
+        self.scroll_widget.adjustSize()
 
     def OnCloseProject(self):
         self.RepopulateSurfaces(clear_project=True)
@@ -1294,91 +1193,73 @@ class SurfacePage(wx.Panel):
                     Publisher.sendMessage("Show surface", index=key, visibility=show)
 
 
-class SurfaceButtonControlPanel(wx.Panel):
+class SurfaceButtonControlPanel(QWidget):
     """
     Button control panel that includes data notebook operations.
     TODO: Enhace interface with parent class - it is really messed up
     """
 
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, pos=wx.Point(0, 50), size=wx.Size(256, 22))
+        super().__init__(parent)
         self.parent = parent
         self.__init_gui()
 
     def __init_gui(self):
-        # Bitmaps to be used in plate buttons
-        BMP_NEW = wx.Bitmap(os.path.join(inv_paths.ICON_DIR, "data_new.png"), wx.BITMAP_TYPE_PNG)
-        BMP_REMOVE = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "data_remove.png"), wx.BITMAP_TYPE_PNG
-        )
-        BMP_DUPLICATE = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "data_duplicate.png"), wx.BITMAP_TYPE_PNG
-        )
-        BMP_OPEN = wx.Bitmap(os.path.join(inv_paths.ICON_DIR, "load_mesh.png"), wx.BITMAP_TYPE_PNG)
+        icon_new = QIcon(os.path.join(inv_paths.ICON_DIR, "data_new.png"))
+        icon_remove = QIcon(os.path.join(inv_paths.ICON_DIR, "data_remove.png"))
+        icon_duplicate = QIcon(os.path.join(inv_paths.ICON_DIR, "data_duplicate.png"))
+        icon_open = QIcon(os.path.join(inv_paths.ICON_DIR, "load_mesh.png"))
 
-        # Plate buttons based on previous bitmaps
-        button_style = pbtn.PB_STYLE_SQUARE | pbtn.PB_STYLE_DEFAULT
-        button_new = pbtn.PlateButton(
-            self, BTN_NEW, "", BMP_NEW, style=button_style, size=wx.Size(24, 20)
-        )
-        button_new.SetToolTip(_("Create a new surface"))
+        button_new = QPushButton(icon_new, "", self)
+        button_new.setFixedSize(QSize(24, 20))
+        button_new.setToolTip(_("Create a new surface"))
+        button_new.clicked.connect(self.OnNew)
 
-        button_remove = pbtn.PlateButton(
-            self, BTN_REMOVE, "", BMP_REMOVE, style=button_style, size=wx.Size(24, 20)
-        )
-        button_remove.SetToolTip(_("Remove surface"))
+        button_remove = QPushButton(icon_remove, "", self)
+        button_remove.setFixedSize(QSize(24, 20))
+        button_remove.setToolTip(_("Remove surface"))
+        button_remove.clicked.connect(self.OnRemove)
 
-        button_duplicate = pbtn.PlateButton(
-            self, BTN_DUPLICATE, "", BMP_DUPLICATE, style=button_style, size=wx.Size(24, 20)
-        )
-        button_duplicate.SetToolTip(_("Duplicate surface"))
+        button_duplicate = QPushButton(icon_duplicate, "", self)
+        button_duplicate.setFixedSize(QSize(24, 20))
+        button_duplicate.setToolTip(_("Duplicate surface"))
+        button_duplicate.clicked.connect(self.OnDuplicate)
 
-        button_open = pbtn.PlateButton(
-            self, BTN_OPEN, "", BMP_OPEN, style=button_style, size=wx.Size(24, 20)
-        )
-        button_open.SetToolTip(_("Import a surface file into InVesalius"))
+        button_open = QPushButton(icon_open, "", self)
+        button_open.setFixedSize(QSize(24, 20))
+        button_open.setToolTip(_("Import a surface file into InVesalius"))
+        button_open.clicked.connect(self.OnOpenMesh)
 
-        # Add all controls to gui
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(button_new, 0, wx.GROW | wx.EXPAND | wx.LEFT)
-        sizer.Add(button_remove, 0, wx.GROW | wx.EXPAND)
-        sizer.Add(button_duplicate, 0, wx.GROW | wx.EXPAND)
-        sizer.Add(button_open, 0, wx.GROW | wx.EXPAND)
-        self.SetSizer(sizer)
-        self.Fit()
-
-        # Bindings
-        self.Bind(wx.EVT_BUTTON, self.OnButton)
-
-    def OnButton(self, evt):
-        id = evt.GetId()
-        if id == BTN_NEW:
-            self.OnNew()
-        elif id == BTN_REMOVE:
-            self.OnRemove()
-        elif id == BTN_DUPLICATE:
-            self.OnDuplicate()
-        elif id == BTN_OPEN:
-            self.OnOpenMesh()
+        sizer = QHBoxLayout(self)
+        sizer.setContentsMargins(0, 0, 0, 0)
+        sizer.addWidget(button_new)
+        sizer.addWidget(button_remove)
+        sizer.addWidget(button_duplicate)
+        sizer.addWidget(button_open)
+        sizer.addStretch()
 
     def OnNew(self):
         sl = slice_.Slice()
         dialog = dlg.SurfaceCreationDialog(
-            None, -1, _("New surface"), mask_edited=sl.current_mask.was_edited
+            None,
+            -1,
+            _("New surface"),
+            mask_edited=sl.current_mask.was_edited,
         )
         try:
-            if dialog.ShowModal() == wx.ID_OK:
+            if dialog.exec() == QDialog.DialogCode.Accepted:
                 ok = 1
             else:
                 ok = 0
-        except wx.PyAssertionError:  # TODO FIX: win64
+        except Exception:
             ok = 1
 
         if ok:
             surface_options = dialog.GetValue()
-
-            Publisher.sendMessage("Create surface from index", surface_parameters=surface_options)
-        dialog.Destroy()
+            Publisher.sendMessage(
+                "Create surface from index",
+                surface_parameters=surface_options,
+            )
 
     def OnRemove(self):
         all_selected_indices = []
@@ -1408,16 +1289,8 @@ class SurfaceButtonControlPanel(wx.Panel):
 
 
 class SurfacesListCtrlPanel(InvListCtrl):
-    def __init__(
-        self,
-        parent,
-        ID=-1,
-        pos=wx.DefaultPosition,
-        size=wx.DefaultSize,
-        style=wx.LC_REPORT | wx.LC_EDIT_LABELS,
-        category="General",
-    ):
-        super().__init__(parent, ID, pos, size, style=style)
+    def __init__(self, parent, category="General", **kwargs):
+        super().__init__(parent)
         self._click_check = False
         self.category = category
         self.__init_columns()
@@ -1425,7 +1298,6 @@ class SurfacesListCtrlPanel(InvListCtrl):
         self.__init_evt()
         self.__bind_events_wx()
 
-        # Color of the currently selected surface when opening context menu, default is white
         self.current_color = [255, 255, 255]
         self.current_transparency = 0
         self.surface_list_index = {}
@@ -1435,43 +1307,55 @@ class SurfacesListCtrlPanel(InvListCtrl):
         pass
 
     def __bind_events_wx(self):
-        self.Bind(wx.EVT_LIST_END_LABEL_EDIT, self.OnEditLabel)
-        self.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_selection_changed)
-        self.Bind(wx.EVT_LIST_ITEM_DESELECTED, self.on_selection_changed)
-        self.Bind(wx.EVT_KEY_UP, self.OnKeyEvent)
-        self.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK, self.on_mouse_right_click)
+        self.itemChanged.connect(self._on_item_changed)
+        self.itemSelectionChanged.connect(self.on_selection_changed)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.on_mouse_right_click)
 
-    def on_selection_changed(self, evt):
+    def keyPressEvent(self, event):
+        key = event.key()
+        if (sys.platform == "darwin") and (key == Qt.Key.Key_Backspace):
+            self.RemoveSurfaces()
+        elif key == Qt.Key.Key_Delete:
+            self.RemoveSurfaces()
+        else:
+            super().keyPressEvent(event)
+
+    def _on_item_changed(self, item, column):
+        if self._programmatic_update:
+            return
+        if column == 2:
+            index = self.indexOfTopLevelItem(item)
+            Publisher.sendMessage("Change surface name", index=index, name=item.text(2))
+
+    def on_selection_changed(self):
         Publisher.sendMessage("Update surface select all checkbox", category=self.category)
-        if evt:
-            evt.Skip()
 
-    def on_mouse_right_click(self, event):
-        start_idx = 1
-        focused_idx = self.GetFocusedItem()
+    def on_mouse_right_click(self, pos):
+        item = self.itemAt(pos)
+        if not item:
+            return
+        focused_idx = self.indexOfTopLevelItem(item)
 
-        # Select the surface that was clicked
         Publisher.sendMessage("Change surface selected", surface_index=focused_idx)
 
-        # Create the context menu and add all the menu items
-        surface_context_menu = wx.Menu()
+        menu = QMenu(self)
 
-        colour_id = surface_context_menu.Append(start_idx, _("Change color"))
-        surface_context_menu.Bind(wx.EVT_MENU, self.change_surface_color, colour_id)
+        action_colour = menu.addAction(_("Change color"))
+        action_colour.triggered.connect(lambda: self.change_surface_color(None))
 
-        transparency_id = surface_context_menu.Append(start_idx + 1, _("Change transparency"))
-        surface_context_menu.Bind(wx.EVT_MENU, self.change_transparency, transparency_id)
+        action_transparency = menu.addAction(_("Change transparency"))
+        action_transparency.triggered.connect(lambda: self.change_transparency(None))
 
-        duplicate_id = surface_context_menu.Append(start_idx + 2, _("Duplicate"))
-        surface_context_menu.Bind(wx.EVT_MENU, self.duplicate_surface, duplicate_id)
+        action_duplicate = menu.addAction(_("Duplicate"))
+        action_duplicate.triggered.connect(lambda: self.duplicate_surface(None))
 
-        surface_context_menu.AppendSeparator()
+        menu.addSeparator()
 
-        delete_id = surface_context_menu.Append(start_idx + 3, _("Delete"))
-        surface_context_menu.Bind(wx.EVT_MENU, self.delete_surface, delete_id)
+        action_delete = menu.addAction(_("Delete"))
+        action_delete.triggered.connect(lambda: self.delete_surface(None))
 
-        self.PopupMenu(surface_context_menu)
-        surface_context_menu.Destroy()
+        menu.exec(self.viewport().mapToGlobal(pos))
 
     def update_current_surface_data(self, surface):
         self.current_color = [int(255 * c) for c in surface.colour][:3]
@@ -1491,7 +1375,8 @@ class SurfacesListCtrlPanel(InvListCtrl):
         self.change_surface_color(None)
 
     def change_surface_color(self, event):
-        focused_idx = self.GetFocusedItem()
+        current_item = self.currentItem()
+        focused_idx = self.indexOfTopLevelItem(current_item) if current_item else -1
         current_color = self.current_color
 
         new_color = dlg.ShowColorDialog(color_current=current_color)
@@ -1501,7 +1386,11 @@ class SurfacesListCtrlPanel(InvListCtrl):
 
         new_vtk_color = [c / 255.0 for c in new_color]
 
-        Publisher.sendMessage("Set surface colour", surface_index=focused_idx, colour=new_vtk_color)
+        Publisher.sendMessage(
+            "Set surface colour",
+            surface_index=focused_idx,
+            colour=new_vtk_color,
+        )
 
         Publisher.sendMessage("Change surface selected", surface_index=focused_idx)
 
@@ -1519,7 +1408,8 @@ class SurfacesListCtrlPanel(InvListCtrl):
         self.change_transparency(None)
 
     def change_transparency(self, event):
-        focused_idx = self.GetFocusedItem()
+        current_item = self.currentItem()
+        focused_idx = self.indexOfTopLevelItem(current_item) if current_item else -1
         initial_value = self.current_transparency
 
         transparency_dialog = dlg.SurfaceTransparencyDialog(
@@ -1528,15 +1418,15 @@ class SurfacesListCtrlPanel(InvListCtrl):
             transparency=initial_value,
         )
 
-        if transparency_dialog.ShowModal() == wx.ID_OK:
+        if transparency_dialog.exec() == QDialog.DialogCode.Accepted:
             new_value = transparency_dialog.get_value()
         else:
             new_value = initial_value
 
-        transparency_dialog.Destroy()
-
         Publisher.sendMessage(
-            "Set surface transparency", surface_index=focused_idx, transparency=new_value / 100.0
+            "Set surface transparency",
+            surface_index=focused_idx,
+            transparency=new_value / 100.0,
         )
 
         Publisher.sendMessage("Change surface selected", surface_index=focused_idx)
@@ -1550,17 +1440,9 @@ class SurfacesListCtrlPanel(InvListCtrl):
 
     def delete_surface(self, event):
         result = dlg.ShowConfirmationDialog(msg=_("Delete surface?"))
-        if result != wx.ID_OK:
+        if result != QDialog.DialogCode.Accepted:
             return
         self.RemoveSurfaces()
-
-    def OnKeyEvent(self, event):
-        keycode = event.GetKeyCode()
-        # Delete key
-        if (sys.platform == "darwin") and (keycode == wx.WXK_BACK):
-            self.RemoveSurfaces()
-        elif keycode == wx.WXK_DELETE:
-            self.RemoveSurfaces()
 
     def RemoveSurfaces(self, selected_items=None):
         """
@@ -1576,18 +1458,12 @@ class SurfacesListCtrlPanel(InvListCtrl):
             dlg.SurfaceSelectionRequiredForRemoval()
 
     def OnCloseProject(self):
-        self.DeleteAllItems()
+        self.clear()
         self.surface_list_index = {}
         self.surface_bmp_idx_to_name = {}
 
     def OnItemSelected_(self, evt):
-        # Note: DON'T rename to OnItemSelected!!!
-        # Otherwise the parent's method will be overwritten and other
-        # things will stop working, e.g.: OnCheckItem
-
-        # last_surface_index = evt.Index
-        # Publisher.sendMessage('Change measurement selected', last_index)
-        evt.Skip()
+        pass
 
     def GetSelected(self):
         """
@@ -1595,57 +1471,32 @@ class SurfacesListCtrlPanel(InvListCtrl):
         """
         selected = []
         for global_surface_id, local_pos in self.surface_list_index.items():
-            if self.IsSelected(local_pos):
+            item = self.topLevelItem(local_pos)
+            if item and item.isSelected():
                 selected.append(global_surface_id)
         selected.sort(reverse=True)
         return selected
 
     def __init_columns(self):
-        self.InsertColumn(0, "", wx.LIST_FORMAT_CENTER)
-        self.InsertColumn(1, "", wx.LIST_FORMAT_CENTER)
-        self.InsertColumn(2, _("Name"))
-        self.InsertColumn(3, _("Volume (mm³)"))
-        self.InsertColumn(4, _("Area (mm²)"))
-        self.InsertColumn(5, _("Transparency"), wx.LIST_FORMAT_RIGHT)
-
-        self.SetColumnWidth(0, 25)
-        self.SetColumnWidth(1, 25)
-        self.SetColumnWidth(2, 85)
-        self.SetColumnWidth(3, 85)
-        self.SetColumnWidth(4, 85)
-        self.SetColumnWidth(5, 80)
+        self.setHeaderLabels(
+            [
+                "",
+                "",
+                _("Name"),
+                _("Volume (mm\u00b3)"),
+                _("Area (mm\u00b2)"),
+                _("Transparency"),
+            ]
+        )
+        self.setColumnWidth(0, 25)
+        self.setColumnWidth(1, 25)
+        self.setColumnWidth(2, 85)
+        self.setColumnWidth(3, 85)
+        self.setColumnWidth(4, 85)
+        self.setColumnWidth(5, 80)
 
     def __init_image_list(self):
-        self.imagelist = wx.ImageList(16, 16)
-
-        image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_invisible.png"))
-        bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
-        self.imagelist.Add(bitmap)
-
-        image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_visible.png"))
-        bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
-        self.imagelist.Add(bitmap)
-
-        self.SetImageList(self.imagelist, wx.IMAGE_LIST_SMALL)
-
-        self.image_gray = Image.open(os.path.join(inv_paths.ICON_DIR, "object_colour.png"))
-
-    def OnBeginLabelEdit(self, evt):
-        if evt.GetColumn() == 1:
-            evt.Skip()
-        else:
-            evt.Veto()
-
-    def OnEditLabel(self, evt):
-        if not evt.IsEditCancelled():
-            index = evt.GetIndex()
-            self.SetItem(index, 2, evt.GetLabel())
-            Publisher.sendMessage("Change surface name", index=evt.GetIndex(), name=evt.GetLabel())
-        evt.Skip()
+        self._load_icons()
 
     def OnCheckItem(self, index, flag):
         global_idx = -1
@@ -1668,14 +1519,19 @@ class SurfacesListCtrlPanel(InvListCtrl):
         transparency = f"{int(100 * surface.transparency)}%"
 
         if index not in self.surface_list_index:
-            image = self.CreateColourBitmap(colour)
-            image_index = self.imagelist.Add(image)
+            colour_icon = self.CreateColourBitmap(colour)
 
-            local_position = self.GetItemCount()
+            local_position = self.topLevelItemCount()
             self.surface_list_index[index] = local_position
 
             self.InsertNewItem(
-                local_position, name, volume, area, transparency, colour, image_index
+                local_position,
+                name,
+                volume,
+                area,
+                transparency,
+                colour,
+                colour_icon,
             )
         else:
             local_position = self.surface_list_index[index]
@@ -1689,16 +1545,23 @@ class SurfacesListCtrlPanel(InvListCtrl):
         area="0 mm2",
         transparency="0%%",
         colour=None,
-        image_index=0,
+        colour_icon=None,
     ):
-        self.InsertItem(index, "")
-        self.SetItemImage(index, 1)
-        self.SetItem(index, 1, "", imageId=image_index)
-        self.SetItem(index, 2, label)
-        self.SetItem(index, 3, volume)
-        self.SetItem(index, 4, area)
-        self.SetItem(index, 5, transparency)
-        self.SetItemImage(index, 1)
+        item = QTreeWidgetItem()
+        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+        item.setIcon(0, self.icon_visible)
+        item.setData(0, Qt.ItemDataRole.UserRole, True)
+        if colour_icon:
+            item.setIcon(1, colour_icon)
+        item.setText(2, label)
+        item.setText(3, volume)
+        item.setText(4, area)
+        item.setText(5, transparency)
+        item.setTextAlignment(5, Qt.AlignmentFlag.AlignRight)
+
+        self._programmatic_update = True
+        self.insertTopLevelItem(index, item)
+        self._programmatic_update = False
 
     def UpdateItemInfo(
         self,
@@ -1709,26 +1572,31 @@ class SurfacesListCtrlPanel(InvListCtrl):
         transparency="0%%",
         colour=None,
     ):
-        self.SetItem(index, 2, label)
-        self.SetItem(index, 3, volume)
-        self.SetItem(index, 4, area)
-        self.SetItem(index, 5, transparency)
-        self.SetItemImage(index, 1)
+        item = self.topLevelItem(index)
+        if item:
+            self._programmatic_update = True
+            item.setText(2, label)
+            item.setText(3, volume)
+            item.setText(4, area)
+            item.setText(5, transparency)
+            self._programmatic_update = False
+            self.SetItemImage(index, 1)
 
     def EditSurfaceTransparency(self, surface_index, transparency):
         if surface_index in self.surface_list_index:
             local_pos = self.surface_list_index[surface_index]
-            self.SetItem(local_pos, 5, f"{int(transparency * 100)}%")
+            item = self.topLevelItem(local_pos)
+            if item:
+                self._programmatic_update = True
+                item.setText(5, f"{int(transparency * 100)}%")
+                self._programmatic_update = False
 
     def EditSurfaceColour(self, surface_index, colour):
         if surface_index in self.surface_list_index:
             local_pos = self.surface_list_index[surface_index]
-            image = self.CreateColourBitmap(colour)
-            item = self.GetItem(local_pos, 1)
-            image_index = item.GetImage()
-            if image_index != -1:
-                self.imagelist.Replace(image_index, image)
-                self.RefreshItem(local_pos)
+            item = self.topLevelItem(local_pos)
+            if item:
+                item.setIcon(1, self.CreateColourBitmap(colour))
 
 
 # -------------------------------------------------
@@ -1736,15 +1604,8 @@ class SurfacesListCtrlPanel(InvListCtrl):
 
 
 class MeasuresListCtrlPanel(InvListCtrl):
-    def __init__(
-        self,
-        parent,
-        ID=-1,
-        pos=wx.DefaultPosition,
-        size=wx.DefaultSize,
-        style=wx.LC_REPORT | wx.LC_EDIT_LABELS,
-    ):
-        super().__init__(parent, ID, pos, size, style=style)
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent)
         self._click_check = False
         self.__init_columns()
         self.__init_image_list()
@@ -1763,21 +1624,28 @@ class MeasuresListCtrlPanel(InvListCtrl):
         Publisher.subscribe(self.OnRemoveGUIMeasure, "Remove GUI measurement")
 
     def __bind_events_wx(self):
-        self.Bind(wx.EVT_LIST_END_LABEL_EDIT, self.OnEditLabel)
-        self.Bind(wx.EVT_LIST_ITEM_SELECTED, self.OnItemSelected_)
-        self.Bind(wx.EVT_KEY_UP, self.OnKeyEvent)
+        self.itemChanged.connect(self._on_item_changed)
+        self.itemSelectionChanged.connect(self.OnItemSelected_)
 
-    def OnKeyEvent(self, event):
-        keycode = event.GetKeyCode()
-        # Delete key
-        if (sys.platform == "darwin") and (keycode == wx.WXK_BACK):
+    def keyPressEvent(self, event):
+        key = event.key()
+        if (sys.platform == "darwin") and (key == Qt.Key.Key_Backspace):
             self.RemoveMeasurements()
-        elif keycode == wx.WXK_DELETE:
+        elif key == Qt.Key.Key_Delete:
             self.RemoveMeasurements()
+        else:
+            super().keyPressEvent(event)
+
+    def _on_item_changed(self, item, column):
+        if self._programmatic_update:
+            return
+        if column == 1:
+            index = self.indexOfTopLevelItem(item)
+            Publisher.sendMessage("Change measurement name", index=index, name=item.text(1))
 
     def OnRemoveGUIMeasure(self, measure_index):
         if measure_index in self._list_index:
-            self.DeleteItem(measure_index)
+            self.takeTopLevelItem(measure_index)
 
             old_dict = self._list_index
             new_dict = {}
@@ -1792,8 +1660,6 @@ class MeasuresListCtrlPanel(InvListCtrl):
         """
         Remove items selected.
         """
-        # it is necessary to update internal dictionary
-        # that maps bitmap given item index
         selected_items = self.GetSelected()
         selected_items.sort(reverse=True)
 
@@ -1801,7 +1667,7 @@ class MeasuresListCtrlPanel(InvListCtrl):
         if selected_items:
             for index in selected_items:
                 new_dict = {}
-                self.DeleteItem(index)
+                self.takeTopLevelItem(index)
                 for i in old_dict:
                     if i < index:
                         new_dict[i] = old_dict[i]
@@ -1814,19 +1680,12 @@ class MeasuresListCtrlPanel(InvListCtrl):
             dlg.MeasureSelectionRequiredForRemoval()
 
     def OnCloseProject(self):
-        self.DeleteAllItems()
+        self.clear()
         self._list_index = {}
         self._bmp_idx_to_name = {}
 
-    def OnItemSelected_(self, evt):
-        # Note: DON'T rename to OnItemSelected!!!
-        # Otherwise the parent's method will be overwritten and other
-        # things will stop working, e.g.: OnCheckItem
-
-        # last_index = evt.Index
-        #  Publisher.sendMessage('Change measurement selected',
-        #  last_index)
-        evt.Skip()
+    def OnItemSelected_(self):
+        pass
 
     def GetSelected(self):
         """
@@ -1834,60 +1693,23 @@ class MeasuresListCtrlPanel(InvListCtrl):
         """
         selected = []
         for index in self._list_index:
-            if self.IsSelected(index):
+            item = self.topLevelItem(index)
+            if item and item.isSelected():
                 selected.append(index)
-        # it is important to revert items order, so
-        # listctrl update is ok
         selected.sort(reverse=True)
 
         return selected
 
     def __init_columns(self):
-        self.InsertColumn(0, "", wx.LIST_FORMAT_CENTER)
-        self.InsertColumn(1, _("Name"))
-        self.InsertColumn(2, _("Location"))
-        self.InsertColumn(3, _("Type"))
-        self.InsertColumn(4, _("Value"), wx.LIST_FORMAT_RIGHT)
-
-        self.SetColumnWidth(0, 25)
-        self.SetColumnWidth(1, 65)
-        self.SetColumnWidth(2, 55)
-        self.SetColumnWidth(3, 50)
-        self.SetColumnWidth(4, 75)
+        self.setHeaderLabels(["", _("Name"), _("Location"), _("Type"), _("Value")])
+        self.setColumnWidth(0, 25)
+        self.setColumnWidth(1, 65)
+        self.setColumnWidth(2, 55)
+        self.setColumnWidth(3, 50)
+        self.setColumnWidth(4, 75)
 
     def __init_image_list(self):
-        self.imagelist = wx.ImageList(16, 16)
-
-        image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_invisible.png"))
-        bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
-        self.imagelist.Add(bitmap)
-
-        image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_visible.png"))
-        bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
-        self.imagelist.Add(bitmap)
-
-        self.SetImageList(self.imagelist, wx.IMAGE_LIST_SMALL)
-
-        self.image_gray = Image.open(os.path.join(inv_paths.ICON_DIR, "object_colour.png"))
-
-    def OnBeginLabelEdit(self, evt):
-        if evt.GetColumn() == 1:
-            evt.Skip()
-        else:
-            evt.Veto()
-
-    def OnEditLabel(self, evt):
-        if not evt.IsEditCancelled():
-            index = evt.GetIndex()
-            self.SetItem(index, 1, evt.GetLabel())
-            Publisher.sendMessage(
-                "Change measurement name", index=evt.GetIndex(), name=evt.GetLabel()
-            )
-        evt.Skip()
+        self._load_icons()
 
     def OnCheckItem(self, index, flag):
         Publisher.sendMessage("Show measurement", index=index, visibility=flag)
@@ -1904,7 +1726,11 @@ class MeasuresListCtrlPanel(InvListCtrl):
         for key in self._list_index.keys():
             if key not in index_list:
                 self.SetItemImage(key, not visibility)
-                Publisher.sendMessage("Show measurement", index=key, visibility=not visibility)
+                Publisher.sendMessage(
+                    "Show measurement",
+                    index=key,
+                    visibility=not visibility,
+                )
         for index in index_list:
             self.SetItemImage(index, visibility)
             Publisher.sendMessage("Show measurement", index=index, visibility=visibility)
@@ -1912,11 +1738,9 @@ class MeasuresListCtrlPanel(InvListCtrl):
     def OnLoadData(self, measurement_dict, spacing=(1.0, 1.0, 1.0)):
         for i in sorted(measurement_dict):
             m = measurement_dict[i]
-            image = self.CreateColourBitmap(m.colour)
-            image_index = self.imagelist.Add(image)
+            colour_icon = self.CreateColourBitmap(m.colour)
 
-            # index_list = self._list_index.keys()
-            self._list_index[m.index] = image_index
+            self._list_index[m.index] = colour_icon
 
             colour = [255 * c for c in m.colour]
             type = TYPE[m.type]
@@ -1924,7 +1748,7 @@ class MeasuresListCtrlPanel(InvListCtrl):
             if m.type == const.LINEAR:
                 value = f"{m.value:.2f} mm"
             elif m.type == const.ANGULAR:
-                value = f"{m.value:.2f}°"
+                value = f"{m.value:.2f}\u00b0"
             else:
                 value = f"{m.value:.3f}"
             self.InsertNewItem(m.index, m.name, colour, location, type, value)
@@ -1934,23 +1758,22 @@ class MeasuresListCtrlPanel(InvListCtrl):
 
     def AddItem_(self, index, name, colour, location, type_, value):
         if index not in self._list_index:
-            image = self.CreateColourBitmap(colour)
-            image_index = self.imagelist.Add(image)
+            colour_icon = self.CreateColourBitmap(colour)
 
             index_list = self._list_index.keys()
-            self._list_index[index] = image_index
+            self._list_index[index] = colour_icon
 
             if (index in index_list) and index_list:
                 try:
                     self.UpdateItemInfo(index, name, colour, location, type_, value)
-                except wx.wxAssertionError:
+                except Exception:
                     self.InsertNewItem(index, name, colour, location, type_, value)
             else:
                 self.InsertNewItem(index, name, colour, location, type_, value)
         else:
             try:
                 self.UpdateItemInfo(index, name, colour, location, type_, value)
-            except wx.wxAssertionError:
+            except Exception:
                 self.InsertNewItem(index, name, colour, location, type_, value)
 
     def InsertNewItem(
@@ -1962,13 +1785,23 @@ class MeasuresListCtrlPanel(InvListCtrl):
         type_="LINEAR",
         value="0 mm",
     ):
-        self.InsertItem(index, "")
-        self.SetItem(index, 1, label, imageId=self._list_index[index])
-        self.SetItem(index, 2, location)
-        self.SetItem(index, 3, type_)
-        self.SetItem(index, 4, value)
-        self.SetItemImage(index, 1)
-        self.Refresh()
+        colour_icon = self._list_index.get(index)
+
+        item = QTreeWidgetItem()
+        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+        item.setIcon(0, self.icon_visible)
+        item.setData(0, Qt.ItemDataRole.UserRole, True)
+        if colour_icon:
+            item.setIcon(1, colour_icon)
+        item.setText(1, label)
+        item.setText(2, location)
+        item.setText(3, type_)
+        item.setText(4, value)
+        item.setTextAlignment(4, Qt.AlignmentFlag.AlignRight)
+
+        self._programmatic_update = True
+        self.insertTopLevelItem(index, item)
+        self._programmatic_update = False
 
     def UpdateItemInfo(
         self,
@@ -1979,102 +1812,86 @@ class MeasuresListCtrlPanel(InvListCtrl):
         type_="LINEAR",
         value="0 mm",
     ):
-        self.SetItem(index, 1, label, imageId=self._list_index[index])
-        self.SetItem(index, 2, location)
-        self.SetItem(index, 3, type_)
-        self.SetItem(index, 4, value)
-        self.SetItemImage(index, 1)
-        self.Refresh()
+        item = self.topLevelItem(index)
+        if item:
+            colour_icon = self._list_index.get(index)
+            self._programmatic_update = True
+            if colour_icon:
+                item.setIcon(1, colour_icon)
+            item.setText(1, label)
+            item.setText(2, location)
+            item.setText(3, type_)
+            item.setText(4, value)
+            self._programmatic_update = False
+            self.SetItemImage(index, 1)
 
     def EditItemColour(self, measure_index, colour):
         """ """
-        image = self.CreateColourBitmap(colour)
-        image_index = self._list_index[measure_index]
-        self.imagelist.Replace(image_index, image)
-        self.Refresh()
+        new_icon = self.CreateColourBitmap(colour)
+        self._list_index[measure_index] = new_icon
+        item = self.topLevelItem(measure_index)
+        if item:
+            item.setIcon(1, new_icon)
 
 
 # *******************************************************************
 # *******************************************************************
 
 
-class AnnotationsListCtrlPanel(wx.ListCtrl):
-    # TODO: Remove edimixin, allow only visible and invisible
-    def __init__(
-        self,
-        parent,
-        ID=-1,
-        pos=wx.DefaultPosition,
-        size=wx.DefaultSize,
-        style=wx.LC_REPORT | wx.LC_EDIT_LABELS,
-    ):
-        wx.ListCtrl.__init__(self, parent, ID, pos, size, style=style)
+class AnnotationsListCtrlPanel(QTreeWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setRootIsDecorated(False)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.setAllColumnsShowFocus(True)
         self._click_check = False
         self.__init_columns()
         self.__init_image_list()
         self.__init_evt()
 
-        # just testing
         self.Populate()
 
     def __init_evt(self):
-        self.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.OnItemActivated)
+        self.itemDoubleClicked.connect(self._on_item_activated)
 
     def __init_columns(self):
-        self.InsertColumn(0, "", wx.LIST_FORMAT_CENTER)
-        self.InsertColumn(1, _("Name"))
-        self.InsertColumn(2, _("Type"), wx.LIST_FORMAT_CENTER)
-        self.InsertColumn(3, _("Value"))
-
-        self.SetColumnWidth(0, 25)
-        self.SetColumnWidth(1, 90)
-        self.SetColumnWidth(2, 50)
-        self.SetColumnWidth(3, 120)
+        self.setHeaderLabels(["", _("Name"), _("Type"), _("Value")])
+        self.setColumnWidth(0, 25)
+        self.setColumnWidth(1, 90)
+        self.setColumnWidth(2, 50)
+        self.setColumnWidth(3, 120)
 
     def __init_image_list(self):
-        self.imagelist = wx.ImageList(16, 16)
+        self.icon_visible = QIcon(os.path.join(inv_paths.ICON_DIR, "object_visible.png"))
+        self.icon_invisible = QIcon(os.path.join(inv_paths.ICON_DIR, "object_invisible.png"))
+        self.icon_colour = QIcon(os.path.join(inv_paths.ICON_DIR, "object_colour.png"))
 
-        image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_visible.png"))
-        bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
-        img_check = self.imagelist.Add(bitmap)  # noqa: F841
-
-        image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_invisible.png"))
-        bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
-        img_null = self.imagelist.Add(bitmap)  # noqa: F841
-
-        image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_colour.png"))
-        bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
-        self.img_colour = self.imagelist.Add(bitmap)
-
-        self.SetImageList(self.imagelist, wx.IMAGE_LIST_SMALL)
-
-    def OnItemActivated(self, evt):
-        self.ToggleItem(evt.Index)
+    def _on_item_activated(self, item, column):
+        index = self.indexOfTopLevelItem(item)
+        visible = not bool(item.data(0, Qt.ItemDataRole.UserRole))
+        item.setData(0, Qt.ItemDataRole.UserRole, visible)
+        item.setIcon(0, self.icon_visible if visible else self.icon_invisible)
+        self.OnCheckItem(index, visible)
 
     def OnCheckItem(self, index, flag):
-        # TODO: use pubsub to communicate to models
         if flag:
             print("checked, ", index)
         else:
             print("unchecked, ", index)
 
     def InsertNewItem(self, index=0, name="Axial 1", type_="2d", value="bla", colour=None):
-        self.InsertItem(index, "")
-        self.SetItem(index, 1, name, imageId=self.img_colour)
-        self.SetItem(index, 2, type_)
-        self.SetItem(index, 3, value)
+        item = QTreeWidgetItem()
+        item.setIcon(1, self.icon_colour)
+        item.setText(1, name)
+        item.setText(2, type_)
+        item.setText(3, value)
+        self.insertTopLevelItem(index, item)
 
     def Populate(self):
-        dict = (
+        data_list = (
             (0, "Axial 1", "2D", "blalbalblabllablalbla"),
             (1, "Coronal 1", "2D", "hello here we are again"),
             (2, "Volume 1", "3D", "hey ho, lets go"),
         )
-        for data in dict:
+        for data in data_list:
             self.InsertNewItem(data[0], data[1], data[2], data[3])

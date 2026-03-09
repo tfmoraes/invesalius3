@@ -19,18 +19,22 @@
 import os
 import sys
 
-import wx
-
-try:
-    import wx.lib.agw.foldpanelbar as fpb
-    import wx.lib.agw.hyperlink as hl
-except ImportError:
-    import wx.lib.foldpanelbar as fpb
-    import wx.lib.hyperlink as hl
-
-import wx.lib.colourselect as csel
-import wx.lib.platebtn as pbtn
-from wx.lib import scrolledpanel as scrolled
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMenu,
+    QPushButton,
+    QScrollArea,
+    QToolBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 import invesalius.constants as const
 import invesalius.data.slice_ as slice_
@@ -38,158 +42,110 @@ import invesalius.gui.dialogs as dlg
 import invesalius.gui.widgets.gradient as grad
 import invesalius.session as ses
 from invesalius import inv_paths
-from invesalius.gui.widgets.inv_spinctrl import InvSpinCtrl
+from invesalius.gui.default_viewers import ColourSelectButton
+from invesalius.gui.widgets.inv_spinctrl import InvFloatSpinCtrl, InvSpinCtrl
 from invesalius.i18n import tr as _
 from invesalius.project import Project
 from invesalius.pubsub import pub as Publisher
 
-BTN_NEW = wx.NewIdRef()
-
-MENU_BRUSH_SQUARE = wx.NewIdRef()
-MENU_BRUSH_CIRCLE = wx.NewIdRef()
-
-MENU_BRUSH_ADD = wx.NewIdRef()
-MENU_BRUSH_DEL = wx.NewIdRef()
-MENU_BRUSH_THRESH = wx.NewIdRef()
-
-MENU_UNIT_MM = wx.NewIdRef()
-MENU_UNIT_UM = wx.NewIdRef()
-MENU_UNIT_PX = wx.NewIdRef()
-
 MASK_LIST = []
 
 
-class TaskPanel(wx.Panel):
+class TaskPanel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
         inner_panel = InnerTaskPanel(self)
 
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(inner_panel, 1, wx.EXPAND | wx.GROW | wx.BOTTOM | wx.RIGHT | wx.LEFT, 7)
-        sizer.Fit(self)
-
-        self.SetSizer(sizer)
-        self.Update()
-        self.SetAutoLayout(1)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(7, 0, 7, 7)
+        layout.addWidget(inner_panel, 1)
 
 
-class InnerTaskPanel(scrolled.ScrolledPanel):
+class InnerTaskPanel(QScrollArea):
     def __init__(self, parent):
-        scrolled.ScrolledPanel.__init__(self, parent)
+        super().__init__(parent)
         self.select_all_active = False
         Publisher.subscribe(self.update_create_surface_button, "Update create surface button")
 
-        backgroud_colour = wx.Colour(255, 255, 255)
-        self.SetBackgroundColour(backgroud_colour)
-        self.SetAutoLayout(1)
+        self.setWidgetResizable(True)
+        self.setFrameShape(QFrame.NoFrame)
 
-        # Image(s) for buttons
-        BMP_ADD = wx.Bitmap(os.path.join(inv_paths.ICON_DIR, "object_add.png"), wx.BITMAP_TYPE_PNG)
-        # BMP_ADD.SetWidth(25)
-        # BMP_ADD.SetHeight(25)
+        container = QWidget()
+        container.setStyleSheet("background-color: white;")
 
-        # Button for creating new surface
-        button_new_mask = pbtn.PlateButton(
-            self, BTN_NEW, "", BMP_ADD, style=pbtn.PB_STYLE_SQUARE | pbtn.PB_STYLE_DEFAULT
-        )
-        button_new_mask.SetBackgroundColour(self.GetBackgroundColour())
-        self.Bind(wx.EVT_BUTTON, self.OnButton)
+        # Button for creating new mask
+        BMP_ADD = QPixmap(os.path.join(inv_paths.ICON_DIR, "object_add.png"))
+        button_new_mask = QPushButton("")
+        button_new_mask.setIcon(QIcon(BMP_ADD))
+        button_new_mask.setFlat(True)
+        button_new_mask.clicked.connect(self.OnLinkNewMask)
 
-        # Fixed hyperlink items
         tooltip = _("Create mask for slice segmentation and editing")
-        link_new_mask = hl.HyperLinkCtrl(self, -1, _("Create new mask"))
-        link_new_mask.SetUnderlines(False, False, False)
-        link_new_mask.SetBold(True)
-        link_new_mask.SetColours("BLACK", "BLACK", "BLACK")
-        link_new_mask.SetBackgroundColour(self.GetBackgroundColour())
-        link_new_mask.SetToolTip(tooltip)
-        link_new_mask.AutoBrowse(False)
-        link_new_mask.UpdateLink()
-        link_new_mask.Bind(hl.EVT_HYPERLINK_LEFT, self.OnLinkNewMask)
+        link_new_mask = QPushButton(_("Create new mask"))
+        link_new_mask.setFlat(True)
+        link_new_mask.setStyleSheet(
+            "QPushButton { text-align: left; font-weight: bold; color: black; }"
+        )
+        link_new_mask.setToolTip(tooltip)
+        link_new_mask.clicked.connect(self.OnLinkNewMask)
 
         Publisher.subscribe(self.OnLinkNewMask, "New mask from shortcut")
 
-        # Create horizontal sizers to represent lines in the panel
-        line_new = wx.BoxSizer(wx.HORIZONTAL)
-        line_new.Add(link_new_mask, 1, wx.EXPAND | wx.GROW | wx.TOP | wx.RIGHT, 4)
-        line_new.Add(button_new_mask, 0, wx.ALL | wx.EXPAND | wx.GROW, 0)
+        line_new = QHBoxLayout()
+        line_new.addWidget(link_new_mask, 1)
+        line_new.addWidget(button_new_mask, 0)
 
-        # Fold panel which contains mask properties and edition tools
-        # print wx.SystemSettings_GetColour(wx.SYS_COLOUR_BACKGROUND)
-        # print wx.SystemSettings_GetColour(wx.SYS_COLOUR_APPWORKSPACE)
-        # print wx.SystemSettings_GetColour(wx.SYS_COLOUR_BTNFACE)
-        # print wx.SystemSettings_GetColour(wx.SYS_COLOUR_DESKTOP)
-        # print wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
-        # print wx.SystemSettings_GetColour(wx.SYS_COLOUR_SCROLLBAR)
-        # print wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUHILIGHT)
-        try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
-        except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
-        fold_panel = FoldPanel(self)
-        fold_panel.SetBackgroundColour(default_colour)
+        fold_panel = FoldPanel(container)
         self.fold_panel = fold_panel
 
-        # Button to fold to select region task
-        self.button_next = wx.Button(self, -1, _("Create surface"))
-        check_box = wx.CheckBox(self, -1, _("Overwrite last surface"))
+        self.button_next = QPushButton(_("Create surface"))
+        check_box = QCheckBox(_("Overwrite last surface"))
         self.check_box = check_box
-        if sys.platform != "win32":
-            self.button_next.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
-            check_box.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
-        self.button_next.Bind(wx.EVT_BUTTON, self.OnButtonNextTask)
+        self.button_next.clicked.connect(self.OnButtonNextTask)
 
-        next_btn_sizer = wx.BoxSizer(wx.VERTICAL)
-        next_btn_sizer.Add(self.button_next, 1, wx.ALIGN_RIGHT)
+        next_btn_sizer = QVBoxLayout()
+        next_btn_sizer.addWidget(self.button_next, 0, Qt.AlignRight)
 
-        line_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        line_sizer.Add(check_box, 0, wx.ALIGN_LEFT | wx.RIGHT | wx.LEFT, 5)
-        line_sizer.Add(next_btn_sizer, 1, wx.EXPAND | wx.RIGHT | wx.LEFT, 5)
-        line_sizer.Fit(self)
+        line_sizer = QHBoxLayout()
+        line_sizer.addWidget(check_box, 0, Qt.AlignLeft)
+        line_sizer.setContentsMargins(5, 0, 5, 0)
+        line_sizer.addLayout(next_btn_sizer, 1)
 
-        # Add line sizers into main sizer
-        main_sizer = wx.BoxSizer(wx.VERTICAL)
-        main_sizer.Add(line_new, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
-        main_sizer.Add(fold_panel, 1, wx.GROW | wx.EXPAND | wx.ALL, 5)
-        main_sizer.Add(line_sizer, 0, wx.GROW | wx.EXPAND)
-        main_sizer.AddSpacer(5)
-        main_sizer.Fit(self)
+        main_layout = QVBoxLayout(container)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        main_layout.addLayout(line_new)
+        main_layout.addWidget(fold_panel, 1)
+        main_layout.addLayout(line_sizer)
+        main_layout.addSpacing(5)
 
-        self.SetSizerAndFit(main_sizer)
-        self.Update()
-        self.SetAutoLayout(1)
+        self.setWidget(container)
 
-        self.sizer = main_sizer
-
-    def OnButton(self, evt):
-        id = evt.GetId()
-        if id == BTN_NEW:
-            self.OnLinkNewMask()
+    def OnButton(self):
+        self.OnLinkNewMask()
 
     def update_create_surface_button(self, select_all_active):
         """Update the create surface button text based on select all state"""
         self.select_all_active = select_all_active
 
         if select_all_active:
-            self.button_next.SetLabel("Create All Surfaces")
-            self.button_next.SetToolTip("Create surfaces for all selected masks")
+            self.button_next.setText("Create All Surfaces")
+            self.button_next.setToolTip("Create surfaces for all selected masks")
         else:
-            self.button_next.SetLabel("Create Surface")
-            self.button_next.SetToolTip("Create surface from selected mask")
+            self.button_next.setText("Create Surface")
+            self.button_next.setToolTip("Create surface from selected mask")
 
     def get_current_surface_parameters(self):
         """Get current surface creation parameters from the UI"""
-        overwrite = self.check_box.IsChecked()
-        # a template that be used for each mask
+        overwrite = self.check_box.isChecked()
         return {
             "method": {
                 "algorithm": "Default",
                 "options": {},
             },
             "options": {
-                "index": None,  # will be set for each mask
-                "name": "",  # will be set for each mask
+                "index": None,
+                "name": "",
                 "quality": _("Optimal *"),
                 "fill": False,
                 "keep_largest": False,
@@ -197,10 +153,10 @@ class InnerTaskPanel(scrolled.ScrolledPanel):
             },
         }
 
-    def OnButtonNextTask(self, evt):
+    def OnButtonNextTask(self):
         if self.select_all_active:
             dlgs = dlg.SurfaceDialog()
-            if dlgs.ShowModal() == wx.ID_OK:
+            if dlgs.exec() == QDialog.Accepted:
                 algorithm = dlgs.GetAlgorithmSelected()
                 options = dlgs.GetOptions()
                 surface_parameters_template = self.get_current_surface_parameters()
@@ -211,10 +167,9 @@ class InnerTaskPanel(scrolled.ScrolledPanel):
                     "Create surfaces for all masks",
                     surface_template=surface_parameters_template,
                 )
-            dlgs.Destroy()
             return
 
-        overwrite = self.check_box.IsChecked()
+        overwrite = self.check_box.isChecked()
         algorithm = "Default"
         options = {}
         to_generate = True
@@ -222,13 +177,11 @@ class InnerTaskPanel(scrolled.ScrolledPanel):
             sl = slice_.Slice()
             if sl.current_mask.was_edited:
                 dlgs = dlg.SurfaceDialog()
-                if dlgs.ShowModal() == wx.ID_OK:
+                if dlgs.exec() == QDialog.Accepted:
                     algorithm = dlgs.GetAlgorithmSelected()
                     options = dlgs.GetOptions()
                 else:
                     to_generate = False
-
-                dlgs.Destroy()
 
             if to_generate:
                 proj = Project()
@@ -245,14 +198,14 @@ class InnerTaskPanel(scrolled.ScrolledPanel):
                 ):
                     mask_prop_panel = self.fold_panel.inner_panel.mask_prop_panel
                     if hasattr(mask_prop_panel, "combo_mask_name"):
-                        mask_selection = mask_prop_panel.combo_mask_name.GetSelection()
+                        mask_selection = mask_prop_panel.combo_mask_name.currentIndex()
                         if mask_selection >= 0:
-                            mask_name = mask_prop_panel.combo_mask_name.GetString(mask_selection)
+                            mask_name = mask_prop_panel.combo_mask_name.itemText(mask_selection)
 
                 method = {"algorithm": algorithm, "options": options}
                 srf_options = {
                     "index": mask_index,
-                    "name": mask_name,  # Use the mask name instead of empty string
+                    "name": mask_name,
                     "quality": _("Optimal *"),
                     "fill": False,
                     "keep_largest": False,
@@ -278,11 +231,11 @@ class InnerTaskPanel(scrolled.ScrolledPanel):
         dialog = dlg.NewMask()
 
         try:
-            if dialog.ShowModal() == wx.ID_OK:
+            if dialog.exec() == QDialog.Accepted:
                 ok = 1
             else:
                 ok = 0
-        except wx.PyAssertionError:  # TODO FIX: win64
+        except Exception:
             ok = 1
 
         if ok:
@@ -291,146 +244,59 @@ class InnerTaskPanel(scrolled.ScrolledPanel):
                 Publisher.sendMessage(
                     "Create new mask", mask_name=mask_name, thresh=thresh, colour=colour
                 )
-        dialog.Destroy()
 
     def GetMaskSelected(self):
         return self.fold_panel.GetMaskSelected()
 
 
-class FoldPanel(wx.Panel):
+class FoldPanel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
         inner_panel = InnerFoldPanel(self)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(inner_panel, 1, wx.EXPAND | wx.GROW, 2)
-        sizer.Fit(self)
-
-        self.SetSizerAndFit(sizer)
-        self.Update()
-        self.SetAutoLayout(1)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(inner_panel, 1)
 
         self.inner_panel = inner_panel
 
     def GetMaskSelected(self):
-        # x = self.inner_panel.GetMaskSelected()
         return self.inner_panel.GetMaskSelected()
 
 
-class InnerFoldPanel(wx.Panel):
+class InnerFoldPanel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
-        try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
-        except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
-        self.SetBackgroundColour(default_colour)
-
-        # Fold panel and its style settings
-        # FIXME: If we dont insert a value in size or if we set wx.DefaultSize,
-        # the fold_panel doesnt show. This means that, for some reason, Sizer
-        # is not working properly in this panel. It might be on some child or
-        # parent panel. Perhaps we need to insert the item into the sizer also...
-        # Study this.
-        # gbs = wx.GridBagSizer()
-
-        # gbs.AddGrowableRow(0, 1)
-        # gbs.AddGrowableCol(0, 1)
-
-        # self.gbs = gbs
+        super().__init__(parent)
 
         self.last_size = None
 
-        # Panel sizer to expand fold panel
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        # sizer.Add(gbs, 1, wx.GROW|wx.EXPAND)
-        self.SetSizer(sizer)
+        tool_box = QToolBox(self)
+        self.tool_box = tool_box
 
-        fold_panel = fpb.FoldPanelBar(
-            self, -1, wx.DefaultPosition, wx.DefaultSize, 0, fpb.FPB_SINGLE_FOLD
-        )
-        self.fold_panel = fold_panel
+        self.mask_prop_panel = MaskProperties(tool_box)
+        tool_box.addItem(self.mask_prop_panel, _("Mask properties"))
 
-        # Fold panel style
-        style = fpb.CaptionBarStyle()
-        style.SetCaptionStyle(fpb.CAPTIONBAR_GRADIENT_V)
-        style.SetFirstColour(default_colour)
-        style.SetSecondColour(default_colour)
+        etw = EditionTools(tool_box)
+        self.__idx_editor = tool_box.addItem(etw, _("Manual edition"))
 
-        # Fold 1 - Mask properties
-        item = fold_panel.AddFoldPanel(_("Mask properties"), collapsed=True)
-        self.mask_prop_panel = MaskProperties(item)
+        wtw = WatershedTool(tool_box)
+        self.__idx_watershed = tool_box.addItem(wtw, _("Watershed"))
 
-        fold_panel.ApplyCaptionStyle(item, style)
-        fold_panel.AddFoldPanelWindow(
-            item, self.mask_prop_panel, spacing=0, leftSpacing=0, rightSpacing=0
-        )
+        tool_box.setCurrentIndex(0)
 
-        # Fold 2 - Advanced edition tools
-        item = fold_panel.AddFoldPanel(_("Manual edition"), collapsed=True)
-        etw = EditionTools(item)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(tool_box, 1)
 
-        fold_panel.ApplyCaptionStyle(item, style)
-        fold_panel.AddFoldPanelWindow(item, etw, spacing=0, leftSpacing=0, rightSpacing=0)
-        self.__id_editor = item.GetId()
-        self.last_panel_opened = None
-
-        # Fold 3 - Watershed
-        item = fold_panel.AddFoldPanel(_("Watershed"), collapsed=True)
-        wtw = WatershedTool(item)
-
-        fold_panel.ApplyCaptionStyle(item, style)
-        fold_panel.AddFoldPanelWindow(item, wtw, spacing=0, leftSpacing=0, rightSpacing=0)
-        self.__id_watershed = item.GetId()
-
-        sizer.Add(fold_panel, 1, wx.EXPAND)
-
-        fold_panel.Expand(fold_panel.GetFoldPanel(2))
-        self.ResizeFPB()
-        fold_panel.Expand(fold_panel.GetFoldPanel(0))
-
-        sizer.Layout()
-        self.Fit()
-
-        self.fold_panel = fold_panel
         self.last_style = None
+        self.last_panel_opened = None
 
         self.__bind_evt()
         self.__bind_pubsub_evt()
 
-    def __calc_best_size(self, panel):
-        parent = panel.GetParent()
-        _ = panel.Reparent(self)
-
-        # gbs = self.gbs
-        # fold_panel = self.fold_panel
-
-        # Calculating the size
-        # gbs.AddGrowableRow(0, 1)
-        # gbs.AddGrowableRow(0, 1)
-        # gbs.Add(panel, (0, 0), flag=wx.EXPAND)
-        self.GetSizer().Add(panel, 1, wx.EXPAND)
-        # self.SetSizerAndFit(self.GetSizer())
-        self.GetSizer().Layout()
-        self.GetSizer().Fit(self)
-        # gbs.Layout()
-        # self.Fit()
-        # self.GetSizer().Layout()
-        size = panel.GetSize()
-
-        # gbs.Remove(0)
-        # gbs.RemoveGrowableRow(0)
-
-        self.GetSizer().Remove(0)
-        panel.Reparent(parent)
-        panel.SetInitialSize(size)
-
-        # if self.last_size is None or self.last_size.GetHeight() < size.GetHeight():
-        # self.SetInitialSize(size)
-
     def __bind_evt(self):
-        self.fold_panel.Bind(fpb.EVT_CAPTIONBAR, self.OnFoldPressCaption)
+        self.tool_box.currentChanged.connect(self.OnFoldPressCaption)
 
     def __bind_pubsub_evt(self):
         Publisher.subscribe(self.OnRetrieveStyle, "Retrieve task slice style")
@@ -438,38 +304,16 @@ class InnerFoldPanel(wx.Panel):
         Publisher.subscribe(self.OnCloseProject, "Close project data")
         Publisher.subscribe(self.OnColapsePanel, "Show panel")
 
-    def OnFoldPressCaption(self, evt):
-        id = evt.GetTag().GetId()
-        closed = evt.GetFoldStatus()
-
-        if self.__id_editor == id:
-            if closed:
-                Publisher.sendMessage("Disable style", style=const.SLICE_STATE_EDITOR)
-                self.last_style = None
-            else:
-                Publisher.sendMessage("Enable style", style=const.SLICE_STATE_EDITOR)
-                self.last_style = const.SLICE_STATE_EDITOR
-        elif self.__id_watershed == id:
-            if closed:
-                Publisher.sendMessage("Disable style", style=const.SLICE_STATE_WATERSHED)
-                self.last_style = None
-            else:
-                Publisher.sendMessage("Enable style", style=const.SLICE_STATE_WATERSHED)
-                #  Publisher.sendMessage('Show help message', 'Mark the object and the background')
-                self.last_style = const.SLICE_STATE_WATERSHED
+    def OnFoldPressCaption(self, index):
+        if index == self.__idx_editor:
+            Publisher.sendMessage("Enable style", style=const.SLICE_STATE_EDITOR)
+            self.last_style = const.SLICE_STATE_EDITOR
+        elif index == self.__idx_watershed:
+            Publisher.sendMessage("Enable style", style=const.SLICE_STATE_WATERSHED)
+            self.last_style = const.SLICE_STATE_WATERSHED
         else:
             Publisher.sendMessage("Disable style", style=const.SLICE_STATE_EDITOR)
             self.last_style = None
-
-        evt.Skip()
-        wx.CallAfter(self.ResizeFPB)
-
-    def ResizeFPB(self):
-        sizeNeeded = self.fold_panel.GetPanelsLength(0, 0)[2]
-        if sys.platform != "win32":
-            sizeNeeded += const.FOLD_PANEL_EXTRA_HEIGHT
-        self.fold_panel.SetMinSize((self.fold_panel.GetSize()[0], sizeNeeded))
-        self.fold_panel.SetSize((self.fold_panel.GetSize()[0], sizeNeeded))
 
     def OnRetrieveStyle(self):
         if self.last_style == const.SLICE_STATE_EDITOR:
@@ -480,7 +324,7 @@ class InnerFoldPanel(wx.Panel):
             Publisher.sendMessage("Disable style", style=const.SLICE_STATE_EDITOR)
 
     def OnCloseProject(self):
-        self.fold_panel.Expand(self.fold_panel.GetFoldPanel(0))
+        self.tool_box.setCurrentIndex(0)
 
     def OnColapsePanel(self, panel_id):
         panel_seg_id = {
@@ -491,84 +335,55 @@ class InnerFoldPanel(wx.Panel):
 
         try:
             _id = panel_seg_id[panel_id]
-            self.fold_panel.Expand(self.fold_panel.GetFoldPanel(_id))
-            self.Layout()
+            self.tool_box.setCurrentIndex(_id)
         except KeyError:
             pass
 
     def GetMaskSelected(self):
-        # x = self.mask_prop_panel.GetMaskSelected()
         return self.mask_prop_panel.GetMaskSelected()
 
 
-class MaskProperties(wx.Panel):
+class MaskProperties(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
         ## LINE 1
-
-        # Combo related to mask naem
-        combo_mask_name = wx.ComboBox(
-            self, -1, "", choices=MASK_LIST, style=wx.CB_DROPDOWN | wx.CB_READONLY
-        )
-        # combo_mask_name.SetSelection(0) # wx.CB_SORT
-        if sys.platform != "win32":
-            combo_mask_name.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
+        combo_mask_name = QComboBox(self)
+        combo_mask_name.setEditable(False)
         self.combo_mask_name = combo_mask_name
 
-        # Mask colour
-        button_colour = csel.ColourSelect(self, 111, colour=(0, 255, 0), size=(22, -1))
+        button_colour = ColourSelectButton(self, colour=(0, 255, 0), size=(22, 22))
         self.button_colour = button_colour
 
-        # Sizer which represents the first line
-        line1 = wx.BoxSizer(wx.HORIZONTAL)
-        line1.Add(combo_mask_name, 1, wx.EXPAND | wx.GROW | wx.TOP | wx.RIGHT, 2)
-        line1.Add(button_colour, 0, wx.TOP | wx.LEFT | wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, 2)
+        line1 = QHBoxLayout()
+        line1.addWidget(combo_mask_name, 1)
+        line1.addWidget(button_colour, 0)
 
         ### LINE 2
-        text_thresh = wx.StaticText(self, -1, _("Set predefined or manual threshold:"))
+        text_thresh = QLabel(_("Set predefined or manual threshold:"))
 
         ### LINE 3
-        THRESHOLD_LIST = [
-            "",
-        ]
-        combo_thresh = wx.ComboBox(
-            self,
-            -1,
-            "",  # size=(15,-1),
-            choices=THRESHOLD_LIST,
-            style=wx.CB_DROPDOWN | wx.CB_READONLY,
-        )
-        combo_thresh.SetSelection(0)
-        if sys.platform != "win32":
-            combo_thresh.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
+        THRESHOLD_LIST = [""]
+        combo_thresh = QComboBox(self)
+        combo_thresh.setEditable(False)
+        combo_thresh.addItems(THRESHOLD_LIST)
+        combo_thresh.setCurrentIndex(0)
         self.combo_thresh = combo_thresh
 
         ## LINE 4
         gradient = grad.GradientCtrl(self, -1, -5000, 5000, 0, 5000, (0, 255, 0, 100))
         self.gradient = gradient
 
-        # Add all lines into main sizer
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.AddSpacer(7)
-        sizer.Add(line1, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
-
-        sizer.AddSpacer(5)
-        sizer.Add(text_thresh, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
-        sizer.AddSpacer(2)
-        sizer.Add(combo_thresh, 0, wx.EXPAND | wx.GROW | wx.LEFT | wx.RIGHT, 5)
-
-        sizer.AddSpacer(5)
-        sizer.Add(gradient, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
-        sizer.AddSpacer(7)
-
-        sizer.Fit(self)
-
-        self.SetSizerAndFit(sizer)
-        self.Update()
-        self.SetAutoLayout(1)
-
-        # Non GUI stuff
+        layout = QVBoxLayout(self)
+        layout.addSpacing(7)
+        layout.addLayout(line1)
+        layout.addSpacing(5)
+        layout.addWidget(text_thresh)
+        layout.addSpacing(2)
+        layout.addWidget(combo_thresh)
+        layout.addSpacing(5)
+        layout.addWidget(gradient, 1)
+        layout.addSpacing(7)
 
         proj = Project()
         self.threshold_modes = proj.threshold_modes
@@ -579,7 +394,6 @@ class MaskProperties(wx.Panel):
 
     def __bind_events(self):
         Publisher.subscribe(self.AddMask, "Add mask")
-        # TODO: Uncomment
         Publisher.subscribe(self.SetThresholdBounds, "Update threshold limits")
         Publisher.subscribe(self.SetThresholdModes, "Set threshold modes")
         Publisher.subscribe(self.SetItemsColour, "Set GUI items colour")
@@ -594,46 +408,41 @@ class MaskProperties(wx.Panel):
         self.CloseProject()
 
     def CloseProject(self):
-        n = self.combo_mask_name.GetCount()
-        for i in range(n - 1, -1, -1):
-            self.combo_mask_name.Delete(i)
-        n = self.combo_thresh.GetCount()
-        for i in range(n - 1, -1, -1):
-            self.combo_thresh.Delete(i)
+        self.combo_mask_name.clear()
+        self.combo_thresh.clear()
 
     def OnRemoveMasks(self, mask_indexes):
-        self.combo_mask_name.Freeze()
+        self.combo_mask_name.blockSignals(True)
         try:
-            count = self.combo_mask_name.GetCount()
+            count = self.combo_mask_name.count()
             if len(mask_indexes) >= count:
-                self.combo_mask_name.Clear()
+                self.combo_mask_name.clear()
             else:
                 for i in sorted(set(mask_indexes), reverse=True):
-                    if 0 <= i < self.combo_mask_name.GetCount():
-                        self.combo_mask_name.Delete(i)
+                    if 0 <= i < self.combo_mask_name.count():
+                        self.combo_mask_name.removeItem(i)
         finally:
-            self.combo_mask_name.Thaw()
+            self.combo_mask_name.blockSignals(False)
 
-        if self.combo_mask_name.IsEmpty():
-            self.combo_mask_name.SetValue("")
-            self.Disable()
+        if self.combo_mask_name.count() == 0:
+            self.combo_mask_name.setCurrentText("")
+            self.setEnabled(False)
 
     def __bind_events_wx(self):
-        self.Bind(grad.EVT_THRESHOLD_CHANGED, self.OnSlideChanged, self.gradient)
-        self.Bind(grad.EVT_THRESHOLD_CHANGING, self.OnSlideChanging, self.gradient)
-        self.combo_thresh.Bind(wx.EVT_COMBOBOX, self.OnComboThresh)
-        self.combo_mask_name.Bind(wx.EVT_COMBOBOX, self.OnComboName)
-        self.button_colour.Bind(csel.EVT_COLOURSELECT, self.OnSelectColour)
+        self.gradient.threshold_changed.connect(self.OnSlideChanged)
+        self.gradient.threshold_changing.connect(self.OnSlideChanging)
+        self.combo_thresh.currentIndexChanged.connect(self.OnComboThresh)
+        self.combo_mask_name.currentIndexChanged.connect(self.OnComboName)
+        self.button_colour.colour_selected.connect(self.OnSelectColour)
 
     def SelectMaskName(self, index):
         if index >= 0:
-            self.combo_mask_name.SetSelection(index)
+            self.combo_mask_name.setCurrentIndex(index)
         else:
-            self.combo_mask_name.SetValue("")
+            self.combo_mask_name.setCurrentText("")
 
     def ChangeMaskName(self, index, name):
-        self.combo_mask_name.SetString(index, name)
-        self.combo_mask_name.Refresh()
+        self.combo_mask_name.setItemText(index, name)
 
     def SetThresholdValues(self, threshold_range):
         thresh_min, thresh_max = threshold_range
@@ -646,10 +455,10 @@ class MaskProperties(wx.Panel):
         if thresh in Project().threshold_modes.values():
             preset_name = Project().threshold_modes.get_key(thresh)
             index = self.threshold_modes_names.index(preset_name)
-            self.combo_thresh.SetSelection(index)
+            self.combo_thresh.setCurrentIndex(index)
         else:
             index = self.threshold_modes_names.index(_("Custom"))
-            self.combo_thresh.SetSelection(index)
+            self.combo_thresh.setCurrentIndex(index)
             Project().threshold_modes[_("Custom")] = (thresh_min, thresh_max)
 
     def SetThresholdValues2(self, threshold_range):
@@ -660,10 +469,10 @@ class MaskProperties(wx.Panel):
         if thresh in Project().threshold_modes.values():
             preset_name = Project().threshold_modes.get_key(thresh)
             index = self.threshold_modes_names.index(preset_name)
-            self.combo_thresh.SetSelection(index)
+            self.combo_thresh.setCurrentIndex(index)
         else:
             index = self.threshold_modes_names.index(_("Custom"))
-            self.combo_thresh.SetSelection(index)
+            self.combo_thresh.setCurrentIndex(index)
             Project().threshold_modes[_("Custom")] = (thresh_min, thresh_max)
 
     def SetItemsColour(self, colour):
@@ -671,41 +480,37 @@ class MaskProperties(wx.Panel):
         self.button_colour.SetColour(colour)
 
     def AddMask(self, mask):
-        if self.combo_mask_name.IsEmpty():
-            self.Enable()
+        if self.combo_mask_name.count() == 0:
+            self.setEnabled(True)
         mask_name = mask.name
-        # mask_thresh = mask.threshold_range
-        # mask_colour = [int(c * 255) for c in mask.colour]
-        _ = self.combo_mask_name.Append(mask_name)
-        #  self.combo_mask_name.SetSelection(index)
-        #  self.button_colour.SetColour(mask_colour)
-        #  self.gradient.SetColour(mask_colour)
-        #  self.combo_mask_name.SetSelection(index)
+        self.combo_mask_name.addItem(mask_name)
 
     def GetMaskSelected(self):
-        # x = self.combo_mask_name.GetSelection()
-        return self.combo_mask_name.GetSelection()
+        return self.combo_mask_name.currentIndex()
 
     def SetThresholdModes(self, thresh_modes_names, default_thresh):
-        self.combo_thresh.SetItems(thresh_modes_names)
+        self.combo_thresh.blockSignals(True)
+        self.combo_thresh.clear()
+        self.combo_thresh.addItems(thresh_modes_names)
+        self.combo_thresh.blockSignals(False)
         self.threshold_modes_names = thresh_modes_names
         proj = Project()
         if isinstance(default_thresh, int):
-            self.combo_thresh.SetSelection(default_thresh)
+            self.combo_thresh.setCurrentIndex(default_thresh)
             (thresh_min, thresh_max) = self.threshold_modes[thresh_modes_names[default_thresh]]
         elif default_thresh in proj.threshold_modes.keys():
             index = self.threshold_modes_names.index(default_thresh)
-            self.combo_thresh.SetSelection(index)
+            self.combo_thresh.setCurrentIndex(index)
             thresh_min, thresh_max = self.threshold_modes[default_thresh]
 
         elif default_thresh in proj.threshold_modes.values():
             preset_name = proj.threshold_modes.get_key(default_thresh)
             index = self.threshold_modes_names.index(preset_name)
-            self.combo_thresh.SetSelection(index)
+            self.combo_thresh.setCurrentIndex(index)
             thresh_min, thresh_max = default_thresh
         else:
             index = self.threshold_modes_names.index(_("Custom"))
-            self.combo_thresh.SetSelection(index)
+            self.combo_thresh.setCurrentIndex(index)
             thresh_min, thresh_max = default_thresh
             proj.threshold_modes[_("Custom")] = (thresh_min, thresh_max)
 
@@ -718,18 +523,22 @@ class MaskProperties(wx.Panel):
         self.gradient.SetMinRange(thresh_min)
         self.gradient.SetMaxRange(thresh_max)
 
-    def OnComboName(self, evt):
-        # mask_name = evt.GetString()
-        mask_index = evt.GetSelection()
+    def OnComboName(self, mask_index):
+        if mask_index < 0:
+            return
         Publisher.sendMessage("Change mask selected", index=mask_index)
         Publisher.sendMessage("Show mask", index=mask_index, value=True)
 
-    def OnComboThresh(self, evt):
-        (thresh_min, thresh_max) = Project().threshold_modes[evt.GetString()]
-        self.gradient.SetMinValue(thresh_min)
-        self.gradient.SetMaxValue(thresh_max)
-        self.OnSlideChanging(None)
-        self.OnSlideChanged(None)
+    def OnComboThresh(self, index):
+        if index < 0:
+            return
+        thresh_name = self.combo_thresh.itemText(index)
+        if thresh_name and thresh_name in Project().threshold_modes:
+            (thresh_min, thresh_max) = Project().threshold_modes[thresh_name]
+            self.gradient.SetMinValue(thresh_min)
+            self.gradient.SetMaxValue(thresh_max)
+            self.OnSlideChanging(None)
+            self.OnSlideChanged(None)
 
     def OnSlideChanged(self, evt):
         thresh_min = self.gradient.GetMinValue()
@@ -745,83 +554,67 @@ class MaskProperties(wx.Panel):
         session = ses.Session()
         session.ChangeProject()
 
-    def OnSelectColour(self, evt):
-        colour = evt.GetValue()[:3]
+    def OnSelectColour(self, colour):
+        colour = colour[:3]
         self.gradient.SetColour(colour)
         Publisher.sendMessage("Change mask colour", colour=colour)
 
 
-class EditionTools(wx.Panel):
+class EditionTools(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
-        try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
-        except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
-        self.SetBackgroundColour(default_colour)
+        super().__init__(parent)
 
         self.unit = "mm"
 
         ## LINE 1
-        text1 = wx.StaticText(self, -1, _("Choose brush type, size or operation:"))
+        text1 = QLabel(_("Choose brush type, size or operation:"))
 
         ## LINE 2
-        menu = wx.Menu()
+        CIRCLE_ICON = QIcon(QPixmap(os.path.join(inv_paths.ICON_DIR, "brush_circle.png")))
+        SQUARE_ICON = QIcon(QPixmap(os.path.join(inv_paths.ICON_DIR, "brush_square.png")))
 
-        CIRCLE_BMP = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "brush_circle.png"), wx.BITMAP_TYPE_PNG
-        )
-        item = menu.Append(MENU_BRUSH_CIRCLE, _("Circle"))
-        item.SetBitmap(CIRCLE_BMP)
+        bmp_brush_format = {const.BRUSH_CIRCLE: CIRCLE_ICON, const.BRUSH_SQUARE: SQUARE_ICON}
+        selected_icon = bmp_brush_format[const.DEFAULT_BRUSH_FORMAT]
 
-        SQUARE_BMP = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "brush_square.png"), wx.BITMAP_TYPE_PNG
-        )
-        item2 = menu.Append(MENU_BRUSH_SQUARE, _("Square"))
-        item2.SetBitmap(SQUARE_BMP)
+        btn_brush_format = QPushButton("")
+        btn_brush_format.setIcon(selected_icon)
+        btn_brush_format.setFlat(True)
 
-        bmp_brush_format = {const.BRUSH_CIRCLE: CIRCLE_BMP, const.BRUSH_SQUARE: SQUARE_BMP}
-        selected_bmp = bmp_brush_format[const.DEFAULT_BRUSH_FORMAT]
-
-        btn_brush_format = pbtn.PlateButton(
-            self, wx.ID_ANY, "", selected_bmp, style=pbtn.PB_STYLE_SQUARE
-        )
-        btn_brush_format.SetMenu(menu)
+        brush_menu = QMenu(self)
+        act_circle = brush_menu.addAction(CIRCLE_ICON, _("Circle"))
+        act_square = brush_menu.addAction(SQUARE_ICON, _("Square"))
+        act_circle.setData(const.BRUSH_CIRCLE)
+        act_square.setData(const.BRUSH_SQUARE)
+        btn_brush_format.setMenu(brush_menu)
         self.btn_brush_format = btn_brush_format
+        self._brush_icons = bmp_brush_format
 
         spin_brush_size = InvSpinCtrl(
             self, -1, value=const.BRUSH_SIZE, min_value=1, max_value=1000, spin_button=False
         )
-        # To calculate best width to spinctrl
         spin_brush_size.CalcSizeFromTextSize("MMMM")
-        spin_brush_size.Bind(wx.EVT_SPINCTRL, self.OnBrushSize)
+        spin_brush_size.valueChanged.connect(self.OnBrushSize)
         self.spin = spin_brush_size
 
-        self.txt_unit = wx.StaticText(self, -1, "mm")
-        self.txt_unit.Bind(wx.EVT_CONTEXT_MENU, self.OnContextMenu)
+        self.txt_unit = QLabel("mm")
+        self.txt_unit.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.txt_unit.customContextMenuRequested.connect(self.OnContextMenu)
 
-        combo_brush_op = wx.ComboBox(
-            self,
-            -1,
-            "",
-            size=(15, -1),
-            choices=const.BRUSH_OP_NAME,
-            style=wx.CB_DROPDOWN | wx.CB_READONLY,
-        )
-        combo_brush_op.SetSelection(const.DEFAULT_BRUSH_OP)
-        if sys.platform != "win32":
-            combo_brush_op.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
+        combo_brush_op = QComboBox(self)
+        combo_brush_op.setEditable(False)
+        combo_brush_op.addItems(const.BRUSH_OP_NAME)
+        combo_brush_op.setCurrentIndex(const.DEFAULT_BRUSH_OP)
         self.combo_brush_op = combo_brush_op
 
-        # Sizer which represents the second line
-        line2 = wx.BoxSizer(wx.HORIZONTAL)
-        line2.Add(btn_brush_format, 0, wx.EXPAND | wx.GROW | wx.RIGHT, 5)
-        line2.Add(spin_brush_size, 0, wx.ALIGN_CENTER_VERTICAL)
-        line2.Add(self.txt_unit, 0, wx.ALIGN_CENTER_VERTICAL)
-        line2.Add(combo_brush_op, 1, wx.RIGHT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL, 5)
+        line2 = QHBoxLayout()
+        line2.addWidget(btn_brush_format, 0)
+        line2.addSpacing(5)
+        line2.addWidget(spin_brush_size, 0)
+        line2.addWidget(self.txt_unit, 0)
+        line2.addWidget(combo_brush_op, 1)
 
         ## LINE 3
-        text_thresh = wx.StaticText(self, -1, _("Brush threshold range:"))
+        text_thresh = QLabel(_("Brush threshold range:"))
 
         ## LINE 4
         gradient_thresh = grad.GradientCtrl(self, -1, 0, 5000, 0, 5000, (0, 0, 255, 100))
@@ -829,76 +622,72 @@ class EditionTools(wx.Panel):
         self.bind_evt_gradient = True
 
         ## LINE 5
-        m3ediv = wx.StaticLine(
-            self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.LI_HORIZONTAL
-        )
+        m3ediv = QFrame(self)
+        m3ediv.setFrameShape(QFrame.HLine)
+        m3ediv.setFrameShadow(QFrame.Sunken)
 
-        cbox_mask_edit_3d = wx.CheckBox(self, -1, "Edit in 3D")
-        btn_clear_3d_poly = wx.Button(self, -1, _("Clear Polygons"))
+        cbox_mask_edit_3d = QCheckBox("Edit in 3D", self)
+        btn_clear_3d_poly = QPushButton(_("Clear Polygons"), self)
 
-        line5 = wx.BoxSizer(wx.HORIZONTAL)
-        line5.Add(cbox_mask_edit_3d, 0, wx.ALIGN_CENTER_VERTICAL)
-        line5.AddStretchSpacer(1)
-        line5.Add(btn_clear_3d_poly, 0, wx.ALIGN_CENTER_VERTICAL)
+        line5 = QHBoxLayout()
+        line5.addWidget(cbox_mask_edit_3d, 0)
+        line5.addStretch(1)
+        line5.addWidget(btn_clear_3d_poly, 0)
 
         ## LINE 6
-        txt_edit_op = wx.StaticText(self, -1, _("Operation:"))
-        combo_mask_edit_3d_op = wx.ComboBox(
-            self, -1, "", choices=const.MASK_3D_EDIT_OP_NAME, style=wx.CB_DROPDOWN | wx.CB_READONLY
+        txt_edit_op = QLabel(_("Operation:"))
+        combo_mask_edit_3d_op = QComboBox(self)
+        combo_mask_edit_3d_op.setEditable(False)
+        combo_mask_edit_3d_op.addItems(const.MASK_3D_EDIT_OP_NAME)
+        combo_mask_edit_3d_op.setCurrentIndex(const.MASK_3D_EDIT_INCLUDE)
+
+        txt_depth_value = QLabel(_("Depth:"))
+        spin_mask_edit_3d_depth = InvFloatSpinCtrl(
+            self, value=1.0, min_value=0.0, max_value=1.0, increment=0.05
         )
-        combo_mask_edit_3d_op.SetSelection(const.MASK_3D_EDIT_INCLUDE)
 
-        txt_depth_value = wx.StaticText(self, -1, _("Depth:"))
-        spin_mask_edit_3d_depth = wx.SpinCtrlDouble(self, value="1.0", min=0.0, max=1.0, inc=0.05)
-
-        line6 = wx.BoxSizer(wx.HORIZONTAL)
-        line6.Add(txt_edit_op, 0, wx.ALIGN_CENTER_VERTICAL)
-        line6.AddSpacer(1)
-        line6.Add(combo_mask_edit_3d_op, 0, wx.ALIGN_CENTER_VERTICAL)
-        line6.AddSpacer(15)
-        line6.Add(txt_depth_value, 0, wx.ALIGN_CENTER_VERTICAL)
-        line6.AddSpacer(1)
-        line6.Add(spin_mask_edit_3d_depth, 0, wx.ALIGN_CENTER_VERTICAL)
+        line6 = QHBoxLayout()
+        line6.addWidget(txt_edit_op, 0)
+        line6.addSpacing(1)
+        line6.addWidget(combo_mask_edit_3d_op, 0)
+        line6.addSpacing(15)
+        line6.addWidget(txt_depth_value, 0)
+        line6.addSpacing(1)
+        line6.addWidget(spin_mask_edit_3d_depth, 0)
 
         self.cbox_mask_edit_3d = cbox_mask_edit_3d
         self.combo_mask_edit_3d_op = combo_mask_edit_3d_op
         self.spin_mask_edit_3d_depth = spin_mask_edit_3d_depth
         self.btn_clear_3d_poly = btn_clear_3d_poly
 
-        # Add lines into main sizer
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.AddSpacer(7)
-        sizer.Add(text1, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
-        sizer.AddSpacer(2)
-        sizer.Add(line2, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
-        sizer.AddSpacer(5)
-        sizer.Add(text_thresh, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
-        sizer.AddSpacer(5)
-        sizer.Add(gradient_thresh, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
-        sizer.AddSpacer(5)
-        sizer.Add(m3ediv, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
-        sizer.AddSpacer(3)
-        sizer.Add(line5, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
-        sizer.AddSpacer(3)
-        sizer.Add(line6, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
-        sizer.AddSpacer(7)
-        sizer.Fit(self)
-
-        self.SetSizerAndFit(sizer)
-        self.Update()
-        self.SetAutoLayout(1)
+        layout = QVBoxLayout(self)
+        layout.addSpacing(7)
+        layout.addWidget(text1)
+        layout.addSpacing(2)
+        layout.addLayout(line2)
+        layout.addSpacing(5)
+        layout.addWidget(text_thresh)
+        layout.addSpacing(5)
+        layout.addWidget(gradient_thresh)
+        layout.addSpacing(5)
+        layout.addWidget(m3ediv)
+        layout.addSpacing(3)
+        layout.addLayout(line5)
+        layout.addSpacing(3)
+        layout.addLayout(line6)
+        layout.addSpacing(7)
 
         self.__bind_events()
         self.__bind_events_wx()
 
     def __bind_events_wx(self):
-        self.btn_brush_format.Bind(wx.EVT_MENU, self.OnMenu)
-        self.Bind(grad.EVT_THRESHOLD_CHANGED, self.OnGradientChanged, self.gradient_thresh)
-        self.combo_brush_op.Bind(wx.EVT_COMBOBOX, self.OnComboBrushOp)
-        self.cbox_mask_edit_3d.Bind(wx.EVT_CHECKBOX, self.OnCheckboxMaskEdit3D)
-        self.combo_mask_edit_3d_op.Bind(wx.EVT_COMBOBOX, self.OnComboMaskEdit3DMode)
-        self.spin_mask_edit_3d_depth.Bind(wx.EVT_SPINCTRLDOUBLE, self.OnSpinDepthMaskEdit3D)
-        self.btn_clear_3d_poly.Bind(wx.EVT_BUTTON, self.OnClearPolyMaskEdit3D)
+        self.btn_brush_format.menu().triggered.connect(self.OnMenu)
+        self.gradient_thresh.threshold_changed.connect(self.OnGradientChanged)
+        self.combo_brush_op.currentIndexChanged.connect(self.OnComboBrushOp)
+        self.cbox_mask_edit_3d.stateChanged.connect(self.OnCheckboxMaskEdit3D)
+        self.combo_mask_edit_3d_op.currentIndexChanged.connect(self.OnComboMaskEdit3DMode)
+        self.spin_mask_edit_3d_depth.valueChanged.connect(self.OnSpinDepthMaskEdit3D)
+        self.btn_clear_3d_poly.clicked.connect(self.OnClearPolyMaskEdit3D)
 
     def __bind_events(self):
         Publisher.subscribe(self.SetThresholdBounds, "Update threshold limits")
@@ -914,8 +703,8 @@ class EditionTools(wx.Panel):
         self.gradient_thresh.SetColour(colour)
 
     def SetGradientColour(self, mask):
-        wx_colour = [c * 255 for c in mask.colour]
-        self.gradient_thresh.SetColour(wx_colour)
+        qt_colour = [c * 255 for c in mask.colour]
+        self.gradient_thresh.SetColour(qt_colour)
 
     def SetThresholdValues(self, threshold_range):
         thresh_min, thresh_max = threshold_range
@@ -940,45 +729,35 @@ class EditionTools(wx.Panel):
                 "Set edition threshold values", threshold_range=(thresh_min, thresh_max)
             )
 
-    def OnMenu(self, evt):
-        SQUARE_BMP = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "brush_square.png"), wx.BITMAP_TYPE_PNG
-        )
-        CIRCLE_BMP = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "brush_circle.png"), wx.BITMAP_TYPE_PNG
-        )
+    def OnMenu(self, action):
+        brush_format = action.data()
+        self.btn_brush_format.setIcon(self._brush_icons[brush_format])
+        Publisher.sendMessage("Set brush format", cursor_format=brush_format)
 
-        brush = {MENU_BRUSH_CIRCLE: const.BRUSH_CIRCLE, MENU_BRUSH_SQUARE: const.BRUSH_SQUARE}
-        bitmap = {MENU_BRUSH_CIRCLE: CIRCLE_BMP, MENU_BRUSH_SQUARE: SQUARE_BMP}
-
-        self.btn_brush_format.SetBitmap(bitmap[evt.GetId()])
-
-        Publisher.sendMessage("Set brush format", cursor_format=brush[evt.GetId()])
-
-    def OnBrushSize(self, evt):
-        """ """
-        # FIXME: Using wx.EVT_SPINCTRL in MacOS it doesnt capture changes only
-        # in the text ctrl - so we are capturing only changes on text
-        # Strangelly this is being called twice
+    def OnBrushSize(self):
         Publisher.sendMessage("Set edition brush size", size=self.spin.GetValue())
 
-    def OnContextMenu(self, evt):
-        print("Context")
-        menu = wx.Menu()
-        mm_item = menu.AppendRadioItem(MENU_UNIT_MM, "mm")
-        um_item = menu.AppendRadioItem(MENU_UNIT_UM, "µm")
-        px_item = menu.AppendRadioItem(MENU_UNIT_PX, "px")
+    def OnContextMenu(self, pos):
+        menu = QMenu(self)
+        mm_action = menu.addAction("mm")
+        mm_action.setCheckable(True)
+        um_action = menu.addAction("µm")
+        um_action.setCheckable(True)
+        px_action = menu.addAction("px")
+        px_action.setCheckable(True)
 
         if self.unit == "mm":
-            mm_item.Check()
+            mm_action.setChecked(True)
         elif self.unit == "µm":
-            um_item.Check()
+            um_action.setChecked(True)
         else:
-            px_item.Check()
+            px_action.setChecked(True)
 
-        menu.Bind(wx.EVT_MENU, self.OnSetUnit)
-        self.txt_unit.PopupMenu(menu)
-        menu.Destroy()
+        action = menu.exec_(self.txt_unit.mapToGlobal(pos))
+        if action:
+            self.txt_unit.setText(action.text())
+            self.unit = action.text()
+            Publisher.sendMessage("Set edition brush unit", unit=self.unit)
 
     def _set_threshold_range_gui(self, threshold_range):
         self.SetThresholdValues(threshold_range)
@@ -986,48 +765,37 @@ class EditionTools(wx.Panel):
     def _set_brush_size(self, size):
         self.spin.SetValue(size)
 
-    def OnComboBrushOp(self, evt):
-        brush_op_id = evt.GetSelection()
+    def OnComboBrushOp(self, brush_op_id):
+        if brush_op_id < 0:
+            return
         Publisher.sendMessage("Set edition operation", operation=brush_op_id)
         if brush_op_id == const.BRUSH_THRESH:
-            self.gradient_thresh.Enable()
+            self.gradient_thresh.setEnabled(True)
         else:
-            self.gradient_thresh.Disable()
+            self.gradient_thresh.setEnabled(False)
 
-    def OnSetUnit(self, evt):
-        if evt.GetId() == MENU_UNIT_MM:
-            self.txt_unit.SetLabel("mm")
-        elif evt.GetId() == MENU_UNIT_UM:
-            self.txt_unit.SetLabel("µm")
-        else:
-            self.txt_unit.SetLabel("px")
-        self.unit = self.txt_unit.GetLabel()
-        Publisher.sendMessage("Set edition brush unit", unit=self.unit)
-
-    def OnCheckboxMaskEdit3D(self, _evt: wx.CommandEvent):
+    def OnCheckboxMaskEdit3D(self, state):
         style_id = const.STATE_MASK_3D_EDIT
         spin_val = self.spin_mask_edit_3d_depth.GetValue()
 
-        if self.cbox_mask_edit_3d.GetValue():
+        if self.cbox_mask_edit_3d.isChecked():
             Publisher.sendMessage("Enable style", style=style_id)
             Publisher.sendMessage("M3E set depth value", value=spin_val)
-            # Enable Clear Polygons button only when Edit in 3D is active
-            self.btn_clear_3d_poly.Enable()
+            self.btn_clear_3d_poly.setEnabled(True)
         else:
             Publisher.sendMessage("Disable style", style=style_id)
-            # Disable Clear Polygons button when Edit in 3D is inactive
-            # to prevent clearing mask edits when the tool is not active.
-            self.btn_clear_3d_poly.Disable()
+            self.btn_clear_3d_poly.setEnabled(False)
 
-    def OnComboMaskEdit3DMode(self, evt: wx.CommandEvent):
-        op_id = evt.GetSelection()
+    def OnComboMaskEdit3DMode(self, op_id):
+        if op_id < 0:
+            return
         Publisher.sendMessage("M3E set edit mode", mode=op_id)
 
     def OnAskMaskEdit3DMode(self):
-        op_id = self.combo_mask_edit_3d_op.GetSelection()
+        op_id = self.combo_mask_edit_3d_op.currentIndex()
         Publisher.sendMessage("M3E set edit mode", mode=op_id)
 
-    def OnSpinDepthMaskEdit3D(self, _evt):
+    def OnSpinDepthMaskEdit3D(self):
         spin_val = self.spin_mask_edit_3d_depth.GetValue()
         Publisher.sendMessage("M3E set depth value", value=spin_val)
 
@@ -1035,133 +803,105 @@ class EditionTools(wx.Panel):
         spin_val = self.spin_mask_edit_3d_depth.GetValue()
         Publisher.sendMessage("M3E set depth value", value=spin_val)
 
-    def OnClearPolyMaskEdit3D(self, _evt):
-        # Only clear polygons when Edit in 3D is active.
-        # Fixes #1079: the button was clearing edits even when unchecked.
-        if self.cbox_mask_edit_3d.GetValue():
+    def OnClearPolyMaskEdit3D(self):
+        if self.cbox_mask_edit_3d.isChecked():
             Publisher.sendMessage("M3E clear polygons")
 
 
 class WatershedTool(EditionTools):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
-        try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
-        except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
-        self.SetBackgroundColour(default_colour)
+        QWidget.__init__(self, parent)
 
         ## LINE 1
-        text1 = wx.StaticText(self, -1, _("Choose brush type, size or operation:"))
+        text1 = QLabel(_("Choose brush type, size or operation:"))
 
         self.unit = "mm"
 
         ## LINE 2
-        menu = wx.Menu()
+        CIRCLE_ICON = QIcon(QPixmap(os.path.join(inv_paths.ICON_DIR, "brush_circle.png")))
+        SQUARE_ICON = QIcon(QPixmap(os.path.join(inv_paths.ICON_DIR, "brush_square.png")))
 
-        CIRCLE_BMP = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "brush_circle.png"), wx.BITMAP_TYPE_PNG
-        )
-        item = menu.Append(MENU_BRUSH_CIRCLE, _("Circle"))
-        item.SetBitmap(CIRCLE_BMP)
+        bmp_brush_format = {const.BRUSH_CIRCLE: CIRCLE_ICON, const.BRUSH_SQUARE: SQUARE_ICON}
+        selected_icon = bmp_brush_format[const.DEFAULT_BRUSH_FORMAT]
 
-        SQUARE_BMP = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "brush_square.png"), wx.BITMAP_TYPE_PNG
-        )
-        item2 = menu.Append(MENU_BRUSH_SQUARE, _("Square"))
-        item2.SetBitmap(SQUARE_BMP)
+        btn_brush_format = QPushButton("")
+        btn_brush_format.setIcon(selected_icon)
+        btn_brush_format.setFlat(True)
 
-        bmp_brush_format = {const.BRUSH_CIRCLE: CIRCLE_BMP, const.BRUSH_SQUARE: SQUARE_BMP}
-        selected_bmp = bmp_brush_format[const.DEFAULT_BRUSH_FORMAT]
-
-        btn_brush_format = pbtn.PlateButton(
-            self, wx.ID_ANY, "", selected_bmp, style=pbtn.PB_STYLE_SQUARE
-        )
-        btn_brush_format.SetMenu(menu)
+        brush_menu = QMenu(self)
+        act_circle = brush_menu.addAction(CIRCLE_ICON, _("Circle"))
+        act_square = brush_menu.addAction(SQUARE_ICON, _("Square"))
+        act_circle.setData(const.BRUSH_CIRCLE)
+        act_square.setData(const.BRUSH_SQUARE)
+        btn_brush_format.setMenu(brush_menu)
         self.btn_brush_format = btn_brush_format
+        self._brush_icons = bmp_brush_format
 
         spin_brush_size = InvSpinCtrl(
             self, -1, value=const.BRUSH_SIZE, min_value=1, max_value=1000, spin_button=False
         )
-        # To calculate best width to spinctrl
         spin_brush_size.CalcSizeFromTextSize("MMMM")
-        spin_brush_size.Bind(wx.EVT_SPINCTRL, self.OnBrushSize)
+        spin_brush_size.valueChanged.connect(self.OnBrushSize)
         self.spin = spin_brush_size
 
-        self.txt_unit = wx.StaticText(self, -1, "mm")
-        self.txt_unit.Bind(wx.EVT_CONTEXT_MENU, self.OnContextMenu)
+        self.txt_unit = QLabel("mm")
+        self.txt_unit.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.txt_unit.customContextMenuRequested.connect(self.OnContextMenu)
 
-        combo_brush_op = wx.ComboBox(
-            self,
-            -1,
-            "",
-            size=(15, -1),
-            choices=(_("Foreground"), _("Background"), _("Erase")),
-            style=wx.CB_DROPDOWN | wx.CB_READONLY,
-        )
-        combo_brush_op.SetSelection(0)
-        if sys.platform != "win32":
-            combo_brush_op.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
+        combo_brush_op = QComboBox(self)
+        combo_brush_op.setEditable(False)
+        combo_brush_op.addItems([_("Foreground"), _("Background"), _("Erase")])
+        combo_brush_op.setCurrentIndex(0)
         self.combo_brush_op = combo_brush_op
 
-        # Sizer which represents the second line
-        line2 = wx.BoxSizer(wx.HORIZONTAL)
-        line2.Add(btn_brush_format, 0, wx.EXPAND | wx.GROW | wx.RIGHT, 5)
-        line2.Add(spin_brush_size, 0, wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, 5)
-        line2.Add(self.txt_unit, 0, wx.ALIGN_CENTER_VERTICAL)
-        line2.Add(combo_brush_op, 1, wx.RIGHT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL, 5)
-
-        ## LINE 3
-
-        ## LINE 4
+        line2 = QHBoxLayout()
+        line2.addWidget(btn_brush_format, 0)
+        line2.addSpacing(5)
+        line2.addWidget(spin_brush_size, 0)
+        line2.addWidget(self.txt_unit, 0)
+        line2.addWidget(combo_brush_op, 1)
 
         # LINE 5
-        check_box = wx.CheckBox(self, -1, _("Overwrite mask"))
-        ww_wl_cbox = wx.CheckBox(self, -1, _("Use WW&WL"))
-        ww_wl_cbox.SetValue(True)
+        check_box = QCheckBox(_("Overwrite mask"), self)
+        ww_wl_cbox = QCheckBox(_("Use WW&WL"), self)
+        ww_wl_cbox.setChecked(True)
         self.check_box = check_box
         self.ww_wl_cbox = ww_wl_cbox
 
         # Line 6
-        bmp = wx.Bitmap(os.path.join(inv_paths.ICON_DIR, "configuration.png"), wx.BITMAP_TYPE_PNG)
-        self.btn_wconfig = wx.BitmapButton(
-            self, -1, bitmap=bmp, size=(bmp.GetWidth() + 10, bmp.GetHeight() + 10)
-        )
-        self.btn_exp_watershed = wx.Button(self, -1, _("Expand watershed to 3D"))
+        bmp = QPixmap(os.path.join(inv_paths.ICON_DIR, "configuration.png"))
+        self.btn_wconfig = QPushButton("")
+        self.btn_wconfig.setIcon(QIcon(bmp))
+        self.btn_wconfig.setFixedSize(bmp.width() + 10, bmp.height() + 10)
+        self.btn_exp_watershed = QPushButton(_("Expand watershed to 3D"))
 
-        sizer_btns = wx.BoxSizer(wx.HORIZONTAL)
-        sizer_btns.Add(self.btn_wconfig, 0, wx.ALIGN_LEFT | wx.LEFT | wx.TOP | wx.DOWN, 5)
-        sizer_btns.Add(self.btn_exp_watershed, 0, wx.GROW | wx.EXPAND | wx.ALL, 5)
+        sizer_btns = QHBoxLayout()
+        sizer_btns.addWidget(self.btn_wconfig, 0, Qt.AlignLeft)
+        sizer_btns.addWidget(self.btn_exp_watershed, 1)
 
-        # Add lines into main sizer
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.AddSpacer(7)
-        sizer.Add(text1, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
-        sizer.AddSpacer(2)
-        sizer.Add(line2, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
-        sizer.AddSpacer(5)
-        sizer.Add(check_box, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
-        sizer.AddSpacer(2)
-        sizer.Add(ww_wl_cbox, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
-        sizer.AddSpacer(5)
-        sizer.Add(sizer_btns, 0, wx.EXPAND)
-        sizer.AddSpacer(7)
-        sizer.Fit(self)
-
-        self.SetSizerAndFit(sizer)
-        self.Update()
-        self.SetAutoLayout(1)
+        layout = QVBoxLayout(self)
+        layout.addSpacing(7)
+        layout.addWidget(text1)
+        layout.addSpacing(2)
+        layout.addLayout(line2)
+        layout.addSpacing(5)
+        layout.addWidget(check_box)
+        layout.addSpacing(2)
+        layout.addWidget(ww_wl_cbox)
+        layout.addSpacing(5)
+        layout.addLayout(sizer_btns)
+        layout.addSpacing(7)
 
         self.__bind_events_wx()
         self.__bind_pubsub_evt()
 
     def __bind_events_wx(self):
-        self.btn_brush_format.Bind(wx.EVT_MENU, self.OnMenu)
-        self.combo_brush_op.Bind(wx.EVT_COMBOBOX, self.OnComboBrushOp)
-        self.check_box.Bind(wx.EVT_CHECKBOX, self.OnCheckOverwriteMask)
-        self.ww_wl_cbox.Bind(wx.EVT_CHECKBOX, self.OnCheckWWWL)
-        self.btn_exp_watershed.Bind(wx.EVT_BUTTON, self.OnExpandWatershed)
-        self.btn_wconfig.Bind(wx.EVT_BUTTON, self.OnConfig)
+        self.btn_brush_format.menu().triggered.connect(self.OnMenu)
+        self.combo_brush_op.currentIndexChanged.connect(self.OnComboBrushOp)
+        self.check_box.stateChanged.connect(self.OnCheckOverwriteMask)
+        self.ww_wl_cbox.stateChanged.connect(self.OnCheckWWWL)
+        self.btn_exp_watershed.clicked.connect(self.OnExpandWatershed)
+        self.btn_wconfig.clicked.connect(self.OnConfig)
 
     def __bind_pubsub_evt(self):
         Publisher.subscribe(self._set_brush_size, "Set watershed brush size")
@@ -1171,8 +911,8 @@ class WatershedTool(EditionTools):
 
     def SetGradientColour(self, mask):
         vtk_colour = mask.colour
-        wx_colour = [c * 255 for c in vtk_colour]
-        self.gradient_thresh.SetColour(wx_colour)
+        qt_colour = [c * 255 for c in vtk_colour]
+        self.gradient_thresh.SetColour(qt_colour)
 
     def SetThresholdValues(self, threshold_range):
         thresh_min, thresh_max = threshold_range
@@ -1189,76 +929,58 @@ class WatershedTool(EditionTools):
         self.gradient_thresh.SetMinValue(thresh_min)
         self.gradient_thresh.SetMaxValue(thresh_max)
 
-    def OnMenu(self, evt):
-        SQUARE_BMP = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "brush_square.png"), wx.BITMAP_TYPE_PNG
-        )
-        CIRCLE_BMP = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "brush_circle.png"), wx.BITMAP_TYPE_PNG
-        )
+    def OnMenu(self, action):
+        brush_format = action.data()
+        self.btn_brush_format.setIcon(self._brush_icons[brush_format])
+        Publisher.sendMessage("Set watershed brush format", brush_format=brush_format)
 
-        brush = {MENU_BRUSH_CIRCLE: const.BRUSH_CIRCLE, MENU_BRUSH_SQUARE: const.BRUSH_SQUARE}
-        bitmap = {MENU_BRUSH_CIRCLE: CIRCLE_BMP, MENU_BRUSH_SQUARE: SQUARE_BMP}
-
-        self.btn_brush_format.SetBitmap(bitmap[evt.GetId()])
-
-        Publisher.sendMessage("Set watershed brush format", brush_format=brush[evt.GetId()])
-
-    def OnBrushSize(self, evt):
-        """ """
-        # FIXME: Using wx.EVT_SPINCTRL in MacOS it doesnt capture changes only
-        # in the text ctrl - so we are capturing only changes on text
-        # Strangelly this is being called twice
+    def OnBrushSize(self):
         Publisher.sendMessage("Set watershed brush size", size=self.spin.GetValue())
 
-    def OnContextMenu(self, evt):
-        print("Context")
-        menu = wx.Menu()
-        mm_item = menu.AppendRadioItem(MENU_UNIT_MM, "mm")
-        um_item = menu.AppendRadioItem(MENU_UNIT_UM, "µm")
-        px_item = menu.AppendRadioItem(MENU_UNIT_PX, "px")
+    def OnContextMenu(self, pos):
+        menu = QMenu(self)
+        mm_action = menu.addAction("mm")
+        mm_action.setCheckable(True)
+        um_action = menu.addAction("µm")
+        um_action.setCheckable(True)
+        px_action = menu.addAction("px")
+        px_action.setCheckable(True)
 
         if self.unit == "mm":
-            mm_item.Check()
+            mm_action.setChecked(True)
         elif self.unit == "µm":
-            um_item.Check()
+            um_action.setChecked(True)
         else:
-            px_item.Check()
+            px_action.setChecked(True)
 
-        menu.Bind(wx.EVT_MENU, self.OnSetUnit)
-        self.txt_unit.PopupMenu(menu)
-        menu.Destroy()
+        action = menu.exec_(self.txt_unit.mapToGlobal(pos))
+        if action:
+            self.txt_unit.setText(action.text())
+            self.unit = action.text()
+            Publisher.sendMessage("Set watershed brush unit", unit=self.unit)
 
     def _set_brush_size(self, size):
         self.spin.SetValue(size)
 
-    def OnSetUnit(self, evt):
-        if evt.GetId() == MENU_UNIT_MM:
-            self.txt_unit.SetLabel("mm")
-        elif evt.GetId() == MENU_UNIT_UM:
-            self.txt_unit.SetLabel("µm")
-        else:
-            self.txt_unit.SetLabel("px")
-        self.unit = self.txt_unit.GetLabel()
-        Publisher.sendMessage("Set watershed brush unit", unit=self.unit)
-
-    def OnComboBrushOp(self, evt):
-        brush_op = self.combo_brush_op.GetValue()
+    def OnComboBrushOp(self, index):
+        if index < 0:
+            return
+        brush_op = self.combo_brush_op.currentText()
         Publisher.sendMessage("Set watershed operation", operation=brush_op)
 
-    def OnCheckOverwriteMask(self, evt):
-        value = self.check_box.GetValue()
+    def OnCheckOverwriteMask(self, state):
+        value = self.check_box.isChecked()
         Publisher.sendMessage("Set overwrite mask", flag=value)
 
-    def OnCheckWWWL(self, evt):
-        value = self.ww_wl_cbox.GetValue()
+    def OnCheckWWWL(self, state):
+        value = self.ww_wl_cbox.isChecked()
         Publisher.sendMessage("Set use ww wl", use_ww_wl=value)
 
-    def OnConfig(self, evt):
+    def OnConfig(self):
         from invesalius.data.styles import WatershedConfig
 
         config = WatershedConfig()
-        dlg.WatershedOptionsDialog(config).Show()
+        dlg.WatershedOptionsDialog(config).show()
 
-    def OnExpandWatershed(self, evt):
+    def OnExpandWatershed(self):
         Publisher.sendMessage("Expand watershed to 3D AXIAL")

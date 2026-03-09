@@ -19,118 +19,91 @@
 
 import os
 
-import wx
-import wx.lib.agw.hyperlink as hl
-import wx.lib.platebtn as pbtn
+from PySide6.QtCore import QSize
+from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtWidgets import (
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 import invesalius.constants as constants
 from invesalius import inv_paths
 from invesalius.i18n import tr as _
 from invesalius.pubsub import pub as Publisher
 
-ID_BTN_MEASURE_LINEAR = wx.NewIdRef()
-ID_BTN_MEASURE_ANGULAR = wx.NewIdRef()
-ID_BTN_ANNOTATION = wx.NewIdRef()
 
-
-class TaskPanel(wx.Panel):
+class TaskPanel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
         inner_panel = InnerTaskPanel(self)
 
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(inner_panel, 1, wx.EXPAND | wx.GROW | wx.BOTTOM | wx.RIGHT | wx.LEFT, 7)
-        sizer.Fit(self)
-
-        self.SetSizer(sizer)
-        self.Update()
-        self.SetAutoLayout(1)
+        sizer = QHBoxLayout(self)
+        sizer.setContentsMargins(7, 0, 7, 7)
+        sizer.addWidget(inner_panel)
 
 
-class InnerTaskPanel(wx.Panel):
+class InnerTaskPanel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
-        self.SetBackgroundColour(wx.Colour(255, 255, 255))
-        self.SetAutoLayout(1)
+        super().__init__(parent)
+        self.setStyleSheet("background-color: white;")
 
-        # Counter for projects loaded in current GUI
         self.proj_count = 0
-
-        # Floating items (to be inserted)
         self.float_hyper_list = []
 
-        # Fixed text and hyperlink items
-        tooltip = _("Measure distances")
-        txt_measure = wx.StaticText(self, -1, _("Measure"))
-        txt_measure.SetToolTip(tooltip)
+        txt_measure = QLabel(_("Measure"), self)
+        txt_measure.setToolTip(_("Measure distances"))
 
-        tooltip = _("Add text annotations")
-        txt_annotation = hl.HyperLinkCtrl(self, -1, _("Add text annotations"))
-        txt_annotation.SetUnderlines(False, False, False)
-        txt_annotation.SetColours("BLACK", "BLACK", "BLACK")
-        txt_annotation.SetToolTip(tooltip)
-        txt_annotation.AutoBrowse(False)
-        txt_annotation.UpdateLink()
-        txt_annotation.Bind(hl.EVT_HYPERLINK_LEFT, self.OnTextAnnotation)
+        txt_annotation = QPushButton(_("Add text annotations"), self)
+        txt_annotation.setFlat(True)
+        txt_annotation.setStyleSheet("color: black; text-decoration: none;")
+        txt_annotation.setToolTip(_("Add text annotations"))
+        txt_annotation.clicked.connect(self.OnTextAnnotation)
 
-        # Image(s) for buttons
-        BMP_ANNOTATE = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "annotation.png"), wx.BITMAP_TYPE_PNG
-        )
-        BMP_ANGLE = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "measure_angle_original.png"), wx.BITMAP_TYPE_PNG
-        )
-        BMP_DISTANCE = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "measure_line_original.png"), wx.BITMAP_TYPE_PNG
-        )
-        BMP_ANNOTATE.SetWidth(25)
-        BMP_ANNOTATE.SetHeight(25)
-        BMP_ANGLE.SetWidth(25)
-        BMP_ANGLE.SetHeight(25)
-        BMP_DISTANCE.SetWidth(25)
-        BMP_DISTANCE.SetHeight(25)
+        BMP_ANNOTATE = QPixmap(os.path.join(inv_paths.ICON_DIR, "annotation.png"))
+        BMP_ANGLE = QPixmap(os.path.join(inv_paths.ICON_DIR, "measure_angle_original.png"))
+        BMP_DISTANCE = QPixmap(os.path.join(inv_paths.ICON_DIR, "measure_line_original.png"))
 
-        # Buttons related to hyperlinks
-        button_style = pbtn.PB_STYLE_SQUARE | pbtn.PB_STYLE_DEFAULT
+        icon_size = QSize(25, 25)
 
-        button_measure_linear = pbtn.PlateButton(
-            self, ID_BTN_MEASURE_LINEAR, "", BMP_DISTANCE, style=button_style
-        )
-        button_measure_angular = pbtn.PlateButton(
-            self, ID_BTN_MEASURE_ANGULAR, "", BMP_ANGLE, style=button_style
-        )
+        button_measure_linear = QPushButton(self)
+        button_measure_linear.setIcon(QIcon(BMP_DISTANCE))
+        button_measure_linear.setIconSize(icon_size)
+        button_measure_linear.setFlat(True)
+        button_measure_linear.clicked.connect(self.OnLinkLinearMeasure)
 
-        button_annotation = pbtn.PlateButton(
-            self, ID_BTN_ANNOTATION, "", BMP_ANNOTATE, style=button_style
-        )
+        button_measure_angular = QPushButton(self)
+        button_measure_angular.setIcon(QIcon(BMP_ANGLE))
+        button_measure_angular.setIconSize(icon_size)
+        button_measure_angular.setFlat(True)
+        button_measure_angular.clicked.connect(self.OnLinkAngularMeasure)
 
-        # When using PlaneButton, it is necessary to bind events from parent win
-        self.Bind(wx.EVT_BUTTON, self.OnButton)
+        button_annotation = QPushButton(self)
+        button_annotation.setIcon(QIcon(BMP_ANNOTATE))
+        button_annotation.setIconSize(icon_size)
+        button_annotation.setFlat(True)
+        button_annotation.clicked.connect(self.OnTextAnnotation)
 
-        # Tags and grid sizer for fixed items
-        # flag_link = wx.EXPAND | wx.GROW | wx.LEFT | wx.TOP
-        # flag_button = wx.EXPAND | wx.GROW
+        sizer = QGridLayout()
+        sizer.addWidget(txt_measure, 0, 0)
+        sizer.addWidget(button_measure_linear, 0, 1)
+        sizer.addWidget(button_measure_angular, 0, 2)
+        sizer.addWidget(txt_annotation, 1, 0)
+        sizer.addWidget(button_annotation, 1, 2, 2, 1)
+        sizer.setColumnStretch(0, 1)
 
-        sizer = wx.GridBagSizer(hgap=0, vgap=0)
-        sizer.Add(txt_measure, pos=(0, 0), flag=wx.GROW | wx.EXPAND | wx.TOP, border=3)
-        sizer.Add(button_measure_linear, pos=(0, 1), flag=wx.GROW | wx.EXPAND)
-        sizer.Add(button_measure_angular, pos=(0, 2), flag=wx.GROW | wx.EXPAND)
-        sizer.Add(txt_annotation, pos=(1, 0), flag=wx.GROW | wx.EXPAND)
-        sizer.Add(button_annotation, pos=(1, 2), span=(2, 1), flag=wx.GROW | wx.EXPAND)
-        sizer.AddGrowableCol(0)
+        main_sizer = QVBoxLayout(self)
+        main_sizer.setContentsMargins(0, 0, 0, 0)
+        main_sizer.addLayout(sizer)
+        main_sizer.addStretch()
 
-        # Add line sizers into main sizer
-        main_sizer = wx.BoxSizer(wx.VERTICAL)
-        main_sizer.Add(sizer, 0, wx.GROW | wx.EXPAND)
-        main_sizer.Fit(self)
-
-        # Update main sizer and panel layout
-        self.SetSizer(sizer)
-        self.Fit()
         self.sizer = main_sizer
 
-    def OnTextAnnotation(self, evt=None):
+    def OnTextAnnotation(self):
         print("TODO: Send Signal - Add text annotation (both 2d and 3d)")
 
     def OnLinkLinearMeasure(self):
@@ -138,13 +111,3 @@ class InnerTaskPanel(wx.Panel):
 
     def OnLinkAngularMeasure(self):
         Publisher.sendMessage("Enable style", style=constants.STATE_MEASURE_ANGLE)
-
-    def OnButton(self, evt):
-        id = evt.GetId()
-
-        if id == ID_BTN_MEASURE_LINEAR:
-            self.OnLinkLinearMeasure()
-        elif id == ID_BTN_MEASURE_ANGULAR:
-            self.OnLinkAngularMeasure()
-        else:  # elif id == ID_BTN_ANNOTATION:
-            self.OnTextAnnotation()

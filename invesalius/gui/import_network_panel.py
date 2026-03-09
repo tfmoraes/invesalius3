@@ -18,74 +18,44 @@
 # --------------------------------------------------------------------------
 import sys
 
-import wx
-import wx.gizmos as gizmos
-
-# from dicionario import musicdata
-import wx.lib.mixins.listctrl as listmix
-import wx.lib.splitter as spl
-from wx.lib.mixins.listctrl import CheckListCtrlMixin
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import (
+    QComboBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 import invesalius.constants as const
 import invesalius.gui.dialogs as dlg
 import invesalius.net.dicom as dcm_net
-
-# import invesalius.gui.dicom_preview_panel as dpp
 import invesalius.reader.dicom_grouper as dcm
 from invesalius.i18n import tr as _
 from invesalius.pubsub import pub as Publisher
 
-myEVT_SELECT_SERIE = wx.NewEventType()
-EVT_SELECT_SERIE = wx.PyEventBinder(myEVT_SELECT_SERIE, 1)
 
-myEVT_SELECT_SLICE = wx.NewEventType()
-EVT_SELECT_SLICE = wx.PyEventBinder(myEVT_SELECT_SLICE, 1)
-
-myEVT_SELECT_PATIENT = wx.NewEventType()
-EVT_SELECT_PATIENT = wx.PyEventBinder(myEVT_SELECT_PATIENT, 1)
-
-myEVT_SELECT_SERIE_TEXT = wx.NewEventType()
-EVT_SELECT_SERIE_TEXT = wx.PyEventBinder(myEVT_SELECT_SERIE_TEXT, 1)
-
-
-class SelectEvent(wx.PyCommandEvent):
-    def __init__(self, evtType, id):
-        super().__init__(evtType, id)
-
-    def GetSelectID(self):
-        return self.SelectedID
-
-    def SetSelectedID(self, id):
-        self.SelectedID = id
-
-    def GetItemData(self):
-        return self.data
-
-    def SetItemData(self, data):
-        self.data = data
-
-
-class Panel(wx.Panel):
+class Panel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, pos=wx.Point(5, 5))  # ,
-        # size=wx.Size(280, 656))
+        super().__init__(parent)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(InnerPanel(self), 1, wx.EXPAND | wx.GROW | wx.ALL, 5)
-
-        self.SetSizer(sizer)
-        sizer.Fit(self)
-
-        self.Layout()
-        self.Update()
-        self.SetAutoLayout(1)
+        sizer = QVBoxLayout(self)
+        sizer.setContentsMargins(5, 5, 5, 5)
+        sizer.addWidget(InnerPanel(self), 1)
 
 
-# Inner fold panel
-class InnerPanel(wx.Panel):
+class InnerPanel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, pos=wx.Point(5, 5))  # ,
-        # size=wx.Size(680, 656))
+        super().__init__(parent)
 
         self.patients = []
         self.first_image_selection = None
@@ -95,50 +65,34 @@ class InnerPanel(wx.Panel):
         self._bind_pubsubevt()
 
     def _init_ui(self):
-        splitter = spl.MultiSplitterWindow(self, style=wx.SP_LIVE_UPDATE)
-        splitter.SetOrientation(wx.VERTICAL)
-        self.splitter = splitter
+        self.splitter = QSplitter(Qt.Vertical, self)
 
-        panel = wx.Panel(self)
-        self.btn_cancel = wx.Button(panel, wx.ID_CANCEL)
-        self.btn_ok = wx.Button(panel, wx.ID_OK, _("Import"))
+        self.image_panel = HostFindPanel(self.splitter)
+        self.text_panel = TextPanel(self.splitter)
 
-        btnsizer = wx.StdDialogButtonSizer()
-        btnsizer.AddButton(self.btn_ok)
-        btnsizer.AddButton(self.btn_cancel)
-        btnsizer.Realize()
+        self.splitter.addWidget(self.image_panel)
+        self.splitter.addWidget(self.text_panel)
+        self.splitter.setSizes([250, 250])
 
-        self.combo_interval = wx.ComboBox(
-            panel, -1, "", choices=const.IMPORT_INTERVAL, style=wx.CB_DROPDOWN | wx.CB_READONLY
-        )
-        self.combo_interval.SetSelection(0)
+        panel = QWidget(self)
+        self.btn_cancel = QPushButton(_("Cancel"), panel)
+        self.btn_ok = QPushButton(_("Import"), panel)
 
-        inner_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        inner_sizer.Add(btnsizer, 0, wx.LEFT | wx.TOP, 5)
-        inner_sizer.Add(self.combo_interval, 0, wx.LEFT | wx.RIGHT | wx.TOP, 5)
-        panel.SetSizer(inner_sizer)
-        inner_sizer.Fit(panel)
+        self.combo_interval = QComboBox(panel)
+        self.combo_interval.addItems(const.IMPORT_INTERVAL)
+        self.combo_interval.setCurrentIndex(0)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(splitter, 20, wx.EXPAND)
-        sizer.Add(panel, 1, wx.EXPAND | wx.LEFT, 90)
+        inner_sizer = QHBoxLayout(panel)
+        inner_sizer.setContentsMargins(5, 5, 5, 5)
+        inner_sizer.addWidget(self.btn_ok)
+        inner_sizer.addWidget(self.btn_cancel)
+        inner_sizer.addWidget(self.combo_interval)
 
-        self.SetSizer(sizer)
-        sizer.Fit(self)
-
-        self.image_panel = HostFindPanel(splitter)
-        splitter.AppendWindow(self.image_panel, 250)
-
-        self.text_panel = TextPanel(splitter)
-        splitter.AppendWindow(self.text_panel, 250)
-
-        self.Layout()
-        self.Update()
-        self.SetAutoLayout(1)
+        sizer = QVBoxLayout(self)
+        sizer.addWidget(self.splitter, 20)
+        sizer.addWidget(panel, 1)
 
     def _bind_pubsubevt(self):
-        # Publisher.subscribe(self.ShowDicomPreview, "Load import panel")
-        # Publisher.subscribe(self.GetSelectedImages ,"Selected Import Images")
         pass
 
     def GetSelectedImages(self, pubsub_evt):
@@ -146,49 +100,43 @@ class InnerPanel(wx.Panel):
         self.last_image_selection = pubsub_evt.data[1]
 
     def _bind_events(self):
-        self.Bind(EVT_SELECT_SERIE, self.OnSelectSerie)
-        self.Bind(EVT_SELECT_SLICE, self.OnSelectSlice)
-        self.Bind(EVT_SELECT_PATIENT, self.OnSelectPatient)
-        self.btn_ok.Bind(wx.EVT_BUTTON, self.OnClickOk)
-        self.btn_cancel.Bind(wx.EVT_BUTTON, self.OnClickCancel)
-        self.text_panel.Bind(EVT_SELECT_SERIE_TEXT, self.OnDblClickTextPanel)
+        self.text_panel.serie_selected.connect(self.OnSelectSerie)
+        self.text_panel.serie_double_clicked.connect(self.OnDblClickTextPanel)
+        self.btn_ok.clicked.connect(self.OnClickOk)
+        self.btn_cancel.clicked.connect(self.OnClickCancel)
 
     def ShowDicomPreview(self, pubsub_evt):
         dicom_groups = pubsub_evt.data
         self.patients.extend(dicom_groups)
         self.text_panel.Populate(dicom_groups)
 
-    def OnSelectSerie(self, evt):
-        patient_id, serie_number = evt.GetSelectID()
-        self.text_panel.SelectSerie(evt.GetSelectID())
+    def OnSelectSerie(self, patient_id, serie_number):
+        self.text_panel.SelectSerie((patient_id, serie_number))
         for patient in self.patients:
             if patient_id == patient.GetDicomSample().patient.id:
                 for group in patient.GetGroups():
                     if serie_number == group.GetDicomSample().acquisition.serie_number:
                         self.image_panel.SetSerie(group)
 
-    def OnSelectSlice(self, evt):
+    def OnSelectSlice(self):
         pass
 
-    def OnSelectPatient(self, evt):
+    def OnSelectPatient(self):
         pass
 
-    def OnDblClickTextPanel(self, evt):
-        group = evt.GetItemData()
+    def OnDblClickTextPanel(self, group):
         self.LoadDicom(group)
 
-    def OnClickOk(self, evt):
+    def OnClickOk(self):
         group = self.text_panel.GetSelection()
-
         if group:
             self.LoadDicom(group)
 
-    def OnClickCancel(self, evt):
-        # Publisher.sendMessage("Cancel DICOM load")
+    def OnClickCancel(self):
         pass
 
     def LoadDicom(self, group):
-        interval = self.combo_interval.GetSelection()
+        interval = self.combo_interval.currentIndex()
 
         if not isinstance(group, dcm.DicomGroup):
             group = max(group.GetGroups(), key=lambda g: g.nslices)
@@ -204,16 +152,17 @@ class InnerPanel(wx.Panel):
 
         nslices_result = slice_amont / (interval + 1)
         if nslices_result > 1:
-            # Publisher.sendMessage('Open DICOM group', (group, interval,
-            #                        [self.first_image_selection, self.last_image_selection]))
             pass
         else:
             dlg.MissingFilesForReconstruction()
 
 
-class TextPanel(wx.Panel):
+class TextPanel(QWidget):
+    serie_selected = Signal(object, object)
+    serie_double_clicked = Signal(object)
+
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, -1)
+        super().__init__(parent)
 
         self._selected_by_user = True
         self.idserie_treeitem = {}
@@ -224,74 +173,59 @@ class TextPanel(wx.Panel):
         self.__bind_pubsub_evt()
 
     def __bind_pubsub_evt(self):
-        # Publisher.subscribe(self.SelectSeries, 'Select series in import panel')
         Publisher.subscribe(self.Populate, "Populate tree")
         Publisher.subscribe(self.SetHostsList, "Set FindPanel hosts list")
 
     def __bind_events_wx(self):
-        self.Bind(wx.EVT_SIZE, self.OnSize)
+        pass
 
     def __init_gui(self):
-        tree = gizmos.TreeListCtrl(
-            self,
-            -1,
-            style=wx.TR_DEFAULT_STYLE
-            | wx.TR_HIDE_ROOT
-            | wx.TR_ROW_LINES
-            #  | wx.TR_COLUMN_LINES
-            | wx.TR_FULL_ROW_HIGHLIGHT
-            | wx.TR_SINGLE,
+        self.tree = QTreeWidget(self)
+        self.tree.setHeaderLabels(
+            [
+                _("Patient name"),
+                _("Patient ID"),
+                _("Age"),
+                _("Gender"),
+                _("Study description"),
+                _("Modality"),
+                _("Date acquired"),
+                _("# Images"),
+                _("Institution"),
+                _("Date of birth"),
+                _("Accession Number"),
+                _("Referring physician"),
+            ]
         )
+        self.tree.setColumnWidth(0, 280)
+        self.tree.setColumnWidth(1, 110)
+        self.tree.setColumnWidth(2, 40)
+        self.tree.setColumnWidth(3, 60)
+        self.tree.setColumnWidth(4, 160)
+        self.tree.setColumnWidth(5, 70)
+        self.tree.setColumnWidth(6, 200)
+        self.tree.setColumnWidth(7, 70)
+        self.tree.setColumnWidth(8, 130)
+        self.tree.setColumnWidth(9, 100)
+        self.tree.setColumnWidth(10, 140)
+        self.tree.setColumnWidth(11, 160)
+        self.tree.setRootIsDecorated(True)
+        self.tree.setSelectionMode(QTreeWidget.SingleSelection)
 
-        tree.AddColumn(_("Patient name"))
-        tree.AddColumn(_("Patient ID"))
-        tree.AddColumn(_("Age"))
-        tree.AddColumn(_("Gender"))
-        tree.AddColumn(_("Study description"))
-        tree.AddColumn(_("Modality"))
-        tree.AddColumn(_("Date acquired"))
-        tree.AddColumn(_("# Images"))
-        tree.AddColumn(_("Institution"))
-        tree.AddColumn(_("Date of birth"))
-        tree.AddColumn(_("Accession Number"))
-        tree.AddColumn(_("Referring physician"))
-
-        tree.SetMainColumn(0)  # the one with the tree in it...
-        tree.SetColumnWidth(0, 280)  # Patient name
-        tree.SetColumnWidth(1, 110)  # Patient ID
-        tree.SetColumnWidth(2, 40)  # Age
-        tree.SetColumnWidth(3, 60)  # Gender
-        tree.SetColumnWidth(4, 160)  # Study description
-        tree.SetColumnWidth(5, 70)  # Modality
-        tree.SetColumnWidth(6, 200)  # Date acquired
-        tree.SetColumnWidth(7, 70)  # Number Images
-        tree.SetColumnWidth(8, 130)  # Institution
-        tree.SetColumnWidth(9, 100)  # Date of birth
-        tree.SetColumnWidth(10, 140)  # Accession Number
-        tree.SetColumnWidth(11, 160)  # Referring physician
-
-        self.root = tree.AddRoot(_("InVesalius Database"))
-        self.tree = tree
+        sizer = QVBoxLayout(self)
+        sizer.setContentsMargins(0, 0, 0, 0)
+        sizer.addWidget(self.tree)
 
     def SelectSeries(self, group_index):
         pass
 
     def Populate(self, pubsub_evt):
         tree = self.tree
-        # print ">>>>>>>>>>>>>>>>>>>>>>>>>>", dir(tree.GetRootItem())
-        # print ">>>>>>>>>>>>",dir(self.tree)
         patients = pubsub_evt.data
 
-        # first = 0
         self.idserie_treeitem = {}
 
         for patient in patients.keys():
-            # ngroups = patient.ngroups
-            # dicom = patient.GetDicomSample()
-            # title = dicom.patient.name + " (%d series)"%(ngroups)
-            # date_time = "%s %s"%(dicom.acquisition.date,
-            #                     dicom.acquisition.time)
-
             first_serie = patients[patient].keys()[0]
             title = patients[patient][first_serie]["name"]
             p = patients[patient][first_serie]
@@ -302,104 +236,50 @@ class TextPanel(wx.Panel):
             study_description = p["study_description"]
             modality = p["modality"]
             date = p["acquisition_date"]
-            time = p["acquisition_time"]
+            time_ = p["acquisition_time"]
             institution = p["institution"]
             birthdate = p["date_of_birth"]
             acession_number = p["acession_number"]
             physician = p["ref_physician"]
 
-            parent = tree.AppendItem(self.root, title)
+            parent = QTreeWidgetItem(tree)
+            parent.setText(0, title)
 
             n_amount_images = 0
             for se in patients[patient]:
                 n_amount_images = n_amount_images + patients[patient][se]["n_images"]
 
-            tree.SetItemPyData(parent, patient)
-            tree.SetItemText(parent, f"{p_id}", 1)
-            tree.SetItemText(parent, f"{age}", 2)
-            tree.SetItemText(parent, f"{gender}", 3)
-            tree.SetItemText(parent, f"{study_description}", 4)
-            tree.SetItemText(parent, "{}".format(""), 5)
-            tree.SetItemText(parent, f"{date}" + " " + time, 6)
-            tree.SetItemText(parent, f"{str(n_amount_images)}", 7)
-            tree.SetItemText(parent, f"{institution}", 8)
-            tree.SetItemText(parent, f"{birthdate}", 9)
-            tree.SetItemText(parent, f"{acession_number}", 10)
-            tree.SetItemText(parent, f"{physician}", 11)
+            parent.setData(0, Qt.UserRole, patient)
+            parent.setText(1, f"{p_id}")
+            parent.setText(2, f"{age}")
+            parent.setText(3, f"{gender}")
+            parent.setText(4, f"{study_description}")
+            parent.setText(5, "")
+            parent.setText(6, f"{date} {time_}")
+            parent.setText(7, f"{str(n_amount_images)}")
+            parent.setText(8, f"{institution}")
+            parent.setText(9, f"{birthdate}")
+            parent.setText(10, f"{acession_number}")
+            parent.setText(11, f"{physician}")
 
             for series in patients[patient].keys():
                 serie_description = patients[patient][series]["serie_description"]
                 n_images = patients[patient][series]["n_images"]
                 date = patients[patient][series]["acquisition_date"]
-                time = patients[patient][series]["acquisition_time"]
+                time_ = patients[patient][series]["acquisition_time"]
                 modality = patients[patient][series]["modality"]
 
-                child = tree.AppendItem(parent, series)
-                tree.SetItemPyData(child, series)
-
-                tree.SetItemText(child, f"{serie_description}", 0)
-                # tree.SetItemText(child, "%s" % dicom.acquisition.protocol_name, 4)
-                tree.SetItemText(child, f"{modality}", 5)
-                tree.SetItemText(child, f"{date}" + " " + time, 6)
-                tree.SetItemText(child, f"{n_images}", 7)
+                child = QTreeWidgetItem(parent)
+                child.setText(0, f"{serie_description}")
+                child.setData(0, Qt.UserRole, series)
+                child.setText(5, f"{modality}")
+                child.setText(6, f"{date} {time_}")
+                child.setText(7, f"{n_images}")
 
                 self.idserie_treeitem[(patient, series)] = child
 
-        tree.Expand(self.root)
-        # tree.SelectItem(parent_select)
-        tree.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.OnActivate)
-        # tree.Bind(wx.EVT_TREE_SEL_CHANGED, self.OnSelChanged)
-
-        """
-
-        for patient in patient_list:
-            if not isinstance(patient, dcm.PatientGroup):
-                return None
-            ngroups = patient.ngroups
-            dicom = patient.GetDicomSample()
-            title = dicom.patient.name + " (%d series)"%(ngroups)
-            date_time = "%s %s"%(dicom.acquisition.date,
-                                 dicom.acquisition.time)
-
-            parent = tree.AppendItem(self.root, title)
-
-            if not first:
-                parent_select = parent
-                first += 1
-
-            tree.SetItemPyData(parent, patient)
-            tree.SetItemText(parent, "%s" % dicom.patient.id, 1)
-            tree.SetItemText(parent, "%s" % dicom.patient.age, 2)
-            tree.SetItemText(parent, "%s" % dicom.patient.gender, 3)
-            tree.SetItemText(parent, "%s" % dicom.acquisition.study_description, 4)
-            tree.SetItemText(parent, "%s" % dicom.acquisition.modality, 5)
-            tree.SetItemText(parent, "%s" % date_time, 6)
-            tree.SetItemText(parent, "%s" % patient.nslices, 7)
-            tree.SetItemText(parent, "%s" % dicom.acquisition.institution, 8)
-            tree.SetItemText(parent, "%s" % dicom.patient.birthdate, 9)
-            tree.SetItemText(parent, "%s" % dicom.acquisition.accession_number, 10)
-            tree.SetItemText(parent, "%s" % dicom.patient.physician, 11)
-
-            group_list = patient.GetGroups()
-            for n, group in enumerate(group_list):
-                dicom = group.GetDicomSample()
-
-                child = tree.AppendItem(parent, group.title)
-                tree.SetItemPyData(child, group)
-
-                tree.SetItemText(child, "%s" % group.title, 0)
-                tree.SetItemText(child, "%s" % dicom.acquisition.protocol_name, 4)
-                tree.SetItemText(child, "%s" % dicom.acquisition.modality, 5)
-                tree.SetItemText(child, "%s" % date_time, 6)
-                tree.SetItemText(child, "%s" % group.nslices, 7)
-
-                self.idserie_treeitem[(dicom.patient.id,
-                                       dicom.acquisition.serie_number)] = child
-
-        tree.Expand(self.root)
-        tree.SelectItem(parent_select)
-        tree.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.OnActivate)
-        tree.Bind(wx.EVT_TREE_SEL_CHANGED, self.OnSelChanged)"""
+        tree.expandAll()
+        tree.itemActivated.connect(self.OnActivate)
 
     def SetHostsList(self, evt_pub):
         self.hosts = evt_pub.data
@@ -408,34 +288,28 @@ class TextPanel(wx.Panel):
         Publisher.sendMessage("Get NodesPanel host list")
         return self.hosts
 
-    def OnSelChanged(self, evt):
-        item = self.tree.GetSelection()
+    def OnSelChanged(self, current, previous):
+        if current is None:
+            return
         if self._selected_by_user:
-            group = self.tree.GetItemPyData(item)
+            group = current.data(0, Qt.UserRole)
             if isinstance(group, dcm.DicomGroup):
-                # Publisher.sendMessage('Load group into import panel',
-                #                            group)
                 pass
-
             elif isinstance(group, dcm.PatientGroup):
-                id = group.GetDicomSample().patient.id
-                my_evt = SelectEvent(myEVT_SELECT_PATIENT, self.GetId())
-                my_evt.SetSelectedID(id)
-                self.GetEventHandler().ProcessEvent(my_evt)
-
-                # Publisher.sendMessage('Load patient into import panel',
-                #                            group)
+                id_ = group.GetDicomSample().patient.id
+                self.serie_selected.emit(id_, None)
         else:
-            parent_id = self.tree.GetItemParent(item)
-            self.tree.Expand(parent_id)
-        evt.Skip()
+            parent_item = current.parent()
+            if parent_item:
+                parent_item.setExpanded(True)
 
-    def OnActivate(self, evt):
-        item = evt.GetItem()
-        item_parent = self.tree.GetItemParent(item)
+    def OnActivate(self, item, column):
+        parent_item = item.parent()
+        if parent_item is None:
+            return
 
-        patient_id = self.tree.GetItemPyData(item_parent)
-        serie_id = self.tree.GetItemPyData(item)
+        patient_id = parent_item.data(0, Qt.UserRole)
+        serie_id = item.data(0, Qt.UserRole)
 
         hosts = self.GetHostList()
 
@@ -447,80 +321,57 @@ class TextPanel(wx.Panel):
                 dn.SetAETitleCall(self.hosts[key][3])
                 dn.SetAETitle(self.hosts[0][3])
                 dn.RunCMove((patient_id, serie_id))
-                # dn.SetSearchWord(self.find_txt.GetValue())
-
-                # Publisher.sendMessage('Populate tree', dn.RunCFind())
-
-        # my_evt = SelectEvent(myEVT_SELECT_SERIE_TEXT, self.GetId())
-        # my_evt.SetItemData(group)
-        # self.GetEventHandler().ProcessEvent(my_evt)
-
-    def OnSize(self, evt):
-        self.tree.SetSize(self.GetSize())
 
     def SelectSerie(self, serie):
         self._selected_by_user = False
-        item = self.idserie_treeitem[serie]
-        self.tree.SelectItem(item)
+        item = self.idserie_treeitem.get(serie)
+        if item:
+            self.tree.setCurrentItem(item)
         self._selected_by_user = True
 
     def GetSelection(self):
         """Get selected item"""
-        item = self.tree.GetSelection()
-        group = self.tree.GetItemPyData(item)
-        return group
+        items = self.tree.selectedItems()
+        if items:
+            return items[0].data(0, Qt.UserRole)
+        return None
 
 
-class FindPanel(wx.Panel):
+class FindPanel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, -1)
+        super().__init__(parent)
 
-        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        self.sizer = QVBoxLayout(self)
 
-        sizer_word_label = wx.BoxSizer(wx.HORIZONTAL)
-        sizer_word_label.Add((5, 0), 0, wx.EXPAND | wx.HORIZONTAL)
-        find_label = wx.StaticText(self, -1, _("Word"))
-        sizer_word_label.Add(find_label)
+        find_label = QLabel(_("Word"), self)
 
-        sizer_txt_find = wx.BoxSizer(wx.HORIZONTAL)
-        sizer_txt_find.Add((5, 0), 0, wx.EXPAND | wx.HORIZONTAL)
-        self.find_txt = wx.TextCtrl(self, -1, size=(225, -1))
+        sizer_word_label = QHBoxLayout()
+        sizer_word_label.addSpacing(5)
+        sizer_word_label.addWidget(find_label)
 
-        self.btn_find = wx.Button(self, -1, _("Search"))
+        self.find_txt = QLineEdit(self)
+        self.find_txt.setMinimumWidth(225)
+        self.btn_find = QPushButton(_("Search"), self)
 
-        sizer_txt_find.Add(self.find_txt)
-        sizer_txt_find.Add(self.btn_find)
+        sizer_txt_find = QHBoxLayout()
+        sizer_txt_find.addSpacing(5)
+        sizer_txt_find.addWidget(self.find_txt)
+        sizer_txt_find.addWidget(self.btn_find)
 
-        self.sizer.Add((0, 5), 0, wx.EXPAND | wx.HORIZONTAL)
-        self.sizer.Add(sizer_word_label)
-        self.sizer.Add(sizer_txt_find)
-
-        # self.sizer.Add(self.serie_preview, 1, wx.EXPAND | wx.ALL, 5)
-        # self.sizer.Add(self.dicom_preview, 1, wx.EXPAND | wx.ALL, 5)
-        self.sizer.Fit(self)
-
-        self.SetSizer(self.sizer)
-
-        self.Layout()
-        self.Update()
-        self.SetAutoLayout(1)
+        self.sizer.addSpacing(5)
+        self.sizer.addLayout(sizer_word_label)
+        self.sizer.addLayout(sizer_txt_find)
 
         self.__bind_evt()
         self._bind_gui_evt()
 
     def __bind_evt(self):
         Publisher.subscribe(self.SetHostsList, "Set FindPanel hosts list")
-        # Publisher.subscribe(self.ShowDicomSeries, 'Load dicom preview')
-        # Publisher.subscribe(self.SetDicomSeries, 'Load group into import panel')
-        # Publisher.subscribe(self.SetPatientSeries, 'Load patient into import panel')
-        pass
 
     def _bind_gui_evt(self):
-        # self.serie_preview.Bind(dpp.EVT_CLICK_SERIE, self.OnSelectSerie)
-        # self.dicom_preview.Bind(dpp.EVT_CLICK_SLICE, self.OnSelectSlice)
-        self.Bind(wx.EVT_BUTTON, self.OnButtonFind, self.btn_find)
+        self.btn_find.clicked.connect(self.OnButtonFind)
 
-    def OnButtonFind(self, evt):
+    def OnButtonFind(self):
         hosts = self.GetHostList()
 
         for key in hosts.keys():
@@ -530,7 +381,7 @@ class FindPanel(wx.Panel):
                 dn.SetPort(self.hosts[key][2])
                 dn.SetAETitleCall(self.hosts[key][3])
                 dn.SetAETitle(self.hosts[0][3])
-                dn.SetSearchWord(self.find_txt.GetValue())
+                dn.SetSearchWord(self.find_txt.text())
 
                 Publisher.sendMessage("Populate tree", dn.RunCFind())
 
@@ -542,201 +393,146 @@ class FindPanel(wx.Panel):
         return self.hosts
 
 
-class HostFindPanel(wx.Panel):
+class HostFindPanel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, -1)
+        super().__init__(parent)
         self._init_ui()
-        self._bind_events()
 
     def _init_ui(self):
-        splitter = spl.MultiSplitterWindow(self, style=wx.SP_LIVE_UPDATE)
-        splitter.SetOrientation(wx.HORIZONTAL)
-        self.splitter = splitter
+        self.splitter = QSplitter(Qt.Horizontal, self)
 
-        # TODO: Rever isso
-        #  splitter.ContainingSizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.image_panel = NodesPanel(self.splitter)
+        self.text_panel = FindPanel(self.splitter)
 
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(splitter, 1, wx.EXPAND)
-        self.SetSizer(sizer)
+        self.splitter.addWidget(self.image_panel)
+        self.splitter.addWidget(self.text_panel)
+        self.splitter.setSizes([500, 750])
 
-        self.image_panel = NodesPanel(splitter)
-        splitter.AppendWindow(self.image_panel, 500)
-
-        self.text_panel = FindPanel(splitter)
-        splitter.AppendWindow(self.text_panel, 750)
-
-        self.SetSizer(sizer)
-        sizer.Fit(self)
-
-        self.Layout()
-        self.Update()
-        self.SetAutoLayout(1)
-
-    def _bind_events(self):
-        self.text_panel.Bind(EVT_SELECT_SERIE, self.OnSelectSerie)
-        self.text_panel.Bind(EVT_SELECT_SLICE, self.OnSelectSlice)
-
-    def OnSelectSerie(self, evt):
-        evt.Skip()
-
-    def OnSelectSlice(self, evt):
-        self.image_panel.dicom_preview.ShowSlice(evt.GetSelectID())
-        evt.Skip()
+        sizer = QHBoxLayout(self)
+        sizer.setContentsMargins(0, 0, 0, 0)
+        sizer.addWidget(self.splitter, 1)
 
     def SetSerie(self, serie):
-        self.image_panel.dicom_preview.SetDicomGroup(serie)
+        pass
 
 
-class NodesTree(
-    wx.ListCtrl, CheckListCtrlMixin, listmix.ListCtrlAutoWidthMixin, listmix.TextEditMixin
-):
+class NodesPanel(QWidget):
     def __init__(self, parent):
-        self.item = 0
-        self.col_locs = [0]
-        self.editorBgColour = wx.Colour(255, 255, 255, 255)
-        wx.ListCtrl.__init__(self, parent, -1, style=wx.LC_REPORT | wx.LC_HRULES)
-        listmix.CheckListCtrlMixin.__init__(self)
-        listmix.TextEditMixin.__init__(self)
-
-    def OnCheckItem(self, index, flag):
-        Publisher.sendMessage("Check item dict", [index, flag])
-
-    def OpenEditor(self, col, row):
-        if col >= 1 and col < 4:
-            listmix.TextEditMixin.OpenEditor(self, col, row)
-        else:
-            listmix.CheckListCtrlMixin.ToggleItem(self, self.item)
-
-    def SetSelected(self, item):
-        self.item = item
-
-    def SetDeselected(self, item):
-        self.item = item
-
-
-class NodesPanel(wx.Panel):
-    def __init__(self, parent):
+        super().__init__(parent)
         self.selected_item = None
         self.hosts = {}
-
-        wx.Panel.__init__(self, parent, -1)
         self.__init_gui()
         self.__bind_evt()
 
     def __bind_evt(self):
-        self.Bind(wx.EVT_COMMAND_RIGHT_CLICK, self.RightButton, self.tree_node)
-        self.Bind(wx.EVT_LIST_ITEM_SELECTED, self.OnItemSelected, self.tree_node)
-        self.Bind(wx.EVT_LIST_ITEM_DESELECTED, self.OnItemDeselected, self.tree_node)
-        self.Bind(wx.EVT_BUTTON, self.OnButtonAdd, self.btn_add)
-        self.Bind(wx.EVT_BUTTON, self.OnButtonRemove, self.btn_remove)
-        self.Bind(wx.EVT_BUTTON, self.OnButtonCheck, self.btn_check)
+        self.tree_node.itemChanged.connect(self.OnItemChanged)
+        self.tree_node.itemSelectionChanged.connect(self.OnItemSelectionChanged)
+        self.btn_add.clicked.connect(self.OnButtonAdd)
+        self.btn_remove.clicked.connect(self.OnButtonRemove)
+        self.btn_check.clicked.connect(self.OnButtonCheck)
 
-        self.Bind(wx.EVT_LIST_END_LABEL_EDIT, self.EndEdition, self.tree_node)
-
-        Publisher.subscribe(self.CheckItemDict, "Check item dict")
         Publisher.subscribe(self.GetHostsList, "Get NodesPanel host list")
-        # Publisher.subscribe(self.UnCheckItemDict, "Uncheck item dict")
 
     def __init_gui(self):
-        self.tree_node = NodesTree(self)
-
-        self.tree_node.InsertColumn(0, _("Active"))
-        self.tree_node.InsertColumn(1, _("Host"))
-        self.tree_node.InsertColumn(2, _("Port"))
-        self.tree_node.InsertColumn(3, _("AETitle"))
-        self.tree_node.InsertColumn(4, _("Status"))
-
-        self.tree_node.SetColumnWidth(0, 50)
-        self.tree_node.SetColumnWidth(1, 150)
-        self.tree_node.SetColumnWidth(2, 50)
-        self.tree_node.SetColumnWidth(3, 150)
-        self.tree_node.SetColumnWidth(4, 80)
+        self.tree_node = QTableWidget(0, 5, self)
+        self.tree_node.setHorizontalHeaderLabels(
+            [
+                _("Active"),
+                _("Host"),
+                _("Port"),
+                _("AETitle"),
+                _("Status"),
+            ]
+        )
+        self.tree_node.setColumnWidth(0, 50)
+        self.tree_node.setColumnWidth(1, 150)
+        self.tree_node.setColumnWidth(2, 50)
+        self.tree_node.setColumnWidth(3, 150)
+        self.tree_node.setColumnWidth(4, 80)
+        self.tree_node.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tree_node.setSelectionMode(QTableWidget.SingleSelection)
 
         self.hosts[0] = [True, "localhost", "", "invesalius"]
-        try:
-            index = self.tree_node.InsertItem(sys.maxsize, "")
-        except (OverflowError, AssertionError):
-            index = self.tree_node.InsertItem(sys.maxint, "")
-        self.tree_node.SetItem(index, 1, "localhost")
-        self.tree_node.SetItem(index, 2, "")
-        self.tree_node.SetItem(index, 3, "invesalius")
-        self.tree_node.SetItem(index, 4, "ok")
-        self.tree_node.CheckItem(index)
-        self.tree_node.SetItemBackgroundColour(index, wx.Colour(245, 245, 245))
-        # print ">>>>>>>>>>>>>>>>>>>>>", sys.maxint
-        # index = self.tree_node.InsertItem(sys.maxint, "")#adiciona vazio a coluna de check
-        # self.tree_node.SetItem(index, 1, "200.144.114.19")
-        # self.tree_node.SetItem(index, 2, "80")
-        # self.tree_node.SetItemData(index, 0)
+        row = self.tree_node.rowCount()
+        self.tree_node.insertRow(row)
 
-        # index2 = self.tree_node.InsertItem(sys.maxint, "")#adiciona vazio a coluna de check
-        # self.tree_node.SetItem(index2, 1, "200.144.114.19")
-        # self.tree_node.SetItem(index2, 2, "80")
-        # self.tree_node.SetItemData(index2, 0)
+        check_item = QTableWidgetItem()
+        check_item.setFlags(check_item.flags() | Qt.ItemIsUserCheckable)
+        check_item.setCheckState(Qt.Checked)
+        self.tree_node.setItem(row, 0, check_item)
+        self.tree_node.setItem(row, 1, QTableWidgetItem("localhost"))
+        self.tree_node.setItem(row, 2, QTableWidgetItem(""))
+        self.tree_node.setItem(row, 3, QTableWidgetItem("invesalius"))
+        self.tree_node.setItem(row, 4, QTableWidgetItem("ok"))
+        self.tree_node.item(row, 0).setBackground(QColor(245, 245, 245))
 
-        self.btn_add = wx.Button(self, -1, _("Add"))
-        self.btn_remove = wx.Button(self, -1, _("Remove"))
-        self.btn_check = wx.Button(self, -1, _("Check status"))
+        self.btn_add = QPushButton(_("Add"), self)
+        self.btn_remove = QPushButton(_("Remove"), self)
+        self.btn_check = QPushButton(_("Check status"), self)
 
-        sizer_btn = wx.BoxSizer(wx.HORIZONTAL)
-        sizer_btn.Add((90, 0), 0, wx.EXPAND | wx.HORIZONTAL)
-        sizer_btn.Add(self.btn_add, 10)
-        sizer_btn.Add(self.btn_remove, 10)
-        sizer_btn.Add(self.btn_check, 0, wx.ALIGN_CENTER_HORIZONTAL)
+        sizer_btn = QHBoxLayout()
+        sizer_btn.addSpacing(90)
+        sizer_btn.addWidget(self.btn_add, 10)
+        sizer_btn.addWidget(self.btn_remove, 10)
+        sizer_btn.addWidget(self.btn_check, 0)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.tree_node, 85, wx.GROW | wx.EXPAND)
-        sizer.Add(sizer_btn, 15)
-        sizer.Fit(self)
-        self.SetSizer(sizer)
-        self.Layout()
-        self.Update()
-        self.SetAutoLayout(1)
-        self.sizer = sizer
+        sizer = QVBoxLayout(self)
+        sizer.addWidget(self.tree_node, 85)
+        sizer.addLayout(sizer_btn, 15)
 
     def GetHostsList(self, pub_evt):
         Publisher.sendMessage("Set FindPanel hosts list", self.hosts)
 
-    def EndEdition(self, evt):
-        index = evt.m_itemIndex
-        item = evt.m_item
-        col = item.GetColumn()
-        txt = item.GetText()
+    def OnItemChanged(self, item):
+        row = item.row()
+        col = item.column()
+        if col == 0:
+            flag = item.checkState() == Qt.Checked
+            if row != 0:
+                self.hosts[row][0] = flag
+            else:
+                item.setCheckState(Qt.Checked)
+        elif 1 <= col <= 3:
+            txt = item.text()
+            if row in self.hosts:
+                self.hosts[row][col] = str(txt)
 
-        values = self.hosts[index]
-        values[col] = str(txt)
-        self.hosts[index] = values
-
-    def OnButtonAdd(self, evt):
-        # adiciona vazio a coluna de check
-        index = self.tree_node.InsertItem(sys.maxsize, "")
-
-        self.hosts[index] = [True, "localhost", "80", ""]
-        self.tree_node.SetItem(index, 1, "localhost")
-        self.tree_node.SetItem(index, 2, "80")
-        self.tree_node.SetItem(index, 3, "")
-        self.tree_node.CheckItem(index)
-
-    def OnLeftDown(self, evt):
-        evt.Skip()
-
-    def OnButtonRemove(self, evt):
-        if self.selected_item is not None and self.selected_item != 0:
-            self.tree_node.DeleteItem(self.selected_item)
-            self.hosts.pop(self.selected_item)
+    def OnItemSelectionChanged(self):
+        selected = self.tree_node.selectedItems()
+        if selected:
+            self.selected_item = selected[0].row()
+        else:
             self.selected_item = None
 
-            k = self.hosts.keys()
-            tmp_cont = 0
+    def OnButtonAdd(self):
+        row = self.tree_node.rowCount()
+        self.tree_node.insertRow(row)
 
+        self.hosts[row] = [True, "localhost", "80", ""]
+
+        check_item = QTableWidgetItem()
+        check_item.setFlags(check_item.flags() | Qt.ItemIsUserCheckable)
+        check_item.setCheckState(Qt.Checked)
+        self.tree_node.setItem(row, 0, check_item)
+        self.tree_node.setItem(row, 1, QTableWidgetItem("localhost"))
+        self.tree_node.setItem(row, 2, QTableWidgetItem("80"))
+        self.tree_node.setItem(row, 3, QTableWidgetItem(""))
+
+    def OnButtonRemove(self):
+        if self.selected_item is not None and self.selected_item != 0:
+            self.tree_node.removeRow(self.selected_item)
+            self.hosts.pop(self.selected_item, None)
+            self.selected_item = None
+
+            k = list(self.hosts.keys())
+            tmp_cont = 0
             tmp_host = {}
             for x in k:
                 tmp_host[tmp_cont] = self.hosts[x]
                 tmp_cont += 1
             self.hosts = tmp_host
 
-    def OnButtonCheck(self, evt):
+    def OnButtonCheck(self):
         for key in self.hosts.keys():
             if key != 0:
                 dn = dcm_net.DicomNet()
@@ -745,25 +541,12 @@ class NodesPanel(wx.Panel):
                 dn.SetAETitleCall(self.hosts[key][3])
                 dn.SetAETitle(self.hosts[0][3])
 
+                status_item = self.tree_node.item(key, 4)
+                if status_item is None:
+                    status_item = QTableWidgetItem()
+                    self.tree_node.setItem(key, 4, status_item)
+
                 if dn.RunCEcho():
-                    self.tree_node.SetItem(key, 4, _("ok"))
+                    status_item.setText(_("ok"))
                 else:
-                    self.tree_node.SetItem(key, 4, _("error"))
-
-    def RightButton(self, evt):
-        evt.Skip()
-
-    def OnItemSelected(self, evt):
-        self.selected_item = evt.m_itemIndex
-        self.tree_node.SetSelected(evt.m_itemIndex)
-
-    def OnItemDeselected(self, evt):
-        if evt.m_itemIndex != 0:
-            self.tree_node.SetDeselected(evt.m_itemIndex)
-
-    def CheckItemDict(self, evt_pub):
-        index, flag = evt_pub.data
-        if index != 0:
-            self.hosts[index][0] = flag
-        else:
-            self.tree_node.CheckItem(0)
+                    status_item.setText(_("error"))

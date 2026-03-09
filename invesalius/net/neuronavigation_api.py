@@ -18,7 +18,7 @@
 # --------------------------------------------------------------------------
 
 import numpy as np
-import wx
+from PySide6.QtCore import QTimer
 from vtkmodules.numpy_interface import dataset_adapter
 
 from invesalius.data.markers.marker import MarkerType
@@ -334,7 +334,9 @@ class NeuronavigationApi(metaclass=Singleton):
             self.connection.remove_pedal_callback(name=name)
 
     def open_orientation_dialog(self, target_id):
-        wx.CallAfter(Publisher.sendMessage, "Open marker orientation dialog", marker_id=target_id)
+        QTimer.singleShot(
+            0, lambda: Publisher.sendMessage("Open marker orientation dialog", marker_id=target_id)
+        )
 
     def stimulation_pulse_received(self, targets, mep):
         # TODO: If marker should not be created always when receiving a stimulation pulse, add the logic here.
@@ -355,8 +357,12 @@ class NeuronavigationApi(metaclass=Singleton):
                     "mep": mep,
                 }
             )
-        wx.CallAfter(Publisher.sendMessage, "Set brain targets", brain_targets=brain_targets)
-        wx.CallAfter(Publisher.sendMessage, "Create marker", marker_type=MarkerType.COIL_POSE)
+        QTimer.singleShot(
+            0, lambda: Publisher.sendMessage("Set brain targets", brain_targets=brain_targets)
+        )
+        QTimer.singleShot(
+            0, lambda: Publisher.sendMessage("Create marker", marker_type=MarkerType.COIL_POSE)
+        )
 
     def set_vector_field(self, vector_field):
         # Modify vector_field to swap x and y coordinates and adjust z orientation to match mTMS
@@ -368,44 +374,62 @@ class NeuronavigationApi(metaclass=Singleton):
             )
             # Reverse the z orientation
             vector["orientation"][2] = -vector["orientation"][2]
-        wx.CallAfter(Publisher.sendMessage, "Set vector field", vector_field=vector_field)
+        QTimer.singleShot(
+            0, lambda: Publisher.sendMessage("Set vector field", vector_field=vector_field)
+        )
 
     def update_robot_status(self, status):
-        wx.CallAfter(
-            Publisher.sendMessage,
-            "Robot to Neuronavigation: Update robot status",
-            robot_status=status,
+        QTimer.singleShot(
+            0,
+            lambda: Publisher.sendMessage(
+                "Robot to Neuronavigation: Update robot status",
+                robot_status=status,
+            ),
         )
 
     def robot_connection_status(self, status):
-        wx.CallAfter(
-            Publisher.sendMessage, "Robot to Neuronavigation: Robot connection status", data=status
+        QTimer.singleShot(
+            0,
+            lambda: Publisher.sendMessage(
+                "Robot to Neuronavigation: Robot connection status", data=status
+            ),
         )
 
     def robot_pose_collected(self, status):
-        wx.CallAfter(
-            Publisher.sendMessage,
-            "Robot to Neuronavigation: Coordinates for the robot transformation matrix collected",
+        QTimer.singleShot(
+            0,
+            lambda: Publisher.sendMessage(
+                "Robot to Neuronavigation: Coordinates for the robot transformation matrix collected",
+            ),
         )
 
     def set_objective_to_neuronavigation(self, objective):
-        wx.CallAfter(
-            Publisher.sendMessage, "Robot to Neuronavigation: Set objective", objective=objective
+        QTimer.singleShot(
+            0,
+            lambda: Publisher.sendMessage(
+                "Robot to Neuronavigation: Set objective", objective=objective
+            ),
         )
 
     def close_robot_dialog(self, status):
-        wx.CallAfter(Publisher.sendMessage, "Robot to Neuronavigation: Close robot dialog")
+        QTimer.singleShot(
+            0, lambda: Publisher.sendMessage("Robot to Neuronavigation: Close robot dialog")
+        )
 
     def update_robot_transformation_matrix(self, matrix):
-        wx.CallAfter(
-            Publisher.sendMessage,
-            "Robot to Neuronavigation: Update robot transformation matrix",
-            data=matrix,
+        QTimer.singleShot(
+            0,
+            lambda: Publisher.sendMessage(
+                "Robot to Neuronavigation: Update robot transformation matrix",
+                data=matrix,
+            ),
         )
 
     def update_coil_target(self, coil_target):
-        wx.CallAfter(
-            Publisher.sendMessage,
-            "NeuroSimo to Neuronavigation: Update coil target",
-            coil_target=coil_target,
+        QTimer.singleShot(
+            0,
+            lambda: Publisher.sendMessage(
+                "NeuroSimo to Neuronavigation: Update coil target",
+                coil_target=coil_target,
+            ),
         )

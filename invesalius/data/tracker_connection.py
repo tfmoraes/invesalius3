@@ -18,7 +18,9 @@
 # --------------------------------------------------------------------------
 import sys
 
-from wx import ID_OK
+from PySide6.QtWidgets import QDialog
+
+ID_OK = QDialog.DialogCode.Accepted
 
 import invesalius.constants as const
 import invesalius.gui.dialogs as dlg

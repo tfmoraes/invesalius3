@@ -4,9 +4,32 @@ import sys
 from functools import partial
 
 import numpy as np
-import wx
-import wx.lib.colourselect as csel
 from matplotlib import colors as mcolors
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QColor, QFont, QPalette
+from PySide6.QtWidgets import (
+    QButtonGroup,
+    QCheckBox,
+    QColorDialog,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMenu,
+    QMessageBox,
+    QPushButton,
+    QRadioButton,
+    QSlider,
+    QSpinBox,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 import invesalius.constants as const
 import invesalius.data.vtk_utils as vtk_utils
@@ -25,18 +48,33 @@ from invesalius.net.pedal_connection import PedalConnector
 from invesalius.pubsub import pub as Publisher
 
 
-class Preferences(wx.Dialog):
+def _make_radio_group(parent, choices, orientation=Qt.Horizontal):
+    group = QButtonGroup(parent)
+    layout = QHBoxLayout() if orientation == Qt.Horizontal else QVBoxLayout()
+    buttons = []
+    for i, label in enumerate(choices):
+        rb = QRadioButton(label, parent)
+        group.addButton(rb, i)
+        layout.addWidget(rb)
+        buttons.append(rb)
+    if buttons:
+        buttons[0].setChecked(True)
+    return group, layout, buttons
+
+
+class Preferences(QDialog):
     def __init__(
         self,
         parent,
         page,
         id_=-1,
         title=_("Preferences"),
-        style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
     ):
-        super().__init__(parent, id_, title, style=style)
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setSizeGripEnabled(True)
 
-        self.book = wx.Notebook(self, -1)
+        self.book = QTabWidget(self)
 
         self.have_log_tab = 0
 
@@ -45,7 +83,7 @@ class Preferences(wx.Dialog):
         if self.have_log_tab == 1:
             self.logging_tab = LoggingTab(self.book)
 
-        self.book.AddPage(self.visualization_tab, _("Visualization"))
+        self.book.addTab(self.visualization_tab, _("Visualization"))
 
         session = ses.Session()
         mode = session.GetConfig("mode")
@@ -63,47 +101,40 @@ class Preferences(wx.Dialog):
             self.tracker_tab = TrackerTab(self.book, tracker, robot)
             self.object_tab = ObjectTab(self.book, navigation, tracker, pedal_connector)
 
-            self.book.AddPage(self.navigation_tab, _("Navigation"))
-            self.book.AddPage(self.tracker_tab, _("Tracker"))
-            self.book.AddPage(self.object_tab, _("TMS Coil"))
+            self.book.addTab(self.navigation_tab, _("Navigation"))
+            self.book.addTab(self.tracker_tab, _("Tracker"))
+            self.book.addTab(self.object_tab, _("TMS Coil"))
 
-        self.book.AddPage(self.language_tab, _("Language"))
+        self.book.addTab(self.language_tab, _("Language"))
         if self.have_log_tab == 1:
-            self.book.AddPage(self.logging_tab, _("Logging"))
+            self.book.addTab(self.logging_tab, _("Logging"))
 
-        btnsizer = self.CreateStdDialogButtonSizer(wx.OK | wx.CANCEL)
-        min_width = max([i.GetMinWidth() for i in (self.book.GetChildren())])
-        min_height = max([i.GetMinHeight() for i in (self.book.GetChildren())])
-        if sys.platform.startswith("linux"):
-            self.book.SetMinClientSize((min_width * 2, min_height * 2))
-        self.book.SetSelection(page)
+        btnsizer = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        btnsizer.accepted.connect(self.OnOK)
+        btnsizer.rejected.connect(self.reject)
 
-        self.Bind(wx.EVT_BUTTON, self.OnOK, id=wx.ID_OK)
-        self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
+        self.book.setCurrentIndex(page)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.book, 1, wx.EXPAND | wx.ALL)
-        sizer.Add(btnsizer, 0, wx.GROW | wx.RIGHT | wx.TOP | wx.BOTTOM, 5)
-        self.SetSizerAndFit(sizer)
-        self.Layout()
+        sizer = QVBoxLayout(self)
+        sizer.addWidget(self.book, 1)
+        sizer.addWidget(btnsizer)
+        self.setLayout(sizer)
         self.__bind_events()
 
     def __bind_events(self):
         Publisher.subscribe(self.LoadPreferences, "Load Preferences")
 
-    def OnOK(self, event):
-        Publisher.sendMessage("Save Preferences")
-        try:
-            self.EndModal(wx.ID_OK)
-        except wx._core.wxAssertionError:
-            self.Destroy()
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.reject()
+        elif event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
+            self.OnOK()
+        else:
+            super().keyPressEvent(event)
 
-    def OnCharHook(self, event):
-        if event.GetKeyCode() == wx.WXK_ESCAPE:
-            self.EndModal(wx.ID_CANCEL)
-        if event.GetKeyCode() == wx.WXK_RETURN:
-            self.OnOK(event)
-        event.Skip()
+    def OnOK(self):
+        Publisher.sendMessage("Save Preferences")
+        self.accept()
 
     def GetPreferences(self):
         values = {}
@@ -125,10 +156,8 @@ class Preferences(wx.Dialog):
         rendering = session.GetConfig("rendering")
         surface_interpolation = session.GetConfig("surface_interpolation")
         language = session.GetConfig("language")
-        # Must invert value as GUI returns 0 for Yes and 1 for No
         slice_interpolation = not bool(session.GetConfig("slice_interpolation"))
 
-        # logger = log.MyLogger()
         file_logging = log.invLogger.GetConfig("file_logging")
         file_logging_level = log.invLogger.GetConfig("file_logging_level")
         append_log_file = log.invLogger.GetConfig("append_log_file")
@@ -155,9 +184,9 @@ class Preferences(wx.Dialog):
             self.logging_tab.LoadSelection(values)
 
 
-class VisualizationTab(wx.Panel):
+class VisualizationTab(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
         self.session = ses.Session()
 
@@ -172,382 +201,262 @@ class VisualizationTab(wx.Panel):
             self.conf = {}
         self.conf["mep_colormap"] = self.conf.get("mep_colormap", "Viridis")
 
-        bsizer = wx.StaticBoxSizer(wx.VERTICAL, self, _("3D Visualization"))
-        lbl_inter = wx.StaticText(bsizer.GetStaticBox(), -1, _("Surface Interpolation "))
-        rb_inter = self.rb_inter = wx.RadioBox(
-            bsizer.GetStaticBox(),
-            -1,
-            "",
-            choices=["Flat", "Gouraud", "Phong"],
-            majorDimension=3,
-            style=wx.RA_SPECIFY_COLS | wx.NO_BORDER,
+        # 3D Visualization group
+        bsizer = QGroupBox(_("3D Visualization"))
+        bsizer_layout = QVBoxLayout()
+
+        lbl_inter = QLabel(_("Surface Interpolation "))
+        self.rb_inter_group, rb_inter_layout, self.rb_inter_btns = _make_radio_group(
+            bsizer, ["Flat", "Gouraud", "Phong"]
         )
+        bsizer_layout.addWidget(lbl_inter)
+        bsizer_layout.addLayout(rb_inter_layout)
 
-        bsizer.Add(lbl_inter, 0, wx.TOP | wx.LEFT | wx.FIXED_MINSIZE, 10)
-        bsizer.Add(rb_inter, 0, wx.TOP | wx.LEFT | wx.FIXED_MINSIZE, 0)
-
-        lbl_rendering = wx.StaticText(bsizer.GetStaticBox(), -1, _("Volume Rendering"))
-        rb_rendering = self.rb_rendering = wx.RadioBox(
-            bsizer.GetStaticBox(),
-            -1,
-            choices=["CPU", _("GPU (NVidia video cards only)")],
-            majorDimension=2,
-            style=wx.RA_SPECIFY_COLS | wx.NO_BORDER,
+        lbl_rendering = QLabel(_("Volume Rendering"))
+        self.rb_rendering_group, rb_rendering_layout, self.rb_rendering_btns = _make_radio_group(
+            bsizer, ["CPU", _("GPU (NVidia video cards only)")]
         )
-        bsizer.Add(lbl_rendering, 0, wx.TOP | wx.LEFT | wx.FIXED_MINSIZE, 10)
-        bsizer.Add(rb_rendering, 0, wx.TOP | wx.LEFT | wx.FIXED_MINSIZE, 0)
+        bsizer_layout.addWidget(lbl_rendering)
+        bsizer_layout.addLayout(rb_rendering_layout)
+        bsizer.setLayout(bsizer_layout)
 
-        bsizer_slices = wx.StaticBoxSizer(wx.VERTICAL, self, _("2D Visualization"))
-        lbl_inter_sl = wx.StaticText(bsizer_slices.GetStaticBox(), -1, _("Slice Interpolation "))
-        rb_inter_sl = self.rb_inter_sl = wx.RadioBox(
-            bsizer_slices.GetStaticBox(),
-            -1,
-            choices=[_("Yes"), _("No")],
-            majorDimension=3,
-            style=wx.RA_SPECIFY_COLS | wx.NO_BORDER,
+        # 2D Visualization group
+        bsizer_slices = QGroupBox(_("2D Visualization"))
+        bsizer_slices_layout = QVBoxLayout()
+        lbl_inter_sl = QLabel(_("Slice Interpolation "))
+        self.rb_inter_sl_group, rb_inter_sl_layout, self.rb_inter_sl_btns = _make_radio_group(
+            bsizer_slices, [_("Yes"), _("No")]
         )
-        bsizer_slices.Add(lbl_inter_sl, 0, wx.TOP | wx.LEFT | wx.FIXED_MINSIZE, 10)
-        bsizer_slices.Add(rb_inter_sl, 0, wx.TOP | wx.LEFT | wx.FIXED_MINSIZE, 0)
+        bsizer_slices_layout.addWidget(lbl_inter_sl)
+        bsizer_slices_layout.addLayout(rb_inter_sl_layout)
+        bsizer_slices.setLayout(bsizer_slices_layout)
 
-        border = wx.BoxSizer(wx.VERTICAL)
-        border.Add(bsizer_slices, 0, wx.EXPAND | wx.ALL | wx.FIXED_MINSIZE, 10)
-        border.Add(bsizer, 1, wx.EXPAND | wx.ALL | wx.FIXED_MINSIZE, 10)
+        border = QVBoxLayout(self)
+        border.addWidget(bsizer_slices)
+        border.addWidget(bsizer, 1)
 
-        # Creating MEP Mapping BoxSizer
         if self.conf.get("mep_enabled") is True:
             self.bsizer_mep = self.InitMEPMapping(None)
-            border.Add(self.bsizer_mep, 0, wx.EXPAND | wx.ALL | wx.FIXED_MINSIZE, 10)
+            border.addWidget(self.bsizer_mep)
 
-        self.SetSizerAndFit(border)
-        self.Layout()
+        self.setLayout(border)
 
     def GetSelection(self):
         options = {
-            const.RENDERING: self.rb_rendering.GetSelection(),
-            const.SURFACE_INTERPOLATION: self.rb_inter.GetSelection(),
-            const.SLICE_INTERPOLATION: not bool(
-                self.rb_inter_sl.GetSelection()
-            ),  # 0 for Yes, 1 for No
+            const.RENDERING: self.rb_rendering_group.checkedId(),
+            const.SURFACE_INTERPOLATION: self.rb_inter_group.checkedId(),
+            const.SLICE_INTERPOLATION: not bool(self.rb_inter_sl_group.checkedId()),
         }
         return options
 
     def InitMEPMapping(self, event):
-        # Adding a new sized for MEP Mapping options
-        # Structured as follows:
-        # MEP Mapping
-        # - Surface Selection -> ComboBox
-        # - Gaussian Radius -> SpinCtrlDouble
-        # - Gaussian Standard Deviation -> SpinCtrlDouble
-        # - Select Colormap -> ComboBox + Image frame
-        # - Color Map Values
-        # -- Min Value -> SpinCtrlDouble
-        # -- Low Value -> SpinCtrlDouble
-        # -- Mid Value -> SpinCtrlDouble
-        # -- Max Value -> SpinCtrlDouble
-        # TODO: Add a button to apply the colormap to the current volume
-        # TODO: Store MEP visualization settings in a
+        bsizer_mep = QGroupBox(_("TMS Motor Mapping"))
+        bsizer_mep_layout = QVBoxLayout()
 
-        bsizer_mep = wx.StaticBoxSizer(wx.VERTICAL, self, _("TMS Motor Mapping"))
-
-        # Surface Selection
-        try:
-            default_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_MENUBAR)
-        except AttributeError:
-            default_colour = wx.SystemSettings_GetColour(wx.SYS_COLOUR_MENUBAR)
-        self.SetBackgroundColour(default_colour)
-
-        # Initializing the project singleton
         from invesalius import project as prj
 
         self.proj = prj.Project()
 
-        combo_brain_surface_name = wx.ComboBox(
-            bsizer_mep.GetStaticBox(), -1, size=(210, 23), style=wx.CB_DROPDOWN | wx.CB_READONLY
-        )
-        if sys.platform != "win32":
-            combo_brain_surface_name.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
-        # TODO: Sending the event to the MEP Visualizer to update the surface
-        # combo_brain_surface_name.Bind(
-        #     wx.EVT_COMBOBOX, self.OnComboNameBrainSurface)
-        combo_brain_surface_name.Bind(wx.EVT_COMBOBOX, self.OnComboName)
+        combo_brain_surface_name = QComboBox()
+        combo_brain_surface_name.setMinimumWidth(210)
+        combo_brain_surface_name.currentIndexChanged.connect(self.OnComboName)
 
         for n in range(len(self.proj.surface_dict)):
-            combo_brain_surface_name.Insert(str(self.proj.surface_dict[n].name), n)
+            combo_brain_surface_name.addItem(str(self.proj.surface_dict[n].name))
 
         self.combo_brain_surface_name = combo_brain_surface_name
 
-        # Mask colour
-        button_colour = csel.ColourSelect(
-            bsizer_mep.GetStaticBox(), -1, colour=(0, 0, 255), size=(22, -1)
-        )
-        button_colour.Bind(csel.EVT_COLOURSELECT, self.OnSelectColour)
+        self._current_colour = QColor(0, 0, 255)
+        button_colour = QPushButton()
+        button_colour.setFixedWidth(22)
+        button_colour.setStyleSheet(f"background-color: {self._current_colour.name()};")
+        button_colour.clicked.connect(self.OnSelectColour)
         self.button_colour = button_colour
 
-        # Sizer which represents the first line
-        line1 = wx.BoxSizer(wx.HORIZONTAL)
-        line1.Add(combo_brain_surface_name, 1, wx.ALL | wx.EXPAND | wx.GROW, 7)
-        line1.Add(button_colour, 0, wx.ALL | wx.EXPAND | wx.GROW, 7)
+        line1 = QHBoxLayout()
+        line1.addWidget(combo_brain_surface_name, 1)
+        line1.addWidget(button_colour)
 
-        surface_sel_lbl = wx.StaticText(bsizer_mep.GetStaticBox(), -1, _("Brain Surface:"))
-        surface_sel_lbl.SetFont(wx.Font(9, wx.DEFAULT, wx.NORMAL, wx.BOLD))
-        surface_sel_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        surface_sel_lbl = QLabel(_("Brain Surface:"))
+        font = surface_sel_lbl.font()
+        font.setBold(True)
+        surface_sel_lbl.setFont(font)
+        surface_sel_sizer = QHBoxLayout()
+        surface_sel_sizer.addWidget(surface_sel_lbl)
+        surface_sel_sizer.addLayout(line1)
 
-        surface_sel_sizer.Add(surface_sel_lbl, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
-        # fixed_sizer.AddSpacer(7)
-        surface_sel_sizer.Add(line1, 0, wx.EXPAND | wx.GROW | wx.LEFT | wx.RIGHT, 5)
-
-        # Gaussian Radius Line
-        lbl_gaussian_radius = wx.StaticText(bsizer_mep.GetStaticBox(), -1, _("Gaussian Radius:"))
-        self.spin_gaussian_radius = wx.SpinCtrlDouble(
-            bsizer_mep.GetStaticBox(), -1, "", size=wx.Size(64, 23), inc=0.5
-        )
-        self.spin_gaussian_radius.Enable(1)
-        self.spin_gaussian_radius.SetRange(1, 99)
-        self.spin_gaussian_radius.SetValue(self.conf.get("gaussian_radius"))
-
-        self.spin_gaussian_radius.Bind(
-            wx.EVT_TEXT, partial(self.OnSelectGaussianRadius, ctrl=self.spin_gaussian_radius)
-        )
-        self.spin_gaussian_radius.Bind(
-            wx.EVT_SPINCTRL, partial(self.OnSelectGaussianRadius, ctrl=self.spin_gaussian_radius)
+        # Gaussian Radius
+        lbl_gaussian_radius = QLabel(_("Gaussian Radius:"))
+        self.spin_gaussian_radius = QDoubleSpinBox()
+        self.spin_gaussian_radius.setFixedWidth(64)
+        self.spin_gaussian_radius.setSingleStep(0.5)
+        self.spin_gaussian_radius.setRange(1, 99)
+        self.spin_gaussian_radius.setValue(self.conf.get("gaussian_radius"))
+        self.spin_gaussian_radius.valueChanged.connect(
+            partial(self.OnSelectGaussianRadius, ctrl=self.spin_gaussian_radius)
         )
 
-        line_gaussian_radius = wx.BoxSizer(wx.HORIZONTAL)
-        line_gaussian_radius.AddMany(
-            [
-                (lbl_gaussian_radius, 1, wx.EXPAND | wx.GROW | wx.TOP | wx.RIGHT | wx.LEFT, 0),
-                (self.spin_gaussian_radius, 0, wx.ALL | wx.EXPAND | wx.GROW, 0),
-            ]
+        line_gaussian_radius = QHBoxLayout()
+        line_gaussian_radius.addWidget(lbl_gaussian_radius, 1)
+        line_gaussian_radius.addWidget(self.spin_gaussian_radius)
+
+        # Gaussian Standard Deviation
+        lbl_std_dev = QLabel(_("Gaussian Standard Deviation:"))
+        self.spin_std_dev = QDoubleSpinBox()
+        self.spin_std_dev.setFixedWidth(64)
+        self.spin_std_dev.setSingleStep(0.01)
+        self.spin_std_dev.setRange(0.01, 5.0)
+        self.spin_std_dev.setValue(self.conf.get("gaussian_sharpness"))
+        self.spin_std_dev.valueChanged.connect(partial(self.OnSelectStdDev, ctrl=self.spin_std_dev))
+
+        line_std_dev = QHBoxLayout()
+        line_std_dev.addWidget(lbl_std_dev, 1)
+        line_std_dev.addWidget(self.spin_std_dev)
+
+        # Dimensions size
+        lbl_dims_size = QLabel(_("Dimensions size:"))
+        self.spin_dims_size = QSpinBox()
+        self.spin_dims_size.setFixedWidth(64)
+        self.spin_dims_size.setSingleStep(5)
+        self.spin_dims_size.setRange(10, 100)
+        self.spin_dims_size.setValue(self.conf.get("dimensions_size"))
+        self.spin_dims_size.valueChanged.connect(
+            partial(self.OnSelectDimsSize, ctrl=self.spin_dims_size)
         )
 
-        # Gaussian Standard Deviation Line
-        lbl_std_dev = wx.StaticText(
-            bsizer_mep.GetStaticBox(), -1, _("Gaussian Standard Deviation:")
-        )
-        self.spin_std_dev = wx.SpinCtrlDouble(
-            bsizer_mep.GetStaticBox(), -1, "", size=wx.Size(64, 23), inc=0.01
-        )
-        self.spin_std_dev.Enable(1)
-        self.spin_std_dev.SetRange(0.01, 5.0)
-        self.spin_std_dev.SetValue(self.conf.get("gaussian_sharpness"))
+        line_dims_size = QHBoxLayout()
+        line_dims_size.addWidget(lbl_dims_size, 1)
+        line_dims_size.addWidget(self.spin_dims_size)
 
-        self.spin_std_dev.Bind(wx.EVT_TEXT, partial(self.OnSelectStdDev, ctrl=self.spin_std_dev))
-        self.spin_std_dev.Bind(
-            wx.EVT_SPINCTRL, partial(self.OnSelectStdDev, ctrl=self.spin_std_dev)
-        )
+        # Colormap
+        lbl_colormap = QLabel(_("Select Colormap:"))
+        font_bold = lbl_colormap.font()
+        font_bold.setBold(True)
+        lbl_colormap.setFont(font_bold)
 
-        line_std_dev = wx.BoxSizer(wx.HORIZONTAL)
-        line_std_dev.AddMany(
-            [
-                (lbl_std_dev, 1, wx.EXPAND | wx.GROW | wx.TOP | wx.RIGHT | wx.LEFT, 0),
-                (self.spin_std_dev, 0, wx.ALL | wx.EXPAND | wx.GROW, 0),
-            ]
-        )
-
-        # Dimensions size line
-        lbl_dims_size = wx.StaticText(bsizer_mep.GetStaticBox(), -1, _("Dimensions size:"))
-        self.spin_dims_size = wx.SpinCtrl(bsizer_mep.GetStaticBox(), -1, "", size=wx.Size(64, 23))
-        self.spin_dims_size.Enable(1)
-        self.spin_dims_size.SetIncrement(5)
-        self.spin_dims_size.SetRange(10, 100)
-        self.spin_dims_size.SetValue(self.conf.get("dimensions_size"))
-
-        self.spin_dims_size.Bind(
-            wx.EVT_TEXT, partial(self.OnSelectDimsSize, ctrl=self.spin_dims_size)
-        )
-        self.spin_dims_size.Bind(
-            wx.EVT_SPINCTRL, partial(self.OnSelectDimsSize, ctrl=self.spin_dims_size)
-        )
-
-        line_dims_size = wx.BoxSizer(wx.HORIZONTAL)
-        line_dims_size.AddMany(
-            [
-                (lbl_dims_size, 1, wx.EXPAND | wx.GROW | wx.TOP | wx.RIGHT | wx.LEFT, 0),
-                (self.spin_dims_size, 0, wx.ALL | wx.EXPAND | wx.GROW, 0),
-            ]
-        )
-
-        # Select Colormap Line
-        lbl_colormap = wx.StaticText(bsizer_mep.GetStaticBox(), -1, _("Select Colormap:"))
-        lbl_colormap.SetFont(wx.Font(9, wx.DEFAULT, wx.NORMAL, wx.BOLD))
-
-        self.combo_thresh = wx.ComboBox(
-            bsizer_mep.GetStaticBox(),
-            -1,
-            "",  # size=(15,-1),
-            choices=self.colormaps,
-            style=wx.CB_DROPDOWN | wx.CB_READONLY,
-        )
-        self.combo_thresh.Bind(wx.EVT_COMBOBOX, self.OnSelectColormap)
-        # by default use the initial value set in the configuration
-        self.combo_thresh.SetSelection(self.colormaps.index(self.conf.get("mep_colormap")))
-        # self.combo_thresh.SetSelection(0)
+        self.combo_thresh = QComboBox()
+        self.combo_thresh.addItems(self.colormaps)
+        self.combo_thresh.currentIndexChanged.connect(self.OnSelectColormap)
+        self.combo_thresh.setCurrentIndex(self.colormaps.index(self.conf.get("mep_colormap")))
 
         colors_gradient = self.GenerateColormapColors(
             self.conf.get("mep_colormap"), self.number_colors
         )
 
-        self.gradient = grad.GradientDisp(
-            bsizer_mep.GetStaticBox(), -1, -5000, 5000, -5000, 5000, colors_gradient
-        )
+        self.gradient = grad.GradientDisp(bsizer_mep, -1, -5000, 5000, -5000, 5000, colors_gradient)
 
-        colormap_gradient_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        colormap_gradient_sizer.AddMany(
-            [
-                (self.combo_thresh, 0, wx.EXPAND | wx.GROW | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5),
-                (self.gradient, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5),
-            ]
-        )
+        colormap_gradient_sizer = QHBoxLayout()
+        colormap_gradient_sizer.addWidget(self.combo_thresh)
+        colormap_gradient_sizer.addWidget(self.gradient, 1)
 
-        colormap_sizer = wx.BoxSizer(wx.VERTICAL)
+        colormap_sizer = QVBoxLayout()
+        colormap_sizer.addWidget(lbl_colormap)
+        colormap_sizer.addLayout(colormap_gradient_sizer)
 
-        colormap_sizer.AddMany(
-            [
-                (lbl_colormap, 0, wx.TOP | wx.BOTTOM | wx.LEFT, 5),
-                (colormap_gradient_sizer, 0, wx.GROW | wx.SHRINK | wx.LEFT | wx.RIGHT, 5),
-            ]
-        )
+        colormap_custom = QVBoxLayout()
 
-        colormap_custom = wx.BoxSizer(wx.VERTICAL)
+        lbl_colormap_ranges = QLabel(_("Custom Colormap Ranges"))
+        font_bold2 = lbl_colormap_ranges.font()
+        font_bold2.setBold(True)
+        lbl_colormap_ranges.setFont(font_bold2)
 
-        lbl_colormap_ranges = wx.StaticText(
-            bsizer_mep.GetStaticBox(), -1, _("Custom Colormap Ranges")
-        )
-        lbl_colormap_ranges.SetFont(wx.Font(9, wx.DEFAULT, wx.NORMAL, wx.BOLD))
+        lbl_min = QLabel(_("Min Value (uV):"))
+        self.spin_min = QDoubleSpinBox()
+        self.spin_min.setFixedWidth(70)
+        self.spin_min.setSingleStep(10)
+        self.spin_min.setRange(0, 10000)
+        self.spin_min.setValue(self.conf.get("colormap_range_uv").get("min"))
 
-        lbl_min = wx.StaticText(bsizer_mep.GetStaticBox(), -1, _("Min Value (uV):"))
+        lbl_low = QLabel(_("Low Value (uV):"))
+        self.spin_low = QDoubleSpinBox()
+        self.spin_low.setFixedWidth(70)
+        self.spin_low.setSingleStep(10)
+        self.spin_low.setRange(0, 10000)
+        self.spin_low.setValue(self.conf.get("colormap_range_uv").get("low"))
 
-        self.spin_min = wx.SpinCtrlDouble(
-            bsizer_mep.GetStaticBox(), -1, "", size=wx.Size(70, 23), inc=10
-        )
-        self.spin_min.Enable(1)
-        self.spin_min.SetRange(0, 10000)
-        self.spin_min.SetValue(self.conf.get("colormap_range_uv").get("min"))
+        lbl_mid = QLabel(_("Mid Value (uV):"))
+        self.spin_mid = QDoubleSpinBox()
+        self.spin_mid.setFixedWidth(70)
+        self.spin_mid.setSingleStep(10)
+        self.spin_mid.setRange(0, 10000)
+        self.spin_mid.setValue(self.conf.get("colormap_range_uv").get("mid"))
 
-        lbl_low = wx.StaticText(bsizer_mep.GetStaticBox(), -1, _("Low Value (uV):"))
-        self.spin_low = wx.SpinCtrlDouble(
-            bsizer_mep.GetStaticBox(), -1, "", size=wx.Size(70, 23), inc=10
-        )
-        self.spin_low.Enable(1)
-        self.spin_low.SetRange(0, 10000)
-        self.spin_low.SetValue(self.conf.get("colormap_range_uv").get("low"))
+        lbl_max = QLabel(_("Max Value (uV):"))
+        self.spin_max = QDoubleSpinBox()
+        self.spin_max.setFixedWidth(70)
+        self.spin_max.setSingleStep(10)
+        self.spin_max.setRange(0, 10000)
+        self.spin_max.setValue(self.conf.get("colormap_range_uv").get("max"))
 
-        lbl_mid = wx.StaticText(bsizer_mep.GetStaticBox(), -1, _("Mid Value (uV):"))
-        self.spin_mid = wx.SpinCtrlDouble(
-            bsizer_mep.GetStaticBox(), -1, "", size=wx.Size(70, 23), inc=10
-        )
-        self.spin_mid.Enable(1)
-        self.spin_mid.SetRange(0, 10000)
-        self.spin_mid.SetValue(self.conf.get("colormap_range_uv").get("mid"))
+        line_cm_texts = QHBoxLayout()
+        for lbl in (lbl_min, lbl_low, lbl_mid, lbl_max):
+            line_cm_texts.addWidget(lbl, 1)
 
-        lbl_max = wx.StaticText(bsizer_mep.GetStaticBox(), -1, _("Max Value (uV):"))
-        self.spin_max = wx.SpinCtrlDouble(
-            bsizer_mep.GetStaticBox(), -1, "", size=wx.Size(70, 23), inc=10
-        )
-        self.spin_max.Enable(1)
-        self.spin_max.SetRange(0, 10000)
-        self.spin_max.SetValue(self.conf.get("colormap_range_uv").get("max"))
+        line_cm_spins = QHBoxLayout()
+        for sp in (self.spin_min, self.spin_low, self.spin_mid, self.spin_max):
+            line_cm_spins.addWidget(sp)
 
-        line_cm_texts = wx.BoxSizer(wx.HORIZONTAL)
-        line_cm_texts.AddMany(
-            [
-                (lbl_min, 1, wx.EXPAND | wx.GROW | wx.RIGHT | wx.LEFT, 5),
-                (lbl_low, 1, wx.EXPAND | wx.GROW | wx.RIGHT | wx.LEFT, 5),
-                (lbl_mid, 1, wx.EXPAND | wx.GROW | wx.RIGHT | wx.LEFT, 5),
-                (lbl_max, 1, wx.EXPAND | wx.GROW | wx.RIGHT | wx.LEFT, 5),
-            ]
-        )
+        for ctrl, key in [
+            (self.spin_min, "min"),
+            (self.spin_low, "low"),
+            (self.spin_mid, "mid"),
+            (self.spin_max, "max"),
+        ]:
+            ctrl.valueChanged.connect(partial(self.OnSelectColormapRange, ctrl=ctrl, key=key))
 
-        line_cm_spins = wx.BoxSizer(wx.HORIZONTAL)
-        line_cm_spins.AddMany(
-            [
-                (self.spin_min, 0, wx.RIGHT | wx.LEFT | wx.EXPAND | wx.GROW, 12),
-                (self.spin_low, 0, wx.RIGHT | wx.LEFT | wx.EXPAND | wx.GROW, 12),
-                (self.spin_mid, 0, wx.RIGHT | wx.LEFT | wx.EXPAND | wx.GROW, 12),
-                (self.spin_max, 0, wx.RIGHT | wx.LEFT | wx.EXPAND | wx.GROW, 12),
-            ]
-        )
+        colormap_custom.addWidget(lbl_colormap_ranges)
+        colormap_custom.addLayout(line_cm_texts)
+        colormap_custom.addLayout(line_cm_spins)
 
-        # Binding events for the colormap ranges
-        for ctrl in zip(
-            [self.spin_min, self.spin_low, self.spin_mid, self.spin_max],
-            ["min", "low", "mid", "max"],
-        ):
-            ctrl[0].Bind(
-                wx.EVT_TEXT, partial(self.OnSelectColormapRange, ctrl=ctrl[0], key=ctrl[1])
-            )
-            ctrl[0].Bind(
-                wx.EVT_SPINCTRL, partial(self.OnSelectColormapRange, ctrl=ctrl[0], key=ctrl[1])
-            )
+        btn_reset = QPushButton(_("Reset to defaults"))
+        btn_reset.clicked.connect(self.ResetMEPSettings)
 
-        colormap_custom.AddMany(
-            [
-                (lbl_colormap_ranges, 0, wx.TOP | wx.BOTTOM | wx.LEFT, 5),
-                (line_cm_texts, 0, wx.GROW | wx.SHRINK | wx.LEFT | wx.RIGHT, 0),
-                (line_cm_spins, 0, wx.GROW | wx.SHRINK | wx.LEFT | wx.RIGHT, 0),
-            ]
-        )
+        colormap_custom.addWidget(btn_reset, 0, Qt.AlignCenter)
 
-        # Reset to defaults button
-        btn_reset = wx.Button(bsizer_mep.GetStaticBox(), -1, _("Reset to defaults"))
-        btn_reset.Bind(wx.EVT_BUTTON, self.ResetMEPSettings)
+        colormap_sizer.addLayout(colormap_custom)
 
-        # centered button reset
-        colormap_custom.Add(btn_reset, 0, wx.ALIGN_CENTER | wx.TOP, 15)
+        bsizer_mep_layout.addLayout(surface_sel_sizer)
+        bsizer_mep_layout.addLayout(line_gaussian_radius)
+        bsizer_mep_layout.addLayout(line_std_dev)
+        bsizer_mep_layout.addLayout(line_dims_size)
+        bsizer_mep_layout.addLayout(colormap_sizer)
 
-        colormap_sizer.Add(colormap_custom, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
-        bsizer_mep.AddMany(
-            [
-                (surface_sel_sizer, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5),
-                (line_gaussian_radius, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5),
-                (line_std_dev, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5),
-                (line_dims_size, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5),
-                (colormap_sizer, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5),
-            ]
-        )
-
+        bsizer_mep.setLayout(bsizer_mep_layout)
         return bsizer_mep
 
-    def ResetMEPSettings(self, event):
-        # fire an event that will reset the MEP settings to the default values in MEP Visualizer
+    def ResetMEPSettings(self):
         Publisher.sendMessage("Reset MEP Config")
-        # self.session.SetConfig('mep_configuration', self.conf)
         self.UpdateMEPFromSession()
 
     def UpdateMEPFromSession(self):
         self.conf = dict(self.session.GetConfig("mep_configuration"))
-        self.spin_gaussian_radius.SetValue(self.conf.get("gaussian_radius"))
-        self.spin_std_dev.SetValue(self.conf.get("gaussian_sharpness"))
-        self.spin_dims_size.SetValue(self.conf.get("dimensions_size"))
+        self.spin_gaussian_radius.setValue(self.conf.get("gaussian_radius"))
+        self.spin_std_dev.setValue(self.conf.get("gaussian_sharpness"))
+        self.spin_dims_size.setValue(self.conf.get("dimensions_size"))
 
-        self.combo_thresh.SetSelection(self.colormaps.index(self.conf.get("mep_colormap")))
-        partial(self.OnSelectColormap, event=None, ctrl=self.combo_thresh)
-        partial(self.OnSelectColormapRange, event=None, ctrl=self.spin_min, key="min")
+        self.combo_thresh.setCurrentIndex(self.colormaps.index(self.conf.get("mep_colormap")))
 
         ranges = self.conf.get("colormap_range_uv")
         ranges = dict(ranges)
-        self.spin_min.SetValue(ranges.get("min"))
-        self.spin_low.SetValue(ranges.get("low"))
-        self.spin_mid.SetValue(ranges.get("mid"))
-        self.spin_max.SetValue(ranges.get("max"))
+        self.spin_min.setValue(ranges.get("min"))
+        self.spin_low.setValue(ranges.get("low"))
+        self.spin_mid.setValue(ranges.get("mid"))
+        self.spin_max.setValue(ranges.get("max"))
 
-    def OnSelectStdDev(self, evt, ctrl):
-        self.conf["gaussian_sharpness"] = ctrl.GetValue()
-        # Save the configuration
+    def OnSelectStdDev(self, value=None, ctrl=None):
+        self.conf["gaussian_sharpness"] = ctrl.value()
         self.session.SetConfig("mep_configuration", self.conf)
 
-    def OnSelectGaussianRadius(self, evt, ctrl):
-        self.conf["gaussian_radius"] = ctrl.GetValue()
-        # Save the configuration
+    def OnSelectGaussianRadius(self, value=None, ctrl=None):
+        self.conf["gaussian_radius"] = ctrl.value()
         self.session.SetConfig("mep_configuration", self.conf)
 
-    def OnSelectDimsSize(self, evt, ctrl):
-        self.conf["dimensions_size"] = ctrl.GetValue()
-        # Save the configuration
+    def OnSelectDimsSize(self, value=None, ctrl=None):
+        self.conf["dimensions_size"] = ctrl.value()
         self.session.SetConfig("mep_configuration", self.conf)
 
-    def OnSelectColormapRange(self, evt, ctrl, key):
-        self.conf["colormap_range_uv"][key] = ctrl.GetValue()
+    def OnSelectColormapRange(self, value=None, ctrl=None, key=None):
+        self.conf["colormap_range_uv"][key] = ctrl.value()
         self.session.SetConfig("mep_configuration", self.conf)
 
     def LoadSelection(self, values):
@@ -555,26 +464,23 @@ class VisualizationTab(wx.Panel):
         surface_interpolation = values[const.SURFACE_INTERPOLATION]
         slice_interpolation = values[const.SLICE_INTERPOLATION]
 
-        self.rb_rendering.SetSelection(int(rendering))
-        self.rb_inter.SetSelection(int(surface_interpolation))
-        self.rb_inter_sl.SetSelection(int(slice_interpolation))
+        self.rb_rendering_btns[int(rendering)].setChecked(True)
+        self.rb_inter_btns[int(surface_interpolation)].setChecked(True)
+        self.rb_inter_sl_btns[int(slice_interpolation)].setChecked(True)
 
-    def OnSelectColormap(self, event=None):
-        self.conf["mep_colormap"] = self.colormaps[self.combo_thresh.GetSelection()]
+    def OnSelectColormap(self, index=None):
+        self.conf["mep_colormap"] = self.colormaps[self.combo_thresh.currentIndex()]
         colors = self.GenerateColormapColors(self.conf.get("mep_colormap"), self.number_colors)
 
-        # Save the configuration
         self.session.SetConfig("mep_configuration", self.conf)
         Publisher.sendMessage("Save Preferences")
         self.UpdateGradient(self.gradient, colors)
 
     def GenerateColormapColors(self, colormap_name, number_colors=4):
-        # Extract colors and positions
         color_def = const.MEP_COLORMAP_DEFINITIONS[colormap_name]
         colors = list(color_def.values())
-        positions = [0.0, 0.25, 0.5, 1.0]  # Assuming even spacing between colors
+        positions = [0.0, 0.25, 0.5, 1.0]
 
-        # Create LinearSegmentedColormap
         cmap = mcolors.LinearSegmentedColormap.from_list(
             colormap_name, list(zip(positions, colors))
         )
@@ -592,174 +498,148 @@ class VisualizationTab(wx.Panel):
 
     def UpdateGradient(self, gradient, colors):
         gradient.SetGradientColours(colors)
-        gradient.Refresh()
-        gradient.Update()
+        gradient.update()
 
-        self.Refresh()
-        self.Update()
-        self.Show(True)
+        self.update()
+        self.show()
 
-    def OnComboName(self, evt):
+    def OnComboName(self, index=None):
         from invesalius import project as prj
 
         self.proj = prj.Project()
-        surface_index = self.combo_brain_surface_name.GetSelection()
+        surface_index = self.combo_brain_surface_name.currentIndex()
         Publisher.sendMessage("Show single surface", index=surface_index, visibility=True)
         Publisher.sendMessage("Get brain surface actor", index=surface_index)
         Publisher.sendMessage("Press motor map button", pressed=True)
 
-        self.button_colour.SetColour(
-            [int(value * 255) for value in self.proj.surface_dict[surface_index].colour]
-        )
+        colour = [int(value * 255) for value in self.proj.surface_dict[surface_index].colour]
+        self._current_colour = QColor(*colour[:3])
+        self.button_colour.setStyleSheet(f"background-color: {self._current_colour.name()};")
 
-    def OnSelectColour(self, evt):
-        colour = [value / 255.0 for value in self.button_colour.GetColour()]
-        Publisher.sendMessage(
-            "Set surface colour",
-            surface_index=self.combo_brain_surface_name.GetSelection(),
-            colour=colour,
-        )
+    def OnSelectColour(self):
+        colour = QColorDialog.getColor(self._current_colour, self)
+        if colour.isValid():
+            self._current_colour = colour
+            self.button_colour.setStyleSheet(f"background-color: {colour.name()};")
+            colour_float = [colour.redF(), colour.greenF(), colour.blueF()]
+            Publisher.sendMessage(
+                "Set surface colour",
+                surface_index=self.combo_brain_surface_name.currentIndex(),
+                colour=colour_float,
+            )
 
 
-class LoggingTab(wx.Panel):
+class LoggingTab(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
-        # File Logging Selection
-        bsizer_logging = wx.StaticBoxSizer(wx.VERTICAL, self, _("File Logging Options"))
+        # File Logging Options group
+        bsizer_logging = QGroupBox(_("File Logging Options"))
+        bsizer_logging_layout = QVBoxLayout()
 
-        bsizer_file_logging = wx.BoxSizer(wx.HORIZONTAL)
+        bsizer_file_logging = QHBoxLayout()
 
-        rb_file_logging = self.rb_file_logging = wx.RadioBox(
-            self,
-            -1,
-            label="Do Logging",
-            choices=["No", "Yes"],
-            majorDimension=2,
-            style=wx.RA_SPECIFY_COLS | wx.NO_BORDER | wx.FIXED_MINSIZE,
+        lbl_file_logging = QLabel("Do Logging")
+        self.rb_file_logging_group, rb_file_logging_layout, self.rb_file_logging_btns = (
+            _make_radio_group(self, ["No", "Yes"])
         )
-        bsizer_file_logging.Add(rb_file_logging, 0, wx.TOP | wx.LEFT | wx.FIXED_MINSIZE, 5)
+        bsizer_file_logging.addWidget(lbl_file_logging)
+        bsizer_file_logging.addLayout(rb_file_logging_layout)
 
-        rb_append_file = self.rb_append_file = wx.RadioBox(
-            self,  # bsizer_file_logging.GetStaticBox(),
-            -1,
-            label="Append File",
-            choices=["No", "Yes"],
-            majorDimension=2,
-            style=wx.RA_SPECIFY_COLS | wx.NO_BORDER | wx.FIXED_MINSIZE,
+        lbl_append_file = QLabel("Append File")
+        self.rb_append_file_group, rb_append_file_layout, self.rb_append_file_btns = (
+            _make_radio_group(self, ["No", "Yes"])
         )
+        bsizer_file_logging.addWidget(lbl_append_file)
+        bsizer_file_logging.addLayout(rb_append_file_layout)
 
-        lbl_file_logging_level = wx.StaticText(self, -1, _(" Logging Level "))
-        cb_file_logging_level = self.cb_file_logging_level = wx.Choice(
-            self,
-            -1,
-            name="Logging Level",
-            choices=const.LOGGING_LEVEL_TYPES,
-        )
-        bsizer_file_logging.Add(rb_append_file, 0, wx.TOP | wx.LEFT | wx.FIXED_MINSIZE, 5)
-        bsizer_file_logging.Add(lbl_file_logging_level, 0, wx.TOP | wx.LEFT | wx.FIXED_MINSIZE, 5)
-        bsizer_file_logging.Add(cb_file_logging_level, 0, wx.TOP | wx.LEFT | wx.FIXED_MINSIZE, 5)
+        lbl_file_logging_level = QLabel(_(" Logging Level "))
+        self.cb_file_logging_level = QComboBox()
+        self.cb_file_logging_level.addItems(const.LOGGING_LEVEL_TYPES)
+        bsizer_file_logging.addWidget(lbl_file_logging_level)
+        bsizer_file_logging.addWidget(self.cb_file_logging_level)
 
-        bsizer_logging.Add(bsizer_file_logging, 0, wx.TOP | wx.LEFT | wx.EXPAND, 0)
+        bsizer_logging_layout.addLayout(bsizer_file_logging)
 
-        bsizer_log_filename = wx.BoxSizer(wx.HORIZONTAL)
+        bsizer_log_filename = QHBoxLayout()
+        lbl_log_file_label = QLabel(_("File:"))
+        self.tc_log_file_name = QLineEdit()
+        self.tc_log_file_name.setReadOnly(True)
+        self.tc_log_file_name.setMinimumWidth(300)
+        palette = self.tc_log_file_name.palette()
+        palette.setColor(QPalette.Text, QColor("blue"))
+        self.tc_log_file_name.setPalette(palette)
 
-        lbl_log_file_label = wx.StaticText(self, -1, _("File:"))
-        tc_log_file_name = self.tc_log_file_name = wx.TextCtrl(
-            self, -1, "", style=wx.TE_READONLY | wx.TE_LEFT, size=(300, -1)
-        )
-        tc_log_file_name.SetForegroundColour(wx.BLUE)
-        bt_log_file_select = wx.Button(self, label="Modify")  # bsizer_file_logging.GetStaticBox()
-        bt_log_file_select.Bind(wx.EVT_BUTTON, self.OnModifyButton)
-        bsizer_log_filename.Add(
-            lbl_log_file_label, 0, wx.TOP | wx.LEFT, 0
-        )  # | wx.FIXED_MINSIZE, 0)
-        bsizer_log_filename.Add(tc_log_file_name, 0, wx.TOP | wx.LEFT, 0)  # | wx.FIXED_MINSIZE, 0)
-        bsizer_log_filename.Add(
-            bt_log_file_select, 0, wx.TOP | wx.LEFT, 0
-        )  # | wx.FIXED_MINSIZE, 0)
-        bsizer_logging.Add(bsizer_log_filename, 0, wx.TOP | wx.LEFT | wx.FIXED_MINSIZE, 0)
+        bt_log_file_select = QPushButton("Modify")
+        bt_log_file_select.clicked.connect(self.OnModifyButton)
 
-        # Console Logging Selection
-        bsizer_console_logging = wx.StaticBoxSizer(
-            wx.HORIZONTAL, self, _(" Console Logging Options")
-        )
+        bsizer_log_filename.addWidget(lbl_log_file_label)
+        bsizer_log_filename.addWidget(self.tc_log_file_name)
+        bsizer_log_filename.addWidget(bt_log_file_select)
+        bsizer_logging_layout.addLayout(bsizer_log_filename)
+        bsizer_logging.setLayout(bsizer_logging_layout)
 
-        rb_console_logging = self.rb_console_logging = wx.RadioBox(
-            bsizer_console_logging.GetStaticBox(),
-            -1,
-            label="Do logging",
-            choices=["No", "Yes"],
-            majorDimension=2,
-            style=wx.RA_SPECIFY_COLS | wx.NO_BORDER | wx.FIXED_MINSIZE,
-        )
-        bsizer_console_logging.Add(rb_console_logging, 0, wx.TOP | wx.LEFT | wx.FIXED_MINSIZE, 5)
-        lbl_console_logging_level = wx.StaticText(
-            bsizer_console_logging.GetStaticBox(), -1, _(" Logging Level ")
-        )
-        cb_console_logging_level = self.cb_console_logging_level = wx.Choice(
-            bsizer_console_logging.GetStaticBox(),
-            -1,
-            choices=const.LOGGING_LEVEL_TYPES,
-        )
-        bsizer_console_logging.Add(
-            lbl_console_logging_level, 0, wx.TOP | wx.LEFT | wx.FIXED_MINSIZE, 5
-        )
-        bsizer_console_logging.Add(
-            cb_console_logging_level, 0, wx.TOP | wx.LEFT | wx.FIXED_MINSIZE, 5
-        )
+        # Console Logging Options group
+        bsizer_console_logging = QGroupBox(_(" Console Logging Options"))
+        bsizer_console_layout = QHBoxLayout()
 
-        border = wx.BoxSizer(wx.VERTICAL)
-        border.Add(bsizer_logging, 1, wx.EXPAND | wx.ALL, 10)  # | wx.FIXED_MINSIZE, 10)
-        border.Add(bsizer_console_logging, 1, wx.EXPAND | wx.ALL, 10)  # | wx.FIXED_MINSIZE, 10)
-        self.SetSizerAndFit(border)
+        lbl_console_logging = QLabel("Do logging")
+        self.rb_console_logging_group, rb_console_logging_layout, self.rb_console_logging_btns = (
+            _make_radio_group(self, ["No", "Yes"])
+        )
+        bsizer_console_layout.addWidget(lbl_console_logging)
+        bsizer_console_layout.addLayout(rb_console_logging_layout)
 
-        self.Layout()
+        lbl_console_logging_level = QLabel(_(" Logging Level "))
+        self.cb_console_logging_level = QComboBox()
+        self.cb_console_logging_level.addItems(const.LOGGING_LEVEL_TYPES)
+        bsizer_console_layout.addWidget(lbl_console_logging_level)
+        bsizer_console_layout.addWidget(self.cb_console_logging_level)
+        bsizer_console_logging.setLayout(bsizer_console_layout)
+
+        border = QVBoxLayout(self)
+        border.addWidget(bsizer_logging, 1)
+        border.addWidget(bsizer_console_logging, 1)
+        self.setLayout(border)
 
     @log.call_tracking_decorator
-    def OnModifyButton(self, e):
-        logging_file = self.tc_log_file_name.GetValue()
-        path, fname = os.path.split(logging_file)
-        dlg = wx.FileDialog(
-            self,
-            message="Save Log Contents",
-            defaultDir=path,  # os.getcwd(),
-            defaultFile=fname,  # default_file,
-            wildcard="Log files (*.log)|*.log",
-            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
-        )
-        if dlg.ShowModal() == wx.ID_CANCEL:
-            dlg.Destroy()
-            return False
+    def OnModifyButton(self):
+        from PySide6.QtWidgets import QFileDialog
 
-        file_path = dlg.GetPath()
-        self.tc_log_file_name.SetValue(file_path)
-        dlg.Destroy()
-        return True
+        logging_file = self.tc_log_file_name.text()
+        path, fname = os.path.split(logging_file)
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Log Contents",
+            os.path.join(path, fname),
+            "Log files (*.log)",
+        )
+        if file_path:
+            self.tc_log_file_name.setText(file_path)
+            return True
+        return False
 
     def GetSelection(self):
         options = {
-            const.FILE_LOGGING: self.rb_file_logging.GetSelection(),
-            const.FILE_LOGGING_LEVEL: self.cb_file_logging_level.GetSelection(),
-            const.APPEND_LOG_FILE: self.rb_append_file.GetSelection(),
-            const.LOGFILE: self.tc_log_file_name.GetValue(),
-            const.CONSOLE_LOGGING: self.rb_console_logging.GetSelection(),
-            const.CONSOLE_LOGGING_LEVEL: self.cb_console_logging_level.GetSelection(),
+            const.FILE_LOGGING: self.rb_file_logging_group.checkedId(),
+            const.FILE_LOGGING_LEVEL: self.cb_file_logging_level.currentIndex(),
+            const.APPEND_LOG_FILE: self.rb_append_file_group.checkedId(),
+            const.LOGFILE: self.tc_log_file_name.text(),
+            const.CONSOLE_LOGGING: self.rb_console_logging_group.checkedId(),
+            const.CONSOLE_LOGGING_LEVEL: self.cb_console_logging_level.currentIndex(),
         }
-        # session = ses.Session()
-        # logger = log.MyLogger()
 
-        file_logging = self.rb_file_logging.GetSelection()
+        file_logging = self.rb_file_logging_group.checkedId()
         log.invLogger.SetConfig("file_logging", file_logging)
-        file_logging_level = self.cb_file_logging_level.GetSelection()
+        file_logging_level = self.cb_file_logging_level.currentIndex()
         log.invLogger.SetConfig("file_logging_level", file_logging_level)
-        append_log_file = self.rb_append_file.GetSelection()
+        append_log_file = self.rb_append_file_group.checkedId()
         log.invLogger.SetConfig("append_log_file", append_log_file)
-        logging_file = self.tc_log_file_name.GetValue()
+        logging_file = self.tc_log_file_name.text()
         log.invLogger.SetConfig("logging_file", logging_file)
-        console_logging = self.rb_console_logging.GetSelection()
+        console_logging = self.rb_console_logging_group.checkedId()
         log.invLogger.SetConfig("console_logging", console_logging)
-        console_logging_level = self.cb_console_logging_level.GetSelection()
+        console_logging_level = self.cb_console_logging_level.currentIndex()
         log.invLogger.SetConfig("console_logging_level", console_logging_level)
         log.invLogger.configureLogging()
 
@@ -773,17 +653,17 @@ class LoggingTab(wx.Panel):
         console_logging = values[const.CONSOLE_LOGGING]
         console_logging_level = values[const.CONSOLE_LOGGING_LEVEL]
 
-        self.rb_file_logging.SetSelection(int(file_logging))
-        self.cb_file_logging_level.SetSelection(int(file_logging_level))
-        self.rb_append_file.SetSelection(int(append_log_file))
-        self.tc_log_file_name.SetValue(logging_file)
-        self.rb_console_logging.SetSelection(int(console_logging))
-        self.cb_console_logging_level.SetSelection(int(console_logging_level))
+        self.rb_file_logging_btns[int(file_logging)].setChecked(True)
+        self.cb_file_logging_level.setCurrentIndex(int(file_logging_level))
+        self.rb_append_file_btns[int(append_log_file)].setChecked(True)
+        self.tc_log_file_name.setText(logging_file)
+        self.rb_console_logging_btns[int(console_logging)].setChecked(True)
+        self.cb_console_logging_level.setCurrentIndex(int(console_logging_level))
 
 
-class NavigationTab(wx.Panel):
+class NavigationTab(QWidget):
     def __init__(self, parent, navigation):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
         self.session = ses.Session()
         self.navigation = navigation
@@ -792,70 +672,53 @@ class NavigationTab(wx.Panel):
 
         self.LoadConfig()
 
-        text_note = wx.StaticText(
-            self, -1, _("Note: Using too low sleep times can result in Invesalius crashing!")
-        )
-        # Change sleep pause between navigation loops
-        nav_sleep = wx.StaticText(self, -1, _("Navigation Sleep (s):"))
-        spin_nav_sleep = wx.SpinCtrlDouble(self, -1, "", size=wx.Size(50, 23), inc=0.01)
-        spin_nav_sleep.Enable(1)
-        spin_nav_sleep.SetRange(0.01, 10.0)
-        spin_nav_sleep.SetValue(self.sleep_nav)
-        spin_nav_sleep.Bind(wx.EVT_TEXT, partial(self.OnSelectNavSleep, ctrl=spin_nav_sleep))
-        spin_nav_sleep.Bind(wx.EVT_SPINCTRL, partial(self.OnSelectNavSleep, ctrl=spin_nav_sleep))
+        text_note = QLabel(_("Note: Using too low sleep times can result in Invesalius crashing!"))
 
-        # Change sleep pause between coordinate update
-        coord_sleep = wx.StaticText(self, -1, _("Coordinate Sleep (s):"))
-        spin_coord_sleep = wx.SpinCtrlDouble(self, -1, "", size=wx.Size(50, 23), inc=0.01)
-        spin_coord_sleep.Enable(1)
-        spin_coord_sleep.SetRange(0.01, 10.0)
-        spin_coord_sleep.SetValue(self.sleep_coord)
-        spin_coord_sleep.Bind(wx.EVT_TEXT, partial(self.OnSelectCoordSleep, ctrl=spin_coord_sleep))
-        spin_coord_sleep.Bind(
-            wx.EVT_SPINCTRL, partial(self.OnSelectCoordSleep, ctrl=spin_coord_sleep)
+        nav_sleep = QLabel(_("Navigation Sleep (s):"))
+        spin_nav_sleep = QDoubleSpinBox()
+        spin_nav_sleep.setFixedWidth(80)
+        spin_nav_sleep.setSingleStep(0.01)
+        spin_nav_sleep.setRange(0.01, 10.0)
+        spin_nav_sleep.setValue(self.sleep_nav)
+        spin_nav_sleep.valueChanged.connect(partial(self.OnSelectNavSleep, ctrl=spin_nav_sleep))
+
+        coord_sleep = QLabel(_("Coordinate Sleep (s):"))
+        spin_coord_sleep = QDoubleSpinBox()
+        spin_coord_sleep.setFixedWidth(80)
+        spin_coord_sleep.setSingleStep(0.01)
+        spin_coord_sleep.setRange(0.01, 10.0)
+        spin_coord_sleep.setValue(self.sleep_coord)
+        spin_coord_sleep.valueChanged.connect(
+            partial(self.OnSelectCoordSleep, ctrl=spin_coord_sleep)
         )
 
-        line_nav_sleep = wx.BoxSizer(wx.HORIZONTAL)
-        line_nav_sleep.AddMany(
-            [
-                (nav_sleep, 1, wx.EXPAND | wx.GROW | wx.TOP | wx.RIGHT | wx.LEFT, 5),
-                (spin_nav_sleep, 0, wx.ALL | wx.EXPAND | wx.GROW, 5),
-            ]
-        )
+        line_nav_sleep = QHBoxLayout()
+        line_nav_sleep.addWidget(nav_sleep, 1)
+        line_nav_sleep.addWidget(spin_nav_sleep)
 
-        line_coord_sleep = wx.BoxSizer(wx.HORIZONTAL)
-        line_coord_sleep.AddMany(
-            [
-                (coord_sleep, 1, wx.EXPAND | wx.GROW | wx.TOP | wx.RIGHT | wx.LEFT, 5),
-                (spin_coord_sleep, 0, wx.ALL | wx.EXPAND | wx.GROW, 5),
-            ]
-        )
+        line_coord_sleep = QHBoxLayout()
+        line_coord_sleep.addWidget(coord_sleep, 1)
+        line_coord_sleep.addWidget(spin_coord_sleep)
 
-        # Add line sizers into main sizer
-        conf_sizer = wx.StaticBoxSizer(wx.VERTICAL, self, _("Sleep time configuration"))
-        conf_sizer.AddMany(
-            [
-                (text_note, 0, wx.ALL, 10),
-                (line_nav_sleep, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5),
-                (line_coord_sleep, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5),
-            ]
-        )
+        conf_sizer = QGroupBox(_("Sleep time configuration"))
+        conf_layout = QVBoxLayout()
+        conf_layout.addWidget(text_note)
+        conf_layout.addLayout(line_nav_sleep)
+        conf_layout.addLayout(line_coord_sleep)
+        conf_sizer.setLayout(conf_layout)
 
-        main_sizer = wx.BoxSizer(wx.VERTICAL)
-        main_sizer.Add(conf_sizer, 0, wx.ALL | wx.EXPAND, 10)
-        self.SetSizerAndFit(main_sizer)
-        self.Layout()
+        main_sizer = QVBoxLayout(self)
+        main_sizer.addWidget(conf_sizer)
+        self.setLayout(main_sizer)
 
-    def OnSelectNavSleep(self, evt, ctrl):
-        self.sleep_nav = ctrl.GetValue()
+    def OnSelectNavSleep(self, value=None, ctrl=None):
+        self.sleep_nav = ctrl.value()
         self.navigation.UpdateNavSleep(self.sleep_nav)
-
         self.session.SetConfig("sleep_nav", self.sleep_nav)
 
-    def OnSelectCoordSleep(self, evt, ctrl):
-        self.sleep_coord = ctrl.GetValue()
+    def OnSelectCoordSleep(self, value=None, ctrl=None):
+        self.sleep_coord = ctrl.value()
         Publisher.sendMessage("Update coord sleep", data=self.sleep_coord)
-
         self.session.SetConfig("sleep_coord", self.sleep_nav)
 
     def LoadConfig(self):
@@ -869,9 +732,9 @@ class NavigationTab(wx.Panel):
             self.sleep_coord = sleep_coord
 
 
-class ObjectTab(wx.Panel):
+class ObjectTab(QWidget):
     def __init__(self, parent, navigation, tracker, pedal_connector):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
         self.session = ses.Session()
 
@@ -884,49 +747,42 @@ class ObjectTab(wx.Panel):
         self.coil_registrations = {}
         self.__bind_events()
 
-        ### Sizer for TMS coil configuration ###
-        self.config_lbl = wx.StaticText(self, -1, _("Current Configuration:"))
-        self.config_lbl.SetFont(wx.Font(9, wx.DEFAULT, wx.NORMAL, wx.BOLD))
+        # TMS coil registration group
+        self.config_lbl = QLabel(_("Current Configuration:"))
+        font = self.config_lbl.font()
+        font.setBold(True)
+        self.config_lbl.setFont(font)
 
-        self.config_txt = wx.StaticText(
-            self,
-            -1,
-            f"{os.path.basename(self.coil_registrations.get('default_coil', {}).get('path', 'None'))}",
+        self.config_txt = QLabel(
+            f"{os.path.basename(self.coil_registrations.get('default_coil', {}).get('path', 'None'))}"
         )
 
         tooltip = _("New TMS coil configuration")
-        btn_new = wx.Button(self, -1, _("New"), size=wx.Size(65, 23))
-        btn_new.SetToolTip(tooltip)
-        btn_new.Enable(1)
-        btn_new.Bind(wx.EVT_BUTTON, self.OnCreateNewCoil)
+        btn_new = QPushButton(_("New"))
+        btn_new.setFixedSize(65, 23)
+        btn_new.setToolTip(tooltip)
+        btn_new.clicked.connect(self.OnCreateNewCoil)
 
         tooltip = _("Load TMS coil configuration from an OBR file")
-        btn_load = wx.Button(self, -1, _("Load"), size=wx.Size(65, 23))
-        btn_load.SetToolTip(tooltip)
-        btn_load.Enable(1)
-        btn_load.Bind(wx.EVT_BUTTON, self.OnLoadCoilFromOBR)
+        btn_load = QPushButton(_("Load"))
+        btn_load.setFixedSize(65, 23)
+        btn_load.setToolTip(tooltip)
+        btn_load.clicked.connect(self.OnLoadCoilFromOBR)
 
         tooltip = _("Save TMS coil configuration to a file")
-        btn_save = wx.Button(self, -1, _("Save"), size=wx.Size(65, 23))
-        btn_save.SetToolTip(tooltip)
-        btn_save.Enable(1)
-        btn_save.Bind(wx.EVT_BUTTON, self.OnSaveCoilToOBR)
+        btn_save = QPushButton(_("Save"))
+        btn_save.setFixedSize(65, 23)
+        btn_save.setToolTip(tooltip)
+        btn_save.clicked.connect(self.OnSaveCoilToOBR)
 
-        coil_sizer = wx.StaticBoxSizer(wx.VERTICAL, self, _("TMS coil registration"))
-        inner_coil_sizer = wx.FlexGridSizer(3, 4, 5)
-        inner_coil_sizer.AddMany(
-            [
-                (self.config_lbl, 1, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, 5),
-                (self.config_txt, 1, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, 5),
-                ((0, 0), 1, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, 5),
-                (btn_new, 1, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, 5),
-                (btn_load, 1, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, 5),
-                (btn_save, 1, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, 5),
-            ]
-        )
-        coil_sizer.Add(inner_coil_sizer, 0, wx.ALL | wx.EXPAND, 10)
-
-        ### Sizer for settings (conf_sizer) ###
+        coil_sizer = QGroupBox(_("TMS coil registration"))
+        inner_coil_layout = QGridLayout()
+        inner_coil_layout.addWidget(self.config_lbl, 0, 0)
+        inner_coil_layout.addWidget(self.config_txt, 0, 1)
+        inner_coil_layout.addWidget(btn_new, 1, 0)
+        inner_coil_layout.addWidget(btn_load, 1, 1)
+        inner_coil_layout.addWidget(btn_save, 1, 2)
+        coil_sizer.setLayout(inner_coil_layout)
 
         # Angle/Dist thresholds
         self.angle_threshold = self.session.GetConfig(
@@ -936,128 +792,87 @@ class ObjectTab(wx.Panel):
             "distance_threshold", const.DEFAULT_DISTANCE_THRESHOLD
         )
 
-        # Change angles threshold
-        text_angles = wx.StaticText(self, -1, _("Angle threshold (degrees):"))
-        spin_size_angles = wx.SpinCtrlDouble(self, -1, "", size=wx.Size(50, 23))
-        spin_size_angles.SetRange(0.1, 99)
-        spin_size_angles.SetValue(self.angle_threshold)
-        spin_size_angles.Bind(
-            wx.EVT_TEXT, partial(self.OnSelectAngleThreshold, ctrl=spin_size_angles)
-        )
-        spin_size_angles.Bind(
-            wx.EVT_SPINCTRL, partial(self.OnSelectAngleThreshold, ctrl=spin_size_angles)
+        text_angles = QLabel(_("Angle threshold (degrees):"))
+        spin_size_angles = QDoubleSpinBox()
+        spin_size_angles.setFixedWidth(80)
+        spin_size_angles.setRange(0.1, 99)
+        spin_size_angles.setValue(self.angle_threshold)
+        spin_size_angles.valueChanged.connect(
+            partial(self.OnSelectAngleThreshold, ctrl=spin_size_angles)
         )
 
-        # Change dist threshold
-        text_dist = wx.StaticText(self, -1, _("Distance threshold (mm):"))
-        spin_size_dist = wx.SpinCtrlDouble(self, -1, "", size=wx.Size(50, 23))
-        spin_size_dist.SetRange(0.1, 99)
-        spin_size_dist.SetValue(self.distance_threshold)
-        spin_size_dist.Bind(
-            wx.EVT_TEXT, partial(self.OnSelectDistanceThreshold, ctrl=spin_size_dist)
-        )
-        spin_size_dist.Bind(
-            wx.EVT_SPINCTRL, partial(self.OnSelectDistanceThreshold, ctrl=spin_size_dist)
+        text_dist = QLabel(_("Distance threshold (mm):"))
+        spin_size_dist = QDoubleSpinBox()
+        spin_size_dist.setFixedWidth(80)
+        spin_size_dist.setRange(0.1, 99)
+        spin_size_dist.setValue(self.distance_threshold)
+        spin_size_dist.valueChanged.connect(
+            partial(self.OnSelectDistanceThreshold, ctrl=spin_size_dist)
         )
 
-        # Create a horizontal sizer to threshold configs
-        line_angle_threshold = wx.BoxSizer(wx.HORIZONTAL)
-        line_angle_threshold.AddMany(
-            [
-                (text_angles, 1, wx.EXPAND | wx.GROW | wx.TOP | wx.RIGHT | wx.LEFT, 5),
-                (spin_size_angles, 0, wx.ALL | wx.EXPAND | wx.GROW, 5),
-            ]
-        )
+        line_angle_threshold = QHBoxLayout()
+        line_angle_threshold.addWidget(text_angles, 1)
+        line_angle_threshold.addWidget(spin_size_angles)
 
-        line_dist_threshold = wx.BoxSizer(wx.HORIZONTAL)
-        line_dist_threshold.AddMany(
-            [
-                (text_dist, 1, wx.EXPAND | wx.GROW | wx.TOP | wx.RIGHT | wx.LEFT, 5),
-                (spin_size_dist, 0, wx.ALL | wx.EXPAND | wx.GROW, 5),
-            ]
-        )
+        line_dist_threshold = QHBoxLayout()
+        line_dist_threshold.addWidget(text_dist, 1)
+        line_dist_threshold.addWidget(spin_size_dist)
 
-        conf_sizer = wx.StaticBoxSizer(wx.VERTICAL, self, _("Settings"))
-        conf_sizer.AddMany(
-            [
-                (line_angle_threshold, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 10),
-                (line_dist_threshold, 0, wx.GROW | wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 10),
-            ]
-        )
+        conf_sizer = QGroupBox(_("Settings"))
+        conf_layout = QVBoxLayout()
+        conf_layout.addLayout(line_angle_threshold)
+        conf_layout.addLayout(line_dist_threshold)
+        conf_sizer.setLayout(conf_layout)
 
-        ### Sizer for choosing which coils to use in navigation (multicoil)
-        self.sel_sizer = sel_sizer = wx.StaticBoxSizer(
-            wx.VERTICAL,
-            self,
+        # TMS coil selection
+        self.sel_sizer = QGroupBox(
             _(
                 f"TMS coil selection ({len(navigation.coil_registrations)} out of {navigation.n_coils})"
-            ),
+            )
         )
-        self.inner_sel_sizer = inner_sel_sizer = wx.FlexGridSizer(10, 1, 1)
+        self.inner_sel_layout = QVBoxLayout()
 
-        # Coils are selected by toggling coil-buttons
         self.coil_btns = {}
         self.no_coils_lbl = None
         if len(self.coil_registrations) == 0:
-            self.no_coils_lbl = wx.StaticText(
-                self, -1, _("No coils found in config.json. Create or load new coils below.")
+            self.no_coils_lbl = QLabel(
+                _("No coils found in config.json. Create or load new coils below.")
             )
-            inner_sel_sizer.Add(self.no_coils_lbl, 1, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, 5)
-        sel_sizer.Add(inner_sel_sizer, 0, wx.ALL | wx.EXPAND, 10)
+            self.inner_sel_layout.addWidget(self.no_coils_lbl)
+        self.sel_sizer.setLayout(self.inner_sel_layout)
 
-        ### Sizer for choosing which coil is attached to the robot (multicoil) ###
-        self.robot_sizer = robot_sizer = wx.StaticBoxSizer(
-            wx.VERTICAL,
-            self,
-            _("Robot coil selection"),
-        )
-        self.inner_robot_sizer = inner_robot_sizer = wx.FlexGridSizer(2, 1, 1)
+        # Robot coil selection
+        self.robot_sizer = QGroupBox(_("Robot coil selection"))
+        self.inner_robot_layout = QVBoxLayout()
 
-        self.robot_lbl = wx.StaticText(self, -1, _("Robot is connected. Coil attached to robot: "))
-        self.choice_robot_coil = choice_robot_coil = wx.ComboBox(
-            self,
-            -1,
-            f"{self.robot.GetCoilName() or ''}",
-            size=wx.Size(90, 23),
-            choices=list(
-                self.navigation.coil_registrations
-            ),  # List of coils selected for navigation
-            style=wx.CB_DROPDOWN | wx.CB_READONLY,
-        )
-
-        choice_robot_coil.SetToolTip(
-            "Specify which coil is attached to the robot",
-        )
-
-        choice_robot_coil.Bind(wx.EVT_COMBOBOX, self.OnChoiceRobotCoil)
+        self.robot_lbl = QLabel(_("Robot is connected. Coil attached to robot: "))
+        self.choice_robot_coil = QComboBox()
+        self.choice_robot_coil.setFixedWidth(90)
+        self.choice_robot_coil.addItems(list(self.navigation.coil_registrations))
+        robot_coil_name = self.robot.GetCoilName() or ""
+        idx = self.choice_robot_coil.findText(robot_coil_name)
+        if idx >= 0:
+            self.choice_robot_coil.setCurrentIndex(idx)
+        self.choice_robot_coil.setToolTip("Specify which coil is attached to the robot")
+        self.choice_robot_coil.currentTextChanged.connect(self.OnChoiceRobotCoil)
 
         if not self.robot.IsConnected():
-            self.robot_lbl.SetLabel("Robot is not connected")
-            choice_robot_coil.Show(False)  # Hide the combobox
+            self.robot_lbl.setText("Robot is not connected")
+            self.choice_robot_coil.hide()
 
-        inner_robot_sizer.AddMany(
-            [
-                (self.robot_lbl, 1, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, 5),
-                (choice_robot_coil, 1, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, 5),
-            ]
-        )
+        self.inner_robot_layout.addWidget(self.robot_lbl)
+        self.inner_robot_layout.addWidget(self.choice_robot_coil)
+        self.robot_sizer.setLayout(self.inner_robot_layout)
 
-        robot_sizer.Add(inner_robot_sizer, 0, wx.ALL | wx.EXPAND, 10)
-
-        ### Main sizer that contains all of the above GUI sizers ###
-        main_sizer = wx.BoxSizer(wx.VERTICAL)
-        main_sizer.AddMany(
-            [
-                (coil_sizer, 0, wx.ALL | wx.EXPAND, 10),
-                (sel_sizer, 0, wx.ALL | wx.EXPAND, 10),
-                (robot_sizer, 0, wx.ALL | wx.EXPAND, 10),
-                (conf_sizer, 0, wx.ALL | wx.EXPAND, 10),
-            ]
-        )
-        self.SetSizerAndFit(main_sizer)
+        # Main sizer
+        main_sizer = QVBoxLayout(self)
+        main_sizer.addWidget(coil_sizer)
+        main_sizer.addWidget(self.sel_sizer)
+        main_sizer.addWidget(self.robot_sizer)
+        main_sizer.addWidget(conf_sizer)
+        self.setLayout(main_sizer)
 
         self.LoadConfig()
-        self.Layout()
 
     def __bind_events(self):
         Publisher.subscribe(self.OnSetCoilCount, "Reset coil selection")
@@ -1069,64 +884,51 @@ class ObjectTab(wx.Panel):
         if data is None:
             return
         if data == "Connected":
-            self.choice_robot_coil.Show(True)
-
-            self.robot_lbl.SetLabel("Robot is connected. Coil attached to robot: ")
+            self.choice_robot_coil.show()
+            self.robot_lbl.setText("Robot is connected. Coil attached to robot: ")
         else:
-            self.robot_lbl.SetLabel("Robot is not connected.")
+            self.robot_lbl.setText("Robot is not connected.")
 
-    def OnChoiceRobotCoil(self, event):
-        robot_coil_name = event.GetEventObject().GetStringSelection()
-        self.robot.SetCoilName(robot_coil_name)
+    def OnChoiceRobotCoil(self, text):
+        self.robot.SetCoilName(text)
 
     def AddCoilButton(self, coil_name, show_button=True):
         if self.no_coils_lbl is not None:
-            self.no_coils_lbl.Destroy()  # Remove obsolete message
+            self.no_coils_lbl.deleteLater()
             self.no_coils_lbl = None
 
-        # Create a new button with coil_name if it doesn't already exist
         if coil_name not in self.coil_btns:
-            coil_btn = wx.ToggleButton(self, -1, coil_name[:8], size=wx.Size(88, 17))
-            coil_btn.SetToolTip(coil_name)
-            coil_btn.Bind(
-                wx.EVT_TOGGLEBUTTON, lambda event, name=coil_name: self.OnSelectCoil(event, name)
+            coil_btn = QPushButton(coil_name[:8])
+            coil_btn.setCheckable(True)
+            coil_btn.setFixedSize(88, 17)
+            coil_btn.setToolTip(coil_name)
+            coil_btn.clicked.connect(lambda checked, name=coil_name: self.OnSelectCoil(name=name))
+            coil_btn.setContextMenuPolicy(Qt.CustomContextMenu)
+            coil_btn.customContextMenuRequested.connect(
+                lambda pos, name=coil_name: self.OnRightClickCoil(pos, name)
             )
-            coil_btn.Bind(
-                wx.EVT_RIGHT_DOWN, lambda event, name=coil_name: self.OnRightClickCoil(event, name)
-            )
-            coil_btn.Show(show_button)
-            self.coil_btns[coil_name] = (coil_btn, 1, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, 5)
-
-            self.inner_sel_sizer.Add(coil_btn, 1, wx.EXPAND, 5)
+            coil_btn.setVisible(show_button)
+            self.coil_btns[coil_name] = coil_btn
+            self.inner_sel_layout.addWidget(coil_btn)
 
     def ShowMulticoilGUI(self, show_multicoil):
-        # Show/hide singlecoil configuration text
-        self.config_txt.Show(not show_multicoil)
-        self.config_lbl.Show(not show_multicoil)
+        self.config_txt.setVisible(not show_multicoil)
+        self.config_lbl.setVisible(not show_multicoil)
 
-        # Show/hide multicoil GUI elements
-        self.sel_sizer.GetStaticBox().Show(show_multicoil)
-        self.sel_sizer.ShowItems(show_multicoil)
+        self.sel_sizer.setVisible(show_multicoil)
+        self.robot_sizer.setVisible(show_multicoil)
 
-        self.robot_sizer.GetStaticBox().Show(show_multicoil)
-        self.robot_sizer.ShowItems(show_multicoil)
-
-        # Show the robot coil combobox only if the robot is connected
-        self.choice_robot_coil.Show(show_multicoil and self.robot.IsConnected())
-
-        self.Layout()
+        self.choice_robot_coil.setVisible(show_multicoil and self.robot.IsConnected())
 
     def OnSetCoilCount(self, n_coils):
         multicoil_mode = n_coils > 1
 
         if multicoil_mode:
-            # Update multicoil GUI elements
-            self.sel_sizer.GetStaticBox().SetLabel(f"TMS coil selection (0 out of {n_coils})")
+            self.sel_sizer.setTitle(f"TMS coil selection (0 out of {n_coils})")
 
-            # Reset (enable and unpress) all coil-buttons
-            for btn, *junk in self.coil_btns.values():
-                btn.Enable()
-                btn.SetValue(False)
+            for btn in self.coil_btns.values():
+                btn.setEnabled(True)
+                btn.setChecked(False)
 
         self.ShowMulticoilGUI(multicoil_mode)
 
@@ -1137,52 +939,48 @@ class ObjectTab(wx.Panel):
         self.ShowMulticoilGUI(multicoil_mode)
 
         self.coil_registrations = self.session.GetConfig("coil_registrations", {})
-        # Add a button for each coil
         for coil_name in self.coil_registrations:
             self.AddCoilButton(coil_name, show_button=multicoil_mode)
 
-        # Press the buttons for coils that were selected in config file
         selected_coils = state.get("selected_coils", [])
         for coil_name in selected_coils:
-            self.coil_btns[coil_name][0].SetValue(True)
+            self.coil_btns[coil_name].setChecked(True)
 
-        # Update labels
-        self.config_txt.SetLabel(
+        self.config_txt.setText(
             f"{os.path.basename(self.coil_registrations.get('default_coil', {}).get('path', 'None'))}"
         )
 
         n_coils_selected = len(selected_coils)
-        self.sel_sizer.GetStaticBox().SetLabel(
-            f"TMS coil selection ({n_coils_selected} out of {n_coils})"
-        )
+        self.sel_sizer.setTitle(f"TMS coil selection ({n_coils_selected} out of {n_coils})")
 
         if n_coils_selected == n_coils:
             self.CoilSelectionDone()
 
     def CoilSelectionDone(self):
-        if self.navigation.n_coils == 1:  # Tell the robot the coil name
+        if self.navigation.n_coils == 1:
             self.robot.SetCoilName(next(iter(self.navigation.coil_registrations)))
 
         Publisher.sendMessage("Coil selection done", done=True)
         Publisher.sendMessage("Update status text in GUI", label=_("Ready"))
 
-        # Allow only n_coils buttons to be pressed, so disable unpressed coil-buttons
-        for btn, *junk in self.coil_btns.values():
-            btn.Enable(btn.GetValue())
+        for btn in self.coil_btns.values():
+            btn.setEnabled(btn.isChecked())
 
     def OnSelectCoil(self, event=None, name=None, select=False):
         if name is None:
-            if not select:  # Unselect all coils
+            if not select:
                 Publisher.sendMessage("Reset coil selection", n_coils=self.navigation.n_coils)
             return
 
         coil_registration = None
         navigation = self.navigation
 
-        if select or (event is not None and event.GetSelection()):  # If coil is selected
+        btn = self.coil_btns.get(name)
+        is_selected = select or (btn is not None and btn.isChecked())
+
+        if is_selected:
             coil_registration = self.coil_registrations[name]
 
-            # Check that the index of the chosen coil does not conflict with other selected coils
             obj_id = coil_registration["obj_id"]
             selected_registrations = navigation.coil_registrations
             conflicting_coil_name = next(
@@ -1194,89 +992,76 @@ class ObjectTab(wx.Panel):
                 None,
             )
             if conflicting_coil_name is not None:
-                wx.MessageBox(
+                QMessageBox.warning(
+                    self,
+                    _("InVesalius 3"),
                     _(
                         f"Cannot select this coil, its index (obj_id = {obj_id}) conflicts with selected coil: {conflicting_coil_name}"
                     ),
-                    _("InVesalius 3"),
                 )
-                self.coil_btns[name][0].SetValue(
-                    False
-                )  # Unpress the coil-button since its selection just failed
+                self.coil_btns[name].setChecked(False)
                 return
 
-            # Check that the tracker used to configure the coil matches the currently used tracker
             elif (obj_tracker_id := coil_registration["tracker_id"]) != self.tracker.tracker_id:
-                wx.MessageBox(
+                QMessageBox.warning(
+                    self,
+                    _("InVesalius 3"),
                     _(
                         f"Cannot select this coil, its tracker [{const.TRACKERS[obj_tracker_id - 1]}] does not match the selected tracker [{const.TRACKERS[self.tracker.tracker_id - 1]}]"
                     ),
-                    _("InVesalius 3"),
                 )
-                self.coil_btns[name][0].SetValue(False)  # Unpress the button
+                self.coil_btns[name].setChecked(False)
                 return
 
-            # Press the coil button here in case selection was done via code without pressing button
-            self.coil_btns[name][0].SetValue(True)
+            self.coil_btns[name].setChecked(True)
 
-        # Select/Unselect coil
         Publisher.sendMessage("Select coil", coil_name=name, coil_registration=coil_registration)
 
         n_coils_selected = len(navigation.coil_registrations)
         n_coils = navigation.n_coils
 
-        # Update labels telling which coil is selected (for single coil mode) and how many coils to select (for multicoil mode)
-        self.config_txt.SetLabel(
+        self.config_txt.setText(
             f"{os.path.basename(self.coil_registrations.get('default_coil', {}).get('path', 'None'))}"
         )
-        self.sel_sizer.GetStaticBox().SetLabel(
-            f"TMS coil selection ({n_coils_selected} out of {n_coils})"
-        )
+        self.sel_sizer.setTitle(f"TMS coil selection ({n_coils_selected} out of {n_coils})")
 
-        # Update robot coil combobox
         if self.choice_robot_coil is not None:
-            self.choice_robot_coil.Set(list(navigation.coil_registrations))
-            self.choice_robot_coil.SetStringSelection(self.robot.GetCoilName() or "")
+            self.choice_robot_coil.clear()
+            self.choice_robot_coil.addItems(list(navigation.coil_registrations))
+            idx = self.choice_robot_coil.findText(self.robot.GetCoilName() or "")
+            if idx >= 0:
+                self.choice_robot_coil.setCurrentIndex(idx)
 
         if n_coils_selected == n_coils:
             self.CoilSelectionDone()
-        else:  # Enable all buttons
+        else:
             Publisher.sendMessage("Coil selection done", done=False)
-            for btn, *junk in self.coil_btns.values():
-                btn.Enable(True)
+            for btn in self.coil_btns.values():
+                btn.setEnabled(True)
 
-    def OnRightClickCoil(self, event, name):
-        def DeleteCoil(event, name):
-            # Unselect the coil first
-            self.OnSelectCoil(name, select=False)
+    def OnRightClickCoil(self, pos, name):
+        def DeleteCoil(name):
+            self.OnSelectCoil(name=name, select=False)
             del self.coil_registrations[name]
 
-            # Remove the coil-button
-            self.coil_btns[name][0].Destroy()
+            self.coil_btns[name].deleteLater()
             del self.coil_btns[name]
 
-            # Remove the coil from the config file
             self.session.SetConfig("coil_registrations", self.coil_registrations)
-
-            # Remove coil from navigation and CoilVisualizer
             Publisher.sendMessage("Select coil", coil_name=name, coil_registration=None)
 
-        menu = wx.Menu()
-        delete_coil = menu.Append(wx.ID_ANY, "Delete coil")
-        save_coil = menu.Append(wx.ID_ANY, "Save coil to OBR file")
+        menu = QMenu(self)
+        delete_action = menu.addAction("Delete coil")
+        save_action = menu.addAction("Save coil to OBR file")
 
-        self.Bind(wx.EVT_MENU, (lambda event, name=name: DeleteCoil(event, name)), delete_coil)
-        self.Bind(
-            wx.EVT_MENU,
-            (lambda event, name=name: self.OnSaveCoilToOBR(event, coil_name=name)),
-            save_coil,
-        )
-        self.PopupMenu(menu)
-        menu.Destroy()
+        delete_action.triggered.connect(lambda: DeleteCoil(name))
+        save_action.triggered.connect(lambda: self.OnSaveCoilToOBR(coil_name=name))
 
-    def OnCreateNewCoil(self, event=None):
-        # Create a coil registration and save it by the given name
-        # Also used to edit coil registrations by overwriting to the same name
+        sender = self.coil_btns.get(name)
+        if sender:
+            menu.exec(sender.mapToGlobal(pos))
+
+    def OnCreateNewCoil(self):
         if self.tracker.IsTrackerInitialized():
             dialog = dlg.ObjectCalibrationDialog(
                 self.tracker,
@@ -1284,29 +1069,26 @@ class ObjectTab(wx.Panel):
                 self.pedal_connector,
             )
             try:
-                if dialog.ShowModal() == wx.ID_OK:
+                if dialog.exec() == QDialog.Accepted:
                     (coil_name, coil_path, obj_fiducials, obj_orients, obj_id, tracker_id) = (
                         dialog.GetValue()
                     )
 
                     if coil_name in self.coil_registrations and coil_name != "default_coil":
-                        # Warn that we are overwriting an old registration
-                        dialog = wx.TextEntryDialog(
-                            None,
+                        from PySide6.QtWidgets import QInputDialog
+
+                        new_name, ok = QInputDialog.getText(
+                            self,
+                            _("Warning: Coil Name Conflict"),
                             _(
                                 "A registration with this name already exists. Enter a new name or overwrite an old coil registration"
                             ),
-                            _("Warning: Coil Name Conflict"),
-                            value=coil_name,
+                            text=coil_name,
                         )
-                        if dialog.ShowModal() == wx.ID_OK:
-                            coil_name = (
-                                dialog.GetValue().strip()
-                            )  # Update coil_name with user input
-                            dialog.Destroy()
+                        if ok:
+                            coil_name = new_name.strip()
                         else:
-                            dialog.Destroy()
-                            return  # Cancel the operation if the user closes the dialog or cancels
+                            return
 
                     if np.isfinite(obj_fiducials).all() and np.isfinite(obj_orients).all():
                         coil_registration = {
@@ -1318,34 +1100,27 @@ class ObjectTab(wx.Panel):
                         }
                         self.coil_registrations[coil_name] = coil_registration
                         self.session.SetConfig("coil_registrations", self.coil_registrations)
-                        self.AddCoilButton(coil_name)  # Add a button for this coil to GUI
+                        self.AddCoilButton(coil_name)
 
-                        # if we just edited a currently selected coil_name, unselect it (to avoid possible conflicts caused by new registration)
-                        coil_btn = self.coil_btns[coil_name][0]
-                        if coil_btn.GetValue():
-                            coil_btn.SetValue(False)
+                        coil_btn = self.coil_btns[coil_name]
+                        if coil_btn.isChecked():
+                            coil_btn.setChecked(False)
                             self.OnSelectCoil(name=coil_name, select=False)
 
-                        # Select the coil that was just created (if all coils have not been selected)
                         if len(self.navigation.coil_registrations) < self.navigation.n_coils:
                             self.OnSelectCoil(name=coil_name, select=True)
                         else:
-                            coil_btn.Enable(
-                                False
-                            )  # All coils have been selected so disable the new button
+                            coil_btn.setEnabled(False)
 
-                        # Show button only in multicoil mode
-                        coil_btn.Show(self.navigation.n_coils > 1)
+                        coil_btn.setVisible(self.navigation.n_coils > 1)
 
-                    self.Layout()
-
-            except wx.PyAssertionError:  # TODO FIX: win64
+            except Exception:
                 pass
-            dialog.Destroy()
+            dialog.close()
         else:
             dlg.ShowNavigationTrackerWarning(0, "choose")
 
-    def OnLoadCoilFromOBR(self, event=None):
+    def OnLoadCoilFromOBR(self):
         filename = dlg.ShowLoadSaveDialog(
             message=_("Load object registration"), wildcard=_("Registration files (*.obr)|*.obr")
         )
@@ -1365,26 +1140,25 @@ class ObjectTab(wx.Panel):
                 obj_id = int(data[0][-1])
                 coil_name = "default_coil" if self.navigation.n_coils == 1 else coil_name
 
-                # Handle old OBR file which lacks coil_name and tracker information
                 if len(data[0]) < 6:
                     coil_name = "default_coil"
                     tracker_id = self.tracker.tracker_id
 
                 if coil_name in self.coil_registrations and coil_name != "default_coil":
-                    # Warn that we are overwriting an old registration
-                    dialog = wx.TextEntryDialog(
-                        None,
+                    from PySide6.QtWidgets import QInputDialog
+
+                    new_name, ok = QInputDialog.getText(
+                        self,
+                        _("Warning: Coil Name Conflict"),
                         _(
                             "A registration with this name already exists. Enter a new name or overwrite an old coil registration"
                         ),
-                        _("Warning: Coil Name Conflict"),
-                        value=coil_name,
+                        text=coil_name,
                     )
-                    if dialog.ShowModal() == wx.ID_OK:
-                        coil_name = dialog.GetValue().strip()  # Update coil_name with user input
+                    if ok:
+                        coil_name = new_name.strip()
                     else:
-                        return  # Cancel the operation if the user closes the dialog or cancels
-                    dialog.Destroy()
+                        return
 
                 if not os.path.exists(coil_path):
                     coil_path = os.path.join(inv_paths.OBJ_DIR, "magstim_fig8_coil.stl")
@@ -1403,66 +1177,62 @@ class ObjectTab(wx.Panel):
                     }
                     self.coil_registrations[coil_name] = coil_registration
                     self.session.SetConfig("coil_registrations", self.coil_registrations)
-                    self.AddCoilButton(coil_name)  # Add a button for this coil to GUI
+                    self.AddCoilButton(coil_name)
 
-                    # if we just overwrote a currently selected coil_name, unselect it (to avoid possible conflicts caused by this loaded registration)
-                    coil_btn = self.coil_btns[coil_name][0]
-                    if coil_btn.GetValue():
-                        coil_btn.SetValue(False)
+                    coil_btn = self.coil_btns[coil_name]
+                    if coil_btn.isChecked():
+                        coil_btn.setChecked(False)
                         self.OnSelectCoil(name=coil_name, select=False)
                     elif self.navigation.CoilSelectionDone():
-                        coil_btn.Enable(False)
+                        coil_btn.setEnabled(False)
 
                     if self.navigation.n_coils == 1:
-                        # Select the coil that was just loaded for navigation
-                        self.OnSelectCoil(
-                            name="default_coil", select=False
-                        )  # We have to unselect 1st since single coil mode causes edge-case bug
+                        self.OnSelectCoil(name="default_coil", select=False)
                         self.OnSelectCoil(name="default_coil", select=True)
-                        # Hide the coil-button
-                        coil_btn.Show(False)
-
-                    self.Layout()
+                        coil_btn.hide()
 
                 Publisher.sendMessage(
                     "Update status text in GUI", label=_("Object file successfully loaded")
                 )
 
                 msg = _("Object file successfully loaded")
-                wx.MessageBox(msg, _("InVesalius 3"))
-        except:
-            wx.MessageBox(_("Object registration file incompatible."), _("InVesalius 3"))
+                QMessageBox.information(self, _("InVesalius 3"), msg)
+        except Exception:
+            QMessageBox.warning(
+                self, _("InVesalius 3"), _("Object registration file incompatible.")
+            )
             Publisher.sendMessage("Update status text in GUI", label="")
 
-    def OnSaveCoilToOBR(self, evt, coil_name=None):
+    def OnSaveCoilToOBR(self, evt=None, coil_name=None):
         if coil_name is None:
             if self.navigation.n_coils > 1 and self.coil_registrations:
-                # Specify the coil name if multicoil mode and if any exist
-                dialog = wx.SingleChoiceDialog(
-                    None,
-                    _("Select which coil registration to save"),
+                from PySide6.QtWidgets import QInputDialog
+
+                coil_name, ok = QInputDialog.getItem(
+                    self,
                     _("Saving coil registration"),
-                    choices=list(self.coil_registrations),
+                    _("Select which coil registration to save"),
+                    list(self.coil_registrations),
+                    0,
+                    False,
                 )
-                if dialog.ShowModal() == wx.ID_OK:
-                    coil_name = dialog.GetStringSelection()
-                else:
-                    return  # Cancel the operation if the user closes the dialog or cancels
-                dialog.Destroy()
+                if not ok:
+                    return
             else:
-                # In single coil mode there is only one coil to save
                 coil_name = next(iter(self.coil_registrations), None)
 
         coil_registration = self.coil_registrations.get(coil_name, None)
 
-        if coil_registration is None:  # No registration found by this name
-            wx.MessageBox(_("Failed to save registration: No registration to save!"), _("Save"))
+        if coil_registration is None:
+            QMessageBox.warning(
+                self, _("Save"), _("Failed to save registration: No registration to save!")
+            )
             return
 
         filename = dlg.ShowLoadSaveDialog(
             message=_("Save object registration as..."),
             wildcard=_("Registration files (*.obr)|*.obr"),
-            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+            style=1,
             default_filename="object_registration.obr",
             save_ext="obr",
         )
@@ -1482,24 +1252,22 @@ class ObjectTab(wx.Panel):
             )
             data = np.hstack([coil_registration["fiducials"], coil_registration["orientations"]])
             np.savetxt(filename, data, fmt="%.4f", delimiter="\t", newline="\n", header=hdr)
-            wx.MessageBox(_("Object file successfully saved"), _("Save"))
+            QMessageBox.information(self, _("Save"), _("Object file successfully saved"))
 
-    def OnSelectAngleThreshold(self, evt, ctrl):
-        self.angle_threshold = ctrl.GetValue()
+    def OnSelectAngleThreshold(self, value=None, ctrl=None):
+        self.angle_threshold = ctrl.value()
         Publisher.sendMessage("Update angle threshold", angle=self.angle_threshold)
-
         self.session.SetConfig("angle_threshold", self.angle_threshold)
 
-    def OnSelectDistanceThreshold(self, evt, ctrl):
-        self.distance_threshold = ctrl.GetValue()
+    def OnSelectDistanceThreshold(self, value=None, ctrl=None):
+        self.distance_threshold = ctrl.value()
         Publisher.sendMessage("Update distance threshold", dist_threshold=self.distance_threshold)
-
         self.session.SetConfig("distance_threshold", self.distance_threshold)
 
 
-class TrackerTab(wx.Panel):
+class TrackerTab(QWidget):
     def __init__(self, parent, tracker, robot):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
         self.session = ses.Session()
 
@@ -1512,278 +1280,221 @@ class TrackerTab(wx.Panel):
         self.n_coils = 1
         self.LoadConfig()
 
-        # ComboBox for choosing the no. of coils to track
+        # Number of coils
         n_coils_options = [str(n) for n in range(1, 10)]
-        select_n_coils_elem = wx.ComboBox(
-            self,
-            -1,
-            "",
-            size=(145, -1),
-            choices=n_coils_options,
-            style=wx.CB_DROPDOWN | wx.CB_READONLY,
-        )
-        tooltip = _("Choose the number of coils to track")
-        select_n_coils_elem.SetToolTip(tooltip)
-        select_n_coils_elem.SetSelection(self.n_coils - 1)
-        select_n_coils_elem.Bind(
-            wx.EVT_COMBOBOX, partial(self.OnChooseNoOfCoils, ctrl=select_n_coils_elem)
+        select_n_coils_elem = QComboBox()
+        select_n_coils_elem.setFixedWidth(145)
+        select_n_coils_elem.addItems(n_coils_options)
+        select_n_coils_elem.setToolTip(_("Choose the number of coils to track"))
+        select_n_coils_elem.setCurrentIndex(self.n_coils - 1)
+        select_n_coils_elem.currentIndexChanged.connect(
+            partial(self.OnChooseNoOfCoils, ctrl=select_n_coils_elem)
         )
 
-        select_n_coils_label = wx.StaticText(self, -1, _("Choose the number of coils to track:"))
+        select_n_coils_label = QLabel(_("Choose the number of coils to track:"))
 
-        # ComboBox for spatial tracker device selection
+        # Tracker selection
         tracker_options = [_("Select")] + self.tracker.get_trackers()
-        select_tracker_elem = wx.ComboBox(
-            self,
-            -1,
-            "",
-            size=(145, -1),
-            choices=tracker_options,
-            style=wx.CB_DROPDOWN | wx.CB_READONLY,
-        )
-        tooltip = _("Choose the tracking device")
-        select_tracker_elem.SetToolTip(tooltip)
-        select_tracker_elem.SetSelection(self.tracker.tracker_id)
-        select_tracker_elem.Bind(
-            wx.EVT_COMBOBOX, partial(self.OnChooseTracker, ctrl=select_tracker_elem)
+        select_tracker_elem = QComboBox()
+        select_tracker_elem.setFixedWidth(145)
+        select_tracker_elem.addItems(tracker_options)
+        select_tracker_elem.setToolTip(_("Choose the tracking device"))
+        select_tracker_elem.setCurrentIndex(self.tracker.tracker_id)
+        select_tracker_elem.currentIndexChanged.connect(
+            partial(self.OnChooseTracker, ctrl=select_tracker_elem)
         )
 
-        select_tracker_label = wx.StaticText(self, -1, _("Choose the tracking device: "))
+        select_tracker_label = QLabel(_("Choose the tracking device: "))
 
-        # ComboBox for tracker reference mode
-        tooltip = _("Choose the navigation reference mode")
-        choice_ref = wx.ComboBox(
-            self,
-            -1,
-            "",
-            size=(145, -1),
-            choices=const.REF_MODE,
-            style=wx.CB_DROPDOWN | wx.CB_READONLY,
-        )
-        choice_ref.SetSelection(const.DEFAULT_REF_MODE)
-        choice_ref.SetToolTip(tooltip)
-        choice_ref.Bind(
-            wx.EVT_COMBOBOX, partial(self.OnChooseReferenceMode, ctrl=select_tracker_elem)
+        # Reference mode
+        choice_ref = QComboBox()
+        choice_ref.setFixedWidth(145)
+        choice_ref.addItems(const.REF_MODE)
+        choice_ref.setCurrentIndex(const.DEFAULT_REF_MODE)
+        choice_ref.setToolTip(_("Choose the navigation reference mode"))
+        choice_ref.currentIndexChanged.connect(
+            partial(self.OnChooseReferenceMode, ctrl=select_tracker_elem)
         )
         self.choice_ref = choice_ref
 
-        choice_ref_label = wx.StaticText(self, -1, _("Choose the navigation reference mode: "))
+        choice_ref_label = QLabel(_("Choose the navigation reference mode: "))
 
-        ref_sizer = wx.FlexGridSizer(rows=3, cols=2, hgap=5, vgap=5)
-        ref_sizer.AddMany(
-            [
-                (select_n_coils_label, wx.LEFT),
-                (select_n_coils_elem, wx.RIGHT),
-                (select_tracker_label, wx.LEFT),
-                (select_tracker_elem, wx.RIGHT),
-                (choice_ref_label, wx.LEFT),
-                (choice_ref, wx.RIGHT),
-            ]
-        )
-        ref_sizer.Layout()
+        ref_layout = QGridLayout()
+        ref_layout.addWidget(select_n_coils_label, 0, 0)
+        ref_layout.addWidget(select_n_coils_elem, 0, 1)
+        ref_layout.addWidget(select_tracker_label, 1, 0)
+        ref_layout.addWidget(select_tracker_elem, 1, 1)
+        ref_layout.addWidget(choice_ref_label, 2, 0)
+        ref_layout.addWidget(choice_ref, 2, 1)
 
-        sizer = wx.StaticBoxSizer(wx.VERTICAL, self, _("Setup tracker"))
-        sizer.Add(ref_sizer, 1, wx.ALL | wx.FIXED_MINSIZE, 20)
+        sizer = QGroupBox(_("Setup tracker"))
+        sizer_layout = QVBoxLayout()
+        sizer_layout.addLayout(ref_layout)
+        sizer.setLayout(sizer_layout)
 
-        lbl_rob = wx.StaticText(self, -1, _("IP for robot device: "))
+        # Robot IP
+        lbl_rob = QLabel(_("IP for robot device: "))
 
-        # ComboBox for spatial tracker device selection
-        tooltip = _("Choose or type the robot IP")
         robot_ip_options = self.robot.robot_ip_options
-        choice_IP = wx.ComboBox(
-            self, -1, "", choices=robot_ip_options, style=wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER
-        )
-        choice_IP.SetToolTip(tooltip)
+        choice_IP = QComboBox()
+        choice_IP.setEditable(True)
+        choice_IP.addItems(robot_ip_options)
+        choice_IP.setToolTip(_("Choose or type the robot IP"))
 
         if self.robot.robot_ip in self.robot.robot_ip_options:
-            choice_IP.SetSelection(robot_ip_options.index(self.robot.robot_ip))
-            self.robot_ip = choice_IP.GetValue()
-
+            choice_IP.setCurrentIndex(robot_ip_options.index(self.robot.robot_ip))
+            self.robot_ip = choice_IP.currentText()
         elif self.robot.robot_ip is not None:
-            choice_IP.SetValue(self.robot.robot_ip)
-            self.robot_ip = choice_IP.GetValue()
+            choice_IP.setEditText(self.robot.robot_ip)
+            self.robot_ip = choice_IP.currentText()
+        elif choice_IP.currentText() == "" and choice_IP.count() == 0:
+            choice_IP.setEditText(_("Select or type robot IP"))
+        elif choice_IP.currentText() == "":
+            choice_IP.setCurrentIndex(0)
+            self.robot_ip = choice_IP.currentText()
 
-        elif choice_IP.IsTextEmpty() and choice_IP.IsListEmpty():
-            choice_IP.ChangeValue(_("Select or type robot IP"))
-
-        elif choice_IP.IsTextEmpty():
-            choice_IP.SetSelection(0)
-            self.robot_ip = choice_IP.GetValue()
-
-        choice_IP.Bind(wx.EVT_COMBOBOX, partial(self.OnChoiceIP, ctrl=choice_IP))
-        choice_IP.Bind(wx.EVT_TEXT, partial(self.OnTxt_Ent, ctrl=choice_IP))
+        choice_IP.currentTextChanged.connect(partial(self.OnTxt_Ent, ctrl=choice_IP))
+        choice_IP.currentIndexChanged.connect(partial(self.OnChoiceIP, ctrl=choice_IP))
         self.choice_IP = choice_IP
 
-        # ADD ip Robot
-        btn_rob_add_ip = wx.BitmapButton(self, -1, wx.ArtProvider.GetBitmap(wx.ART_PLUS))
-        btn_rob_add_ip.SetToolTip("Add a new IP to the list")
-        btn_rob_add_ip.Enable(1)
-        btn_rob_add_ip.Bind(wx.EVT_BUTTON, self.OnAddIP)
+        btn_rob_add_ip = QPushButton("+")
+        btn_rob_add_ip.setToolTip("Add a new IP to the list")
+        btn_rob_add_ip.setFixedWidth(30)
+        btn_rob_add_ip.clicked.connect(self.OnAddIP)
         self.btn_rob_add_ip = btn_rob_add_ip
 
-        # Remove ip Robot
-        btn_rob_rem_ip = wx.BitmapButton(self, -1, wx.ArtProvider.GetBitmap(wx.ART_MINUS))
-        btn_rob_rem_ip.SetToolTip("Remove the selected IP from the list")
-        btn_rob_rem_ip.Enable(1)
-        btn_rob_rem_ip.Bind(wx.EVT_BUTTON, self.OnRemoveIP)
+        btn_rob_rem_ip = QPushButton("-")
+        btn_rob_rem_ip.setToolTip("Remove the selected IP from the list")
+        btn_rob_rem_ip.setFixedWidth(30)
+        btn_rob_rem_ip.clicked.connect(self.OnRemoveIP)
         self.btn_rob_rem_ip = btn_rob_rem_ip
 
-        # Connect Robot button
-        btn_rob = wx.Button(self, -1, _("Connect"))
-        btn_rob.SetToolTip("Connect to the selected IP")
-        btn_rob.Enable(1)
-        btn_rob.Bind(wx.EVT_BUTTON, self.OnRobotConnect)
+        btn_rob = QPushButton(_("Connect"))
+        btn_rob.setToolTip("Connect to the selected IP")
+        btn_rob.clicked.connect(self.OnRobotConnect)
         self.btn_rob = btn_rob
 
-        status_text = wx.StaticText(self, -1, "Status")
+        status_text = QLabel("Status")
         self.status_text = status_text
 
-        btn_rob_con = wx.Button(self, -1, _("Register"))
-        btn_rob_con.SetToolTip("Register robot tracking")
-        btn_rob_con.Enable(1)
-        btn_rob_con.Bind(wx.EVT_BUTTON, self.OnRobotRegister)
+        btn_rob_con = QPushButton(_("Register"))
+        btn_rob_con.setToolTip("Register robot tracking")
+        btn_rob_con.clicked.connect(self.OnRobotRegister)
 
         if self.robot.IsConnected():
-            self.status_text.SetLabelText(_("Robot is connected!"))
-
-            if self.matrix_tracker_to_robot is None:
-                btn_rob_con.Show()
-            else:
-                btn_rob_con.SetLabel("Register Again")
-                btn_rob_con.Show()
-
+            self.status_text.setText(_("Robot is connected!"))
+            if self.matrix_tracker_to_robot is not None:
+                btn_rob_con.setText("Register Again")
         else:
-            self.status_text.SetLabelText(_("Robot is not connected!"))
-            btn_rob_con.Hide()
+            self.status_text.setText(_("Robot is not connected!"))
+            btn_rob_con.hide()
 
         self.btn_rob_con = btn_rob_con
 
-        rob_ip_sizer = wx.FlexGridSizer(rows=1, cols=5, hgap=3, vgap=3)
-        rob_ip_sizer.AddGrowableCol(3, 1)
-        rob_ip_sizer.AddMany(
-            [
-                (lbl_rob, 0, wx.ALIGN_CENTER_VERTICAL),
-                (btn_rob_add_ip, 0, wx.ALIGN_CENTER_VERTICAL),
-                (btn_rob_rem_ip, 0, wx.ALIGN_CENTER_VERTICAL),
-                (choice_IP, 1, wx.ALIGN_CENTER_VERTICAL | wx.EXPAND),
-                (btn_rob, 0, wx.ALIGN_CENTER_VERTICAL),
-            ]
-        )
+        rob_ip_layout = QHBoxLayout()
+        rob_ip_layout.addWidget(lbl_rob)
+        rob_ip_layout.addWidget(btn_rob_add_ip)
+        rob_ip_layout.addWidget(btn_rob_rem_ip)
+        rob_ip_layout.addWidget(choice_IP, 1)
+        rob_ip_layout.addWidget(btn_rob)
 
-        rob_status_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        rob_status_sizer.Add(status_text, 1, wx.LEFT | wx.ALIGN_CENTER_VERTICAL)
-        rob_status_sizer.AddStretchSpacer(1)
-        rob_status_sizer.Add(btn_rob_con, 0, wx.RIGHT | wx.ALIGN_CENTER_VERTICAL)
+        rob_status_layout = QHBoxLayout()
+        rob_status_layout.addWidget(status_text, 1)
+        rob_status_layout.addStretch(1)
+        rob_status_layout.addWidget(btn_rob_con)
 
-        # --- Pressure force setpoint (slider) ---
-        # Config and scaling (slider is integer)
-        # Recommended value
+        # Pressure force setpoint
         self.pressure_recommended = 10.0
-        self.pressure_match_tol = 0.1  # within 0.1 N counts as "at recommended"
+        self.pressure_match_tol = 0.1
 
         self.pressure_min = 0.0
         self.pressure_max = 40.0
         self.pressure_step = 1
-        self.pressure_scale = int(1 / self.pressure_step)  # 10 for 0.1 resolution
+        self.pressure_scale = int(1 / self.pressure_step)
 
         self.pressure_setpoint = self.session.GetConfig(
             "pressure_setpoint", self.pressure_recommended
         )
-        # Clamp to range in case config has out-of-range value
         self.pressure_setpoint = max(
             self.pressure_min, min(self.pressure_max, float(self.pressure_setpoint))
         )
 
-        self.pressure_lbl = wx.StaticText(self, -1, _("Pressure setpoint (N):"))
-        self.pressure_val_lbl = wx.StaticText(self, -1, f"{self.pressure_setpoint:.1f} N")
+        self.pressure_lbl = QLabel(_("Pressure setpoint (N):"))
+        self.pressure_val_lbl = QLabel(f"{self.pressure_setpoint:.1f} N")
 
-        # Color logic: turn red above threshold
         self.pressure_warn_threshold = 20.0
-        self._pressure_lbl_default_fg = self.pressure_lbl.GetForegroundColour()
-        self._pressure_val_default_fg = self.pressure_val_lbl.GetForegroundColour()
+        self._pressure_lbl_default_fg = self.pressure_lbl.palette().color(QPalette.WindowText)
+        self._pressure_val_default_fg = self.pressure_val_lbl.palette().color(QPalette.WindowText)
 
-        # Recommended hint label (small/italic)
-        self.pressure_rec_lbl = wx.StaticText(
-            self, -1, _("Recommended: {value} N").format(value=f"{self.pressure_recommended:.1f}")
+        self.pressure_rec_lbl = QLabel(
+            _("Recommended: {value} N").format(value=f"{self.pressure_recommended:.1f}")
         )
-        try:
-            f = self.pressure_rec_lbl.GetFont()
-            f.MakeSmaller()
-            f.MakeItalic()
-            self.pressure_rec_lbl.SetFont(f)
-        except Exception:
-            pass
-        self.pressure_rec_lbl.SetForegroundColour(wx.Colour(90, 90, 90))  # subtle grey
+        f = self.pressure_rec_lbl.font()
+        f.setItalic(True)
+        ps = f.pointSize()
+        if ps > 1:
+            f.setPointSize(ps - 1)
+        self.pressure_rec_lbl.setFont(f)
+        self.pressure_rec_lbl.setStyleSheet("color: rgb(90, 90, 90);")
 
-        # Apply initial color based on loaded value
         self._apply_pressure_color(self.pressure_setpoint)
 
-        self.pressure_slider = wx.Slider(
-            self,
-            -1,
-            value=int(self.pressure_setpoint * self.pressure_scale),
-            minValue=int(self.pressure_min * self.pressure_scale),
-            maxValue=int(self.pressure_max * self.pressure_scale),
-            style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS,
-            size=wx.Size(-1, 23),
+        self.pressure_slider = QSlider(Qt.Horizontal)
+        self.pressure_slider.setRange(
+            int(self.pressure_min * self.pressure_scale),
+            int(self.pressure_max * self.pressure_scale),
         )
-        self.pressure_slider.SetToolTip(_("Set the desired pressure/force setpoint"))
-        # Tick frequency every 1.0 N
-        try:
-            self.pressure_slider.SetTickFreq(self.pressure_scale, 1)
-        except Exception:
-            pass
+        self.pressure_slider.setValue(int(self.pressure_setpoint * self.pressure_scale))
+        self.pressure_slider.setToolTip(_("Set the desired pressure/force setpoint"))
+        self.pressure_slider.setTickPosition(QSlider.TicksBelow)
+        self.pressure_slider.setTickInterval(self.pressure_scale)
+        self.pressure_slider.valueChanged.connect(self.OnPressureSlider)
 
-        self.pressure_slider.Bind(wx.EVT_SLIDER, self.OnPressureSlider)
+        self.btn_set_rec = QPushButton(_("Set 10 N"))
+        self.btn_set_rec.setFixedSize(70, 23)
+        self.btn_set_rec.setToolTip(_("Set pressure to the recommended 5.0 N"))
+        self.btn_set_rec.clicked.connect(self.OnSetRecommendedPressure)
 
-        # quick-set button
-        self.btn_set_rec = wx.Button(self, -1, _("Set 10 N"), size=wx.Size(70, 23))
-        self.btn_set_rec.SetToolTip(_("Set pressure to the recommended 5.0 N"))
-        self.btn_set_rec.Bind(wx.EVT_BUTTON, self.OnSetRecommendedPressure)
-
-        # --- Pressure sensor sub-box ---
-        pressure_box = wx.StaticBox(self, -1, _("Pressure Control"))
-
-        # --- Toggle pressure sensor button ---
-        self.chk_enable_pressure = wx.CheckBox(self, -1, _("Enable pressure sensor"))
+        # Pressure sensor
+        self.chk_enable_pressure = QCheckBox(_("Enable pressure sensor"))
         if getattr(self.robot, "robot_init_config", None):
             use_pressure_sensor = self.robot.robot_init_config.get("use_pressure_sensor", False)
         else:
             Publisher.sendMessage("Neuronavigation to Robot: Request config")
-            use_pressure_sensor = False  # fallback default
-        self.chk_enable_pressure.SetValue(use_pressure_sensor)
-        self.chk_enable_pressure.Bind(wx.EVT_CHECKBOX, self.OnTogglePressureSensor)
-        self.chk_enable_pressure.Enable(self.robot.IsConnected())
+            use_pressure_sensor = False
+        self.chk_enable_pressure.setChecked(use_pressure_sensor)
+        self.chk_enable_pressure.stateChanged.connect(self.OnTogglePressureSensor)
+        self.chk_enable_pressure.setEnabled(self.robot.IsConnected())
         self._update_pressure_controls_state(self.robot.IsConnected() and use_pressure_sensor)
 
-        # Row with label, slider, numeric value
-        pressure_row = wx.BoxSizer(wx.HORIZONTAL)
-        pressure_row.Add(self.pressure_lbl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
-        pressure_row.Add(self.pressure_slider, 1, wx.EXPAND | wx.RIGHT, 8)
-        pressure_row.Add(self.pressure_val_lbl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
-        pressure_row.Add(self.btn_set_rec, 0, wx.ALIGN_CENTER_VERTICAL)
+        pressure_row = QHBoxLayout()
+        pressure_row.addWidget(self.pressure_lbl)
+        pressure_row.addWidget(self.pressure_slider, 1)
+        pressure_row.addWidget(self.pressure_val_lbl)
+        pressure_row.addWidget(self.btn_set_rec)
 
-        # Hint below
-        pressure_hint_row = wx.BoxSizer(wx.HORIZONTAL)
-        pressure_hint_row.Add((self.pressure_lbl.GetSize().Width, -1), 0)  # indent under label
-        pressure_hint_row.Add(self.pressure_rec_lbl, 0, wx.TOP, 2)
+        pressure_hint_row = QHBoxLayout()
+        pressure_hint_row.addSpacing(self.pressure_lbl.sizeHint().width())
+        pressure_hint_row.addWidget(self.pressure_rec_lbl)
 
-        pressure_sizer = wx.StaticBoxSizer(pressure_box, wx.VERTICAL)
-        pressure_sizer.Add(self.chk_enable_pressure, 0, wx.ALL, 5)
-        pressure_sizer.Add(pressure_row, 0, wx.EXPAND)
-        pressure_sizer.Add(pressure_hint_row, 0, wx.TOP, 4)
+        pressure_box = QGroupBox(_("Pressure Control"))
+        pressure_layout = QVBoxLayout()
+        pressure_layout.addWidget(self.chk_enable_pressure)
+        pressure_layout.addLayout(pressure_row)
+        pressure_layout.addLayout(pressure_hint_row)
+        pressure_box.setLayout(pressure_layout)
 
-        rob_static_sizer = wx.StaticBoxSizer(wx.VERTICAL, self, _("Setup robot"))
-        rob_static_sizer.Add(rob_ip_sizer, 0, wx.ALL | wx.EXPAND, 7)
-        rob_static_sizer.Add(rob_status_sizer, 0, wx.ALL | wx.EXPAND, 7)
-        rob_static_sizer.Add(pressure_sizer, 0, wx.ALL | wx.EXPAND, 10)
+        rob_static_sizer = QGroupBox(_("Setup robot"))
+        rob_layout = QVBoxLayout()
+        rob_layout.addLayout(rob_ip_layout)
+        rob_layout.addLayout(rob_status_layout)
+        rob_layout.addWidget(pressure_box)
+        rob_static_sizer.setLayout(rob_layout)
 
-        main_sizer = wx.BoxSizer(wx.VERTICAL)
-        main_sizer.AddMany(
-            [(sizer, 0, wx.ALL | wx.EXPAND, 7), (rob_static_sizer, 0, wx.ALL | wx.EXPAND, 7)]
-        )
-        self.SetSizerAndFit(main_sizer)
-        self.Layout()
+        main_sizer = QVBoxLayout(self)
+        main_sizer.addWidget(sizer)
+        main_sizer.addWidget(rob_static_sizer)
+        self.setLayout(main_sizer)
 
         Publisher.sendMessage("Neuronavigation to Robot: Check connection robot")
 
@@ -1808,39 +1519,35 @@ class TrackerTab(wx.Panel):
             self.matrix_tracker_to_robot = np.array(self.matrix_tracker_to_robot)
 
     def OnRobotConfigReceived(self, config):
-        # Update GUI checkbox with the actual value
         use_pressure_sensor = config.get("use_pressure_sensor", False)
-        self.chk_enable_pressure.SetValue(use_pressure_sensor)
+        self.chk_enable_pressure.setChecked(use_pressure_sensor)
         self._update_pressure_controls_state(self.robot.IsConnected() and use_pressure_sensor)
 
-    def OnChooseNoOfCoils(self, evt, ctrl):
+    def OnChooseNoOfCoils(self, index=None, ctrl=None):
         old_n_coils = self.n_coils
-        if hasattr(evt, "GetSelection"):
-            choice = evt.GetSelection()
-            self.n_coils = choice + 1
+        if index is not None:
+            self.n_coils = index + 1
         else:
             self.n_coils = 1
 
-        if self.n_coils != old_n_coils:  # if n_coils was changed reset connection
+        if self.n_coils != old_n_coils:
             tracker_id = self.tracker.tracker_id
             self.tracker.DisconnectTracker()
             self.tracker.SetTracker(tracker_id, n_coils=self.n_coils)
 
-        ctrl.SetSelection(self.n_coils - 1)
+        ctrl.setCurrentIndex(self.n_coils - 1)
         Publisher.sendMessage("Reset coil selection", n_coils=self.n_coils)
         Publisher.sendMessage("Coil selection done", done=False)
 
-    def OnChooseTracker(self, evt, ctrl):
+    def OnChooseTracker(self, index=None, ctrl=None):
         if sys.platform == "darwin":
-            wx.CallAfter(self.GetParent().Hide)
+            QTimer.singleShot(0, lambda: self.window().hide())
         else:
             self.HideParent()
         Publisher.sendMessage("Begin busy cursor")
         Publisher.sendMessage("Update status text in GUI", label=_("Configuring tracker ..."))
-        if hasattr(evt, "GetSelection"):
-            choice = evt.GetSelection()
-        else:
-            choice = None
+
+        choice = index
 
         self.tracker.DisconnectTracker()
         self.tracker.ResetTrackerFiducials()
@@ -1849,21 +1556,25 @@ class TrackerTab(wx.Panel):
         Publisher.sendMessage("Tracker changed")
         Publisher.sendMessage("Reset coil selection", n_coils=self.n_coils)
         Publisher.sendMessage("Coil selection done", done=False)
-        ctrl.SetSelection(self.tracker.tracker_id)
+        ctrl.setCurrentIndex(self.tracker.tracker_id)
         Publisher.sendMessage("End busy cursor")
         if sys.platform == "darwin":
-            wx.CallAfter(self.GetParent().Show)
+            QTimer.singleShot(0, lambda: self.window().show())
         else:
             self.ShowParent()
 
-    def OnChooseReferenceMode(self, evt, ctrl):
-        Navigation(None, None).SetReferenceMode(evt.GetSelection())
+    def OnChooseReferenceMode(self, index=None, ctrl=None):
+        Navigation(None, None).SetReferenceMode(index)
 
-    def HideParent(self):  # hide preferences dialog box
-        self.GetGrandParent().Hide()
+    def HideParent(self):
+        w = self.window()
+        if w:
+            w.hide()
 
-    def ShowParent(self):  # show preferences dialog box
-        self.GetGrandParent().Show()
+    def ShowParent(self):
+        w = self.window()
+        if w:
+            w.show()
 
     def verifyFormatIP(self, robot_ip):
         robot_ip_strip = robot_ip.strip()
@@ -1877,108 +1588,106 @@ class TrackerTab(wx.Panel):
         if full_ip_pattern.match(robot_ip_strip):
             return True
         else:
-            self.status_text.SetLabelText(_("Robot is not connected and invalid IP!"))
+            self.status_text.setText(_("Robot is not connected and invalid IP!"))
             return False
 
-    def OnTxt_Ent(self, evt, ctrl):
-        robot_ip_input = ctrl.GetValue()
+    def OnTxt_Ent(self, text=None, ctrl=None):
+        robot_ip_input = ctrl.currentText()
         robot_ip_input = re.sub(r"[^0-9.]", "", robot_ip_input)
-        ctrl.ChangeValue(robot_ip_input)
+        ctrl.setEditText(robot_ip_input)
 
         msg_box = _("Select or type robot IP:")
 
         if robot_ip_input == "":
-            ctrl.ChangeValue(msg_box)
+            ctrl.setEditText(msg_box)
         else:
-            self.btn_rob_con.Hide()
+            self.btn_rob_con.hide()
             self.robot_ip = robot_ip_input
             if self.verifyFormatIP(self.robot_ip):
-                self.status_text.SetLabelText(_("Robot is not connected!"))
+                self.status_text.setText(_("Robot is not connected!"))
 
-    def OnChoiceIP(self, evt, ctrl):
-        self.robot_ip = ctrl.GetStringSelection()
+    def OnChoiceIP(self, index=None, ctrl=None):
+        self.robot_ip = ctrl.currentText()
 
-    def OnAddIP(self, evt):
+    def OnAddIP(self):
         if self.robot_ip is not None:
-            new_ip = self.choice_IP.GetValue()
+            new_ip = self.choice_IP.currentText()
 
             if new_ip is not None and self.verifyFormatIP(new_ip):
                 if new_ip not in self.robot.robot_ip_options:
-                    self.choice_IP.Append(new_ip)
+                    self.choice_IP.addItem(new_ip)
                     self.robot.robot_ip_options.append(new_ip)
                     self.robot.SaveConfig("robot_ip_options", self.robot.robot_ip_options)
                 else:
-                    self.choice_IP.SetSelection(self.robot.robot_ip_options.index(new_ip))
+                    self.choice_IP.setCurrentIndex(self.robot.robot_ip_options.index(new_ip))
             else:
-                self.status_text.SetLabelText(_("Please select or enter valid IP!"))
+                self.status_text.setText(_("Please select or enter valid IP!"))
 
-    def OnRemoveIP(self, evt):
+    def OnRemoveIP(self):
         if self.robot_ip is not None:
-            current_ip = self.choice_IP.GetValue()
+            current_ip = self.choice_IP.currentText()
 
-            confirm_dlg = wx.MessageDialog(
+            result = QMessageBox.question(
                 self,
-                _(f"Do you really want to remove the IP '{current_ip}' from the list?"),
                 _("Confirmation"),
-                wx.YES_NO | wx.ICON_QUESTION,
+                _(f"Do you really want to remove the IP '{current_ip}' from the list?"),
+                QMessageBox.Yes | QMessageBox.No,
             )
 
-            if confirm_dlg.ShowModal() == wx.ID_YES:
+            if result == QMessageBox.Yes:
                 try:
-                    index = self.choice_IP.FindString(current_ip)
-                    self.choice_IP.Delete(index)
+                    index = self.choice_IP.findText(current_ip)
+                    if index >= 0:
+                        self.choice_IP.removeItem(index)
 
                     self.robot.robot_ip_options.remove(current_ip)
                     self.robot.SaveConfig("robot_ip_options", self.robot.robot_ip_options)
 
-                    if self.choice_IP.GetCount() > 0:
-                        self.choice_IP.SetSelection(0)
+                    if self.choice_IP.count() > 0:
+                        self.choice_IP.setCurrentIndex(0)
                     else:
-                        self.choice_IP.SetValue("")
+                        self.choice_IP.setEditText("")
 
                 except Exception as e:
-                    wx.MessageBox(
-                        _(f"An error occurred while removing the IP:\n{e}"),
+                    QMessageBox.critical(
+                        self,
                         "Erro",
-                        wx.OK | wx.ICON_ERROR,
+                        _(f"An error occurred while removing the IP:\n{e}"),
                     )
 
-            confirm_dlg.Destroy()
-
-    def OnRobotConnect(self, evt):
+    def OnRobotConnect(self):
         if self.robot_ip is not None and self.verifyFormatIP(self.robot_ip):
             self.robot.is_robot_connected = False
-            self.status_text.SetLabelText(_("Trying to connect to robot..."))
-            self.btn_rob_con.Hide()
+            self.status_text.setText(_("Trying to connect to robot..."))
+            self.btn_rob_con.hide()
             self.robot.SetRobotIP(self.robot_ip)
             Publisher.sendMessage(
                 "Neuronavigation to Robot: Connect to robot", robot_IP=self.robot_ip
             )
         else:
-            self.status_text.SetLabelText(_("Please select or enter valid IP before connecting!"))
+            self.status_text.setText(_("Please select or enter valid IP before connecting!"))
 
-    def OnRobotRegister(self, evt):
+    def OnRobotRegister(self):
         if sys.platform == "darwin":
-            wx.CallAfter(self.GetParent().Hide)
+            QTimer.singleShot(0, lambda: self.window().hide())
         else:
             self.HideParent()
         self.robot.RegisterRobot()
         if sys.platform == "darwin":
-            wx.CallAfter(self.GetParent().Show)
+            QTimer.singleShot(0, lambda: self.window().show())
         else:
             self.ShowParent()
 
     def OnRobotStatus(self, data):
         if data == "Connected":
             self.robot.is_robot_connected = True
-            self.status_text.SetLabelText(_("Setup robot transformation matrix:"))
-            self.btn_rob_con.Show()
-            self.chk_enable_pressure.Enable(True)
-            self.chk_enable_pressure.SetValue(
+            self.status_text.setText(_("Setup robot transformation matrix:"))
+            self.btn_rob_con.show()
+            self.chk_enable_pressure.setEnabled(True)
+            self.chk_enable_pressure.setChecked(
                 self.robot.robot_init_config.get("use_pressure_sensor", False)
             )
-            self._update_pressure_controls_state(self.chk_enable_pressure.GetValue())
-            self.Layout()
+            self._update_pressure_controls_state(self.chk_enable_pressure.isChecked())
 
             if (
                 self.robot.robot_ip not in self.robot.robot_ip_options
@@ -1987,33 +1696,26 @@ class TrackerTab(wx.Panel):
                 self.robot.robot_ip_options.append(self.robot.robot_ip)
         else:
             if self.robot.robot_ip is not None:
-                self.status_text.SetLabelText(_(f"{data} to robot on {self.robot.robot_ip}"))
+                self.status_text.setText(_(f"{data} to robot on {self.robot.robot_ip}"))
             else:
-                self.status_text.SetLabelText(_(f"{data} to robot"))
-            self.btn_rob_con.Hide()
-            self.chk_enable_pressure.Enable(False)
+                self.status_text.setText(_(f"{data} to robot"))
+            self.btn_rob_con.hide()
+            self.chk_enable_pressure.setEnabled(False)
             self._update_pressure_controls_state(False)
 
     def OnSetRobotTransformationMatrix(self, data):
         if self.robot.matrix_tracker_to_robot is not None:
-            self.status_text.SetLabelText("Robot is fully setup!")
-            self.btn_rob_con.SetLabel("Register Again")
-            self.btn_rob_con.Show()
-            self.btn_rob_con.Layout()
-            self.Parent.Update()
+            self.status_text.setText("Robot is fully setup!")
+            self.btn_rob_con.setText("Register Again")
+            self.btn_rob_con.show()
 
-    def OnPressureSlider(self, evt):
-        # Convert integer slider value back to float with desired resolution
-        val_i = self.pressure_slider.GetValue()
+    def OnPressureSlider(self, val_i):
         value = val_i / self.pressure_scale
 
-        # Update label
-        self.pressure_val_lbl.SetLabel(f"{value:.1f} N")
-        # Update color based on threshold
+        self.pressure_val_lbl.setText(f"{value:.1f} N")
         self._apply_pressure_color(value)
         self.pressure_setpoint = value
 
-        # Persist in session
         try:
             self.session.SetConfig("pressure_setpoint", value)
         except Exception:
@@ -2022,17 +1724,15 @@ class TrackerTab(wx.Panel):
         try:
             if hasattr(self.robot, "SetPressureSetpoint"):
                 self.robot.SetPressureSetpoint(value)
-        except Exception as e:
+        except Exception:
             pass
 
-    def OnSetRecommendedPressure(self, event):
-        # Set slider to recommended value
+    def OnSetRecommendedPressure(self):
         val_i = int(round(self.pressure_recommended * self.pressure_scale))
-        self.pressure_slider.SetValue(val_i)
+        self.pressure_slider.setValue(val_i)
 
-        # Trigger same updates as moving the slider
         value = val_i / self.pressure_scale
-        self.pressure_val_lbl.SetLabel(f"{value:.1f} N")
+        self.pressure_val_lbl.setText(f"{value:.1f} N")
         self._apply_pressure_color(value)
         self.pressure_setpoint = value
         try:
@@ -2042,105 +1742,82 @@ class TrackerTab(wx.Panel):
         try:
             if hasattr(self.robot, "SetPressureSetpoint"):
                 self.robot.SetPressureSetpoint(value)
-        except Exception as e:
+        except Exception:
             pass
 
     def _update_pressure_controls_state(self, slider_enabled: bool):
         """Enable/disable slider, value, button, and label colors."""
-        self.pressure_slider.Enable(slider_enabled)
-        self.btn_set_rec.Enable(slider_enabled)
+        self.pressure_slider.setEnabled(slider_enabled)
+        self.btn_set_rec.setEnabled(slider_enabled)
 
-        # Set label colors
         if slider_enabled:
-            # Normal colors
-            self.pressure_lbl.SetForegroundColour(self._pressure_lbl_default_fg)
-            self.pressure_val_lbl.SetForegroundColour(self._pressure_val_default_fg)
-            self._apply_pressure_color(self.pressure_setpoint)  # Recommended label handled inside
+            self._set_label_color(self.pressure_lbl, self._pressure_lbl_default_fg)
+            self._set_label_color(self.pressure_val_lbl, self._pressure_val_default_fg)
+            self._apply_pressure_color(self.pressure_setpoint)
         else:
-            gray_color = wx.Colour(150, 150, 150)
-            self.pressure_lbl.SetForegroundColour(gray_color)
-            self.pressure_val_lbl.SetForegroundColour(gray_color)
-            self.pressure_rec_lbl.SetForegroundColour(gray_color)
+            gray_color = QColor(150, 150, 150)
+            self._set_label_color(self.pressure_lbl, gray_color)
+            self._set_label_color(self.pressure_val_lbl, gray_color)
+            self.pressure_rec_lbl.setStyleSheet("color: rgb(150, 150, 150);")
 
-        self.pressure_lbl.Refresh()
-        self.pressure_val_lbl.Refresh()
-        self.pressure_rec_lbl.Refresh()
-
-    def OnTogglePressureSensor(self, evt):
+    def OnTogglePressureSensor(self, state):
         if not self.robot.robot_init_config:
             print("Robot init config not loaded")
             Publisher.sendMessage("Neuronavigation to Robot: Request config")
-            self.chk_enable_pressure.SetValue(False)
+            self.chk_enable_pressure.setChecked(False)
             return
 
-        enabled = self.chk_enable_pressure.GetValue()
+        enabled = self.chk_enable_pressure.isChecked()
         self._update_pressure_controls_state(enabled)
 
         self.robot.robot_init_config["use_pressure_sensor"] = enabled
 
         Publisher.sendMessage("Set visibility robot force visualizer", visible=enabled)
-        # Send message to robot-side configuration
         Publisher.sendMessage(
             "Neuronavigation to Robot: Update config", use_pressure_sensor=enabled
         )
 
+    def _set_label_color(self, label, color):
+        palette = label.palette()
+        palette.setColor(QPalette.WindowText, color)
+        label.setPalette(palette)
+
     def _apply_pressure_color(self, value: float):
-        # Red above threshold
         if value > self.pressure_warn_threshold:
-            warn_color = wx.RED
-            self.pressure_lbl.SetForegroundColour(warn_color)
-            self.pressure_val_lbl.SetForegroundColour(warn_color)
+            warn_color = QColor(255, 0, 0)
+            self._set_label_color(self.pressure_lbl, warn_color)
+            self._set_label_color(self.pressure_val_lbl, warn_color)
         else:
-            # Default
-            self.pressure_lbl.SetForegroundColour(self._pressure_lbl_default_fg)
-            self.pressure_val_lbl.SetForegroundColour(self._pressure_val_default_fg)
+            self._set_label_color(self.pressure_lbl, self._pressure_lbl_default_fg)
+            self._set_label_color(self.pressure_val_lbl, self._pressure_val_default_fg)
 
-        # Recommended hint styling: green if near 5.0 N, grey otherwise
         if abs(value - self.pressure_recommended) <= self.pressure_match_tol:
-            self.pressure_rec_lbl.SetForegroundColour(wx.Colour(0, 140, 0))  # green
-            try:
-                f = self.pressure_rec_lbl.GetFont()
-                f.SetWeight(wx.FONTWEIGHT_BOLD)
-                self.pressure_rec_lbl.SetFont(f)
-            except Exception:
-                pass
+            self.pressure_rec_lbl.setStyleSheet("color: rgb(0, 140, 0); font-weight: bold;")
         else:
-            self.pressure_rec_lbl.SetForegroundColour(wx.Colour(90, 90, 90))
-            try:
-                f = self.pressure_rec_lbl.GetFont()
-                f.SetWeight(wx.FONTWEIGHT_NORMAL)
-                self.pressure_rec_lbl.SetFont(f)
-            except Exception:
-                pass
-
-        self.pressure_lbl.Refresh()
-        self.pressure_val_lbl.Refresh()
-        self.pressure_rec_lbl.Refresh()
+            self.pressure_rec_lbl.setStyleSheet("color: rgb(90, 90, 90); font-weight: normal;")
 
 
-class LanguageTab(wx.Panel):
+class LanguageTab(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
-        bsizer = wx.StaticBoxSizer(wx.VERTICAL, self, _("Language"))
-        self.lg = lg = ComboBoxLanguage(bsizer.GetStaticBox())
+        bsizer = QGroupBox(_("Language"))
+        bsizer_layout = QVBoxLayout()
+
+        self.lg = lg = ComboBoxLanguage(bsizer)
         self.cmb_lang = cmb_lang = lg.GetComboBox()
-        text = wx.StaticText(
-            bsizer.GetStaticBox(),
-            -1,
-            _("Language settings will be applied \n the next time InVesalius starts."),
-        )
-        bsizer.Add(cmb_lang, 0, wx.EXPAND | wx.ALL, 10)
-        bsizer.AddSpacer(5)
-        bsizer.Add(text, 0, wx.EXPAND | wx.ALL, 10)
+        text = QLabel(_("Language settings will be applied \n the next time InVesalius starts."))
+        bsizer_layout.addWidget(cmb_lang)
+        bsizer_layout.addSpacing(5)
+        bsizer_layout.addWidget(text)
+        bsizer.setLayout(bsizer_layout)
 
-        border = wx.BoxSizer()
-        border.Add(bsizer, 1, wx.EXPAND | wx.ALL, 10)
-        self.SetSizerAndFit(border)
-        self.Layout()
+        border = QVBoxLayout(self)
+        border.addWidget(bsizer, 1)
+        self.setLayout(border)
 
     def GetSelection(self):
-        selection = self.cmb_lang.GetSelection()
+        selection = self.cmb_lang.currentIndex()
         locales = self.lg.GetLocalesKey()
         options = {const.LANGUAGE: locales[selection]}
         return options
@@ -2149,4 +1826,4 @@ class LanguageTab(wx.Panel):
         language = values[const.LANGUAGE]
         locales = self.lg.GetLocalesKey()
         selection = locales.index(language)
-        self.cmb_lang.SetSelection(int(selection))
+        self.cmb_lang.setCurrentIndex(int(selection))

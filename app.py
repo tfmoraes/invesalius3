@@ -39,21 +39,11 @@ if sys.platform == "win32":
         import winreg
     except ImportError:
         import _winreg as winreg
-#  else:
-#  if sys.platform != 'darwin':
-#  import wxversion
-#  #wxversion.ensureMinimal('2.8-unicode', optionsRequired=True)
-#  #wxversion.select('2.8-unicode', optionsRequired=True)
-#  #  wxversion.ensureMinimal('4.0')
 
-# Forcing to use X11, OpenGL in wxPython doesn't work with Wayland.
-if sys.platform not in ("win32", "darwin"):
-    os.environ["GDK_BACKEND"] = "x11"
+from PySide6.QtCore import QLocale, QTimer
+from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtWidgets import QApplication, QSplashScreen
 
-import wx
-from wx.adv import SPLASH_CENTRE_ON_SCREEN, SPLASH_TIMEOUT, SplashScreen
-
-# import invesalius.error_handling
 import invesalius.i18n as i18n
 import invesalius.session as ses
 import invesalius.utils as utils
@@ -64,11 +54,6 @@ FS_ENCODE = sys.getfilesystemencoding()
 LANG = None
 
 # ------------------------------------------------------------------
-
-if sys.platform in ("linux2", "linux", "win32"):
-    if not hasattr(wx, "GetXDisplay"):
-        setattr(wx, "GetXDisplay", lambda: None)
-
 
 session = ses.Session()
 if session.ReadConfig():
@@ -81,46 +66,35 @@ if session.ReadConfig():
             pass
 
 
-class InVesalius(wx.App):
+class InVesalius(QApplication):
     """
-    InVesalius wxPython application class.
+    InVesalius PySide6 application class.
     """
 
-    def OnInit(self):
-        """
-        Initialize splash screen and main frame.
-        """
+    def __init__(self, argv):
+        super().__init__(argv)
+
         from multiprocessing import freeze_support
 
         freeze_support()
 
-        self.SetAppName("InVesalius 3")
+        self.setApplicationName("InVesalius 3")
         self.splash = Inv3SplashScreen()
-        self.splash.Show()
-        wx.CallLater(1000, self.Startup2)
+        self.splash.show()
+        QTimer.singleShot(1000, self.startup2)
 
-        return True
-
-    def MacOpenFile(self, filename):
-        """
-        Open drag & drop files under darwin
-        """
-        path = os.path.abspath(filename)
-        Publisher.sendMessage("Open project", filepath=path)
-
-    def Startup2(self):
+    def startup2(self):
         self.control = self.splash.control
         self.frame = self.splash.main
-        self.SetTopWindow(self.frame)
-        self.frame.Show()
-        self.frame.Raise()
+        if self.frame is None:
+            return
+        self.frame.show()
+        self.frame.raise_()
 
-        # Initialize the enhanced logging system
         import invesalius.enhanced_logging
 
         invesalius.enhanced_logging.register_menu_handler()
 
-        # Initialize the legacy logging system for backward compatibility
         import invesalius.gui.log as log
 
         log.invLogger.configureLogging()
@@ -129,72 +103,44 @@ class InVesalius(wx.App):
 # ------------------------------------------------------------------
 
 
-class Inv3SplashScreen(SplashScreen):
+class Inv3SplashScreen(QSplashScreen):
     """
     Splash screen to be shown in InVesalius initialization.
     """
 
     def __init__(self):
-        # Splash screen image will depend on the current language
-        lang = LANG
-        self.locale = wx.Locale(wx.LANGUAGE_ENGLISH)
-
-        # Initialize attributes to avoid errors
         self.control = None
         self.main = None
-        self.fc = None
+        self._startup_timer = None
 
-        # Language information is available in session configuration
-        # file. First we need to check if this file exist, if now, it
-        # should be created
+        lang = LANG
         create_session = LANG is None
 
         install_lang = False
         if lang:
             install_lang = True
 
-        # If no language is set into session file, show dialog so
-        # user can select language
         if not install_lang:
             import invesalius.gui.language_dialog as lang_dlg
 
             dialog = lang_dlg.LanguageDialog()
+            result = dialog.exec()
+            if result == dialog.Accepted:
+                lang = dialog.GetSelectedLanguage()
+                session.SetConfig("language", lang)
+                i18n.tr.reset()
+            else:
+                homedir = os.path.expanduser("~")
+                config_dir = os.path.join(homedir, ".invesalius")
+                if os.path.exists(config_dir):
+                    shutil.rmtree(config_dir)
+                sys.exit()
 
-            # FIXME: This works ok in linux2, darwin and win32,
-            # except on win64, due to wxWidgets bug
-            try:
-                ok = dialog.ShowModal() == wx.ID_OK
-            except wx.PyAssertionError:
-                ok = True
-            finally:
-                if ok:
-                    lang = dialog.GetSelectedLanguage()
-                    session.SetConfig("language", lang)
-                    i18n.tr.reset()
-                else:
-                    homedir = os.path.expanduser("~")
-                    config_dir = os.path.join(homedir, ".invesalius")
-                    if os.path.exists(config_dir):
-                        shutil.rmtree(config_dir)
-
-                    sys.exit()
-
-            dialog.Destroy()
-
-        # Session file should be created... So we set the recently chosen language.
         if create_session:
             session.CreateConfig()
             session.SetConfig("language", lang)
 
-        # Only after language was defined, splash screen will be shown.
         if lang:
-            # import locale
-            # try:
-            #    locale.setlocale(locale.LC_ALL, '')
-            # except locale.Error:
-            #    pass
-
-            # For pt_BR, splash_pt.png should be used
             if lang.startswith("pt"):
                 icon_file = "splash_pt.png"
             else:
@@ -211,38 +157,34 @@ class Inv3SplashScreen(SplashScreen):
                 if not os.path.exists(path):
                     path = os.path.join(inv_paths.ICON_DIR, "splash_en.png")
 
-            bmp = wx.Image(path).ConvertToBitmap()
+            pixmap = QPixmap(str(path))
+            super().__init__(pixmap)
 
-            style = SPLASH_TIMEOUT | SPLASH_CENTRE_ON_SCREEN
+            QTimer.singleShot(200, self.startup)
+        else:
+            super().__init__()
 
-            SplashScreen.__init__(
-                self, bitmap=bmp, splashStyle=style, milliseconds=1500, id=-1, parent=None
-            )
-            self.Bind(wx.EVT_CLOSE, self.OnClose)
-            wx.GetApp().Yield()
-            wx.CallLater(200, self.Startup)
-
-    def Startup(self):
-        # Importing takes sometime, therefore it will be done
-        # while splash is being shown
+    def startup(self):
         from invesalius.control import Controller
         from invesalius.gui.frame import Frame
 
         self.main = Frame(None)
         self.control = Controller(self.main)
 
-        self.fc = wx.CallLater(200, self.ShowMain)
-        args = parse_command_line()
-        wx.CallLater(1, use_cmd_optargs, args)
+        self._startup_timer = QTimer()
+        self._startup_timer.setSingleShot(True)
+        self._startup_timer.timeout.connect(self.show_main)
+        self._startup_timer.start(200)
 
-        # Check for updates
+        args = parse_command_line()
+        QTimer.singleShot(1, lambda: use_cmd_optargs(args))
+
         from threading import Thread
 
         p = Thread(target=utils.UpdateCheck, args=())
         p.start()
 
         if not session.ExitedSuccessfullyLastTime():
-            # Reopen project
             project_path = session.GetState("project_path")
             if project_path is not None:
                 filepath = os.path.join(project_path[0], project_path[1])
@@ -254,24 +196,11 @@ class Inv3SplashScreen(SplashScreen):
         else:
             session.CreateState()
 
-    def OnClose(self, evt):
-        # Make sure the default handler runs too so this window gets
-        # destroyed
-        evt.Skip()
-        self.Hide()
-
-        # If the timer is still running then go ahead and show the
-        # main frame now
-        if hasattr(self, "fc") and self.fc and self.fc.IsRunning():
-            self.fc.Stop()
-            self.ShowMain()
-
-    def ShowMain(self):
-        if not self.main.IsShown():
-            self.main.Show()
-            self.main.Raise()
-        # Destroy the splash screen
-        self.Destroy()
+    def show_main(self):
+        if not self.main.isVisible():
+            self.main.show()
+            self.main.raise_()
+        self.close()
 
 
 def non_gui_startup(args):
@@ -300,17 +229,13 @@ def parse_command_line():
     """
     Handle command line arguments.
     """
-    # Parse command line arguments
     parser = argparse.ArgumentParser()
 
-    # -d or --debug: print all pubsub messages sent
     parser.add_argument("-d", "--debug", action="store_true", dest="debug")
     parser.add_argument("project_file", nargs="?", default="", help="InVesalius 3 project file")
 
     parser.add_argument("--no-gui", action="store_true", dest="no_gui")
 
-    # -i or --import: import DICOM directory
-    # chooses largest series
     parser.add_argument("-i", "--import", action="store", dest="dicom_dir")
 
     parser.add_argument("--import-all", action="store")
@@ -361,7 +286,6 @@ def parse_command_line():
 
 
 def use_cmd_optargs(args):
-    # If import DICOM argument...
     if args.dicom_dir:
         import_dir = args.dicom_dir
         Publisher.sendMessage("Import directory", directory=import_dir, use_gui=not args.no_gui)
@@ -405,8 +329,6 @@ def use_cmd_optargs(args):
                 Publisher.sendMessage("Remove masks", mask_indexes=(0,))
         return True
 
-    # Check if there is a file path somewhere in what the user wrote
-    # In case there is, try opening as it was a inv3
     else:
         if args.project_file:
             file = utils.decode(args.project_file, FS_ENCODE)
@@ -434,16 +356,13 @@ def check_for_cranioplasty(args):
         from invesalius.data import slice_
         from invesalius.project import Project
 
-        # create cranium mask
         Publisher.sendMessage("Update threshold limits", threshold_range=(226, 3071))
         Publisher.sendMessage("Appy threshold all slices")
 
-        # create implant mask
         Publisher.sendMessage("Create implant for cranioplasty")
 
         path_ = args.export
 
-        # convert masks to surfaces and exports them.
         Publisher.sendMessage(
             "Export all surfaces separately", folder=path_, filetype=const.FILETYPE_STL
         )
@@ -538,12 +457,9 @@ def init():
 
     Mostly file-system related initializations.
     """
-    # Is needed because of pyinstaller
     multiprocessing.freeze_support()
 
-    # Needed in win 32 exe
     if hasattr(sys, "frozen") and sys.platform == "win32":
-        # Click in the .inv3 file support
         root = winreg.HKEY_CLASSES_ROOT
         key = r"InVesalius 3.1\InstallationDir"
         hKey = winreg.OpenKey(root, key, 0, winreg.KEY_READ)
@@ -558,7 +474,6 @@ def init():
             inv_paths.copy_old_files()
 
     if hasattr(sys, "frozen") and getattr(sys, "frozen") == "windows_exe":
-        # Set system standard error output to file
         path = inv_paths.USER_LOG_DIR.joinpath("stderr.log")
         sys.stderr = open(path, "w")
 
@@ -613,12 +528,9 @@ def main(connection=None, remote_host=None):
     if args.no_gui:
         non_gui_startup(args)
     else:
-        application = InVesalius(False)
-        # TODO: To avoid related translation (i18n) problems, any additional
-        # module loading, especially those using constants.py,
-        # should be placed after this section.
+        application = InVesalius(sys.argv)
         load_neuronavigation(args, connection, remote_host)
-        application.MainLoop()
+        application.exec()
 
 
 if __name__ == "__main__":

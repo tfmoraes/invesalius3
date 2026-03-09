@@ -40,9 +40,27 @@ import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 
-import wx
-import wx.grid
-import wx.lib.agw.aui as aui
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QColor, QFont
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
+    QSplitter,
+    QTabWidget,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 import invesalius.constants as const
 from invesalius import inv_paths
@@ -209,312 +227,237 @@ class InMemoryHandler(logging.Handler):
         self.records = []
 
 
-class LogViewerFrame(wx.Frame):
+class LogViewerFrame(QMainWindow):
     """Enhanced frame for viewing detailed logs with filtering and searching capabilities."""
 
-    def __init__(self, parent: Optional[wx.Window], in_memory_handler: InMemoryHandler):
+    def __init__(self, parent: Optional[QWidget], in_memory_handler: InMemoryHandler):
         """Initialize the enhanced log viewer frame."""
-        super().__init__(
-            parent,
-            title=_("InVesalius Enhanced Log Viewer"),
-            size=(1200, 800),
-            style=wx.DEFAULT_FRAME_STYLE | wx.RESIZE_BORDER,
-        )
+        super().__init__(parent)
+        self.setWindowTitle(_("InVesalius Enhanced Log Viewer"))
+        self.resize(1200, 800)
 
         self.in_memory_handler = in_memory_handler
         self.search_results = []
         self.current_search_index = -1
         self.search_history = []
 
-        # Create main panel and sizer
-        self.panel = wx.Panel(self)
-        main_sizer = wx.BoxSizer(wx.VERTICAL)
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
 
-        # Create filter controls
-        filter_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        # --- Filter controls ---
+        filter_layout = QHBoxLayout()
 
-        # Level filter
-        level_label = wx.StaticText(self.panel, label=_("Level:"))
-        self.level_choice = wx.Choice(
-            self.panel, choices=["ALL", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        filter_layout.addWidget(QLabel(_("Level:")))
+        self.level_choice = QComboBox()
+        self.level_choice.addItems(["ALL", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+        self.level_choice.currentIndexChanged.connect(self.on_filter_changed)
+        filter_layout.addWidget(self.level_choice)
+
+        filter_layout.addWidget(QLabel(_("Component:")))
+        self.component_choice = QComboBox()
+        self.component_choice.addItem("ALL")
+        self.component_choice.currentIndexChanged.connect(self.on_filter_changed)
+        filter_layout.addWidget(self.component_choice)
+
+        filter_layout.addWidget(QLabel(_("Time:")))
+        self.time_choice = QComboBox()
+        self.time_choice.addItems(["ALL", "Last hour", "Last day", "Last week", "Custom..."])
+        self.time_choice.currentIndexChanged.connect(self.on_time_filter_changed)
+        filter_layout.addWidget(self.time_choice)
+
+        filter_layout.addStretch()
+        main_layout.addLayout(filter_layout)
+
+        # --- Search controls ---
+        search_layout = QHBoxLayout()
+        search_layout.addWidget(QLabel(_("Search:")))
+
+        self.search_text = QComboBox()
+        self.search_text.setEditable(True)
+        self.search_text.lineEdit().returnPressed.connect(self.on_search)
+        search_layout.addWidget(self.search_text, 1)
+
+        search_button = QPushButton(_("Search"))
+        search_button.clicked.connect(self.on_search)
+        search_layout.addWidget(search_button)
+
+        clear_search_button = QPushButton(_("Clear"))
+        clear_search_button.clicked.connect(self.on_search_cancel)
+        search_layout.addWidget(clear_search_button)
+
+        self.search_prev_btn = QPushButton("\u25c0 Previous")
+        self.search_prev_btn.setEnabled(False)
+        self.search_prev_btn.clicked.connect(self.on_search_prev)
+        search_layout.addWidget(self.search_prev_btn)
+
+        self.search_next_btn = QPushButton("Next \u25b6")
+        self.search_next_btn.setEnabled(False)
+        self.search_next_btn.clicked.connect(self.on_search_next)
+        search_layout.addWidget(self.search_next_btn)
+
+        self.search_count = QLabel("")
+        search_layout.addWidget(self.search_count)
+
+        main_layout.addLayout(search_layout)
+
+        # --- Splitter with table and detail view ---
+        self.splitter = QSplitter(Qt.Orientation.Vertical)
+
+        self.log_table = QTableWidget(0, 6)
+        self.log_table.setHorizontalHeaderLabels(
+            [_("Time"), _("Level"), _("Component"), _("Message"), _("File"), _("Line")]
         )
-        self.level_choice.SetSelection(0)
-        self.level_choice.Bind(wx.EVT_CHOICE, self.on_filter_changed)
+        self.log_table.setColumnWidth(0, 180)
+        self.log_table.setColumnWidth(1, 80)
+        self.log_table.setColumnWidth(2, 180)
+        self.log_table.setColumnWidth(3, 400)
+        self.log_table.setColumnWidth(4, 200)
+        self.log_table.setColumnWidth(5, 60)
+        self.log_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.log_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.log_table.cellClicked.connect(self.on_cell_select)
+        self.log_table.cellDoubleClicked.connect(self.on_cell_double_click)
+        self.splitter.addWidget(self.log_table)
 
-        # Component filter
-        component_label = wx.StaticText(self.panel, label=_("Component:"))
-        self.component_choice = wx.Choice(self.panel, choices=["ALL"])
-        self.component_choice.SetSelection(0)
-        self.component_choice.Bind(wx.EVT_CHOICE, self.on_filter_changed)
+        detail_widget = QWidget()
+        detail_layout = QVBoxLayout(detail_widget)
+        detail_layout.addWidget(QLabel(_("Details:")))
+        self.detail_text = QPlainTextEdit()
+        self.detail_text.setReadOnly(True)
+        self.detail_text.setFont(QFont("Monospace", 10))
+        detail_layout.addWidget(self.detail_text)
+        self.splitter.addWidget(detail_widget)
 
-        # Time filter
-        time_label = wx.StaticText(self.panel, label=_("Time:"))
-        self.time_choice = wx.Choice(
-            self.panel, choices=["ALL", "Last hour", "Last day", "Last week", "Custom..."]
-        )
-        self.time_choice.SetSelection(0)
-        self.time_choice.Bind(wx.EVT_CHOICE, self.on_time_filter_changed)
+        self.splitter.setSizes([500, 300])
+        self.splitter.setChildrenCollapsible(False)
+        main_layout.addWidget(self.splitter, 1)
 
-        # Add filter controls to sizer
-        filter_sizer.Add(level_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
-        filter_sizer.Add(self.level_choice, 0, wx.RIGHT, 10)
-        filter_sizer.Add(component_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
-        filter_sizer.Add(self.component_choice, 0, wx.RIGHT, 10)
-        filter_sizer.Add(time_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
-        filter_sizer.Add(self.time_choice, 0, wx.RIGHT, 10)
+        # --- Bottom buttons ---
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
 
-        main_sizer.Add(filter_sizer, 0, wx.EXPAND | wx.ALL, 5)
+        self.auto_refresh_cb = QCheckBox(_("Auto refresh"))
+        self.auto_refresh_cb.setChecked(True)
+        button_layout.addWidget(self.auto_refresh_cb)
 
-        # Create search panel
-        search_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        search_label = wx.StaticText(self.panel, label=_("Search:"))
+        refresh_button = QPushButton(_("Refresh"))
+        refresh_button.clicked.connect(self.on_refresh)
+        button_layout.addWidget(refresh_button)
 
-        # Use a ComboBox instead of a TextCtrl for better keyboard handling and search history
-        self.search_text = wx.ComboBox(self.panel, style=wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER)
-        self.search_text.Bind(wx.EVT_TEXT_ENTER, self.on_search)
-        self.search_text.Bind(wx.EVT_KEY_DOWN, self.on_search_key_down)
+        clear_button = QPushButton(_("Clear"))
+        clear_button.clicked.connect(self.on_clear)
+        button_layout.addWidget(clear_button)
 
-        search_button = wx.Button(self.panel, label=_("Search"))
-        search_button.Bind(wx.EVT_BUTTON, self.on_search)
+        export_button = QPushButton(_("Export"))
+        export_button.clicked.connect(self.on_export)
+        button_layout.addWidget(export_button)
 
-        clear_button = wx.Button(self.panel, label=_("Clear"))
-        clear_button.Bind(wx.EVT_BUTTON, self.on_search_cancel)
+        copy_all_button = QPushButton(_("Copy All"))
+        copy_all_button.clicked.connect(self.on_copy_all)
+        button_layout.addWidget(copy_all_button)
 
-        # Add search navigation buttons
-        self.search_prev_btn = wx.Button(self.panel, label="◀ Previous")
-        self.search_next_btn = wx.Button(self.panel, label="Next ▶")
-        self.search_prev_btn.Bind(wx.EVT_BUTTON, self.on_search_prev)
-        self.search_next_btn.Bind(wx.EVT_BUTTON, self.on_search_next)
-        self.search_prev_btn.Enable(False)
-        self.search_next_btn.Enable(False)
+        main_layout.addLayout(button_layout)
 
-        # Add search match count
-        self.search_count = wx.StaticText(self.panel, label="")
+        # Status bar
+        self.statusBar()
 
-        search_sizer.Add(search_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
-        search_sizer.Add(self.search_text, 1, wx.RIGHT, 5)
-        search_sizer.Add(search_button, 0, wx.RIGHT, 5)
-        search_sizer.Add(clear_button, 0, wx.RIGHT, 5)
-        search_sizer.Add(self.search_prev_btn, 0, wx.RIGHT, 5)
-        search_sizer.Add(self.search_next_btn, 0, wx.RIGHT, 5)
-        search_sizer.Add(self.search_count, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
-
-        main_sizer.Add(search_sizer, 0, wx.EXPAND | wx.ALL, 5)
-
-        # Create splitter window
-        self.splitter = wx.SplitterWindow(self.panel, style=wx.SP_3D | wx.SP_LIVE_UPDATE)
-
-        # Create log grid
-        self.grid_panel = wx.Panel(self.splitter)
-        grid_sizer = wx.BoxSizer(wx.VERTICAL)
-
-        self.log_grid = wx.grid.Grid(self.grid_panel)
-        self.log_grid.CreateGrid(0, 6)
-
-        # Configure grid columns
-        self.log_grid.SetColLabelValue(0, _("Time"))
-        self.log_grid.SetColLabelValue(1, _("Level"))
-        self.log_grid.SetColLabelValue(2, _("Component"))
-        self.log_grid.SetColLabelValue(3, _("Message"))
-        self.log_grid.SetColLabelValue(4, _("File"))
-        self.log_grid.SetColLabelValue(5, _("Line"))
-
-        self.log_grid.SetColSize(0, 180)  # Time
-        self.log_grid.SetColSize(1, 80)  # Level
-        self.log_grid.SetColSize(2, 180)  # Component
-        self.log_grid.SetColSize(3, 400)  # Message
-        self.log_grid.SetColSize(4, 200)  # File
-        self.log_grid.SetColSize(5, 60)  # Line
-
-        self.log_grid.Bind(wx.grid.EVT_GRID_CELL_LEFT_DCLICK, self.on_cell_double_click)
-        self.log_grid.Bind(wx.grid.EVT_GRID_SELECT_CELL, self.on_cell_select)
-
-        grid_sizer.Add(self.log_grid, 1, wx.EXPAND)
-        self.grid_panel.SetSizer(grid_sizer)
-
-        # Create detail panel
-        self.detail_panel = wx.Panel(self.splitter)
-        detail_sizer = wx.BoxSizer(wx.VERTICAL)
-
-        detail_label = wx.StaticText(self.detail_panel, label=_("Details:"))
-        self.detail_text = wx.TextCtrl(
-            self.detail_panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.HSCROLL
-        )
-
-        # Set a monospace font for better readability
-        font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-        self.detail_text.SetFont(font)
-
-        detail_sizer.Add(detail_label, 0, wx.ALL, 5)
-        detail_sizer.Add(self.detail_text, 1, wx.EXPAND | wx.ALL, 5)
-        self.detail_panel.SetSizer(detail_sizer)
-
-        # Set up splitter
-        self.splitter.SplitHorizontally(self.grid_panel, self.detail_panel)
-        self.splitter.SetSashPosition(500)
-        self.splitter.SetMinimumPaneSize(100)
-
-        main_sizer.Add(self.splitter, 1, wx.EXPAND | wx.ALL, 5)
-
-        # Create button panel
-        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-
-        self.auto_refresh_cb = wx.CheckBox(self.panel, label=_("Auto refresh"))
-        self.auto_refresh_cb.SetValue(True)
-
-        self.refresh_button = wx.Button(self.panel, label=_("Refresh"))
-        self.refresh_button.Bind(wx.EVT_BUTTON, self.on_refresh)
-
-        self.clear_button = wx.Button(self.panel, label=_("Clear"))
-        self.clear_button.Bind(wx.EVT_BUTTON, self.on_clear)
-
-        self.export_button = wx.Button(self.panel, label=_("Export"))
-        self.export_button.Bind(wx.EVT_BUTTON, self.on_export)
-
-        self.copy_all_button = wx.Button(self.panel, label=_("Copy All"))
-        self.copy_all_button.Bind(wx.EVT_BUTTON, self.on_copy_all)
-
-        button_sizer.Add(self.auto_refresh_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
-        button_sizer.Add(self.refresh_button, 0, wx.RIGHT, 5)
-        button_sizer.Add(self.clear_button, 0, wx.RIGHT, 5)
-        button_sizer.Add(self.export_button, 0, wx.RIGHT, 5)
-        button_sizer.Add(self.copy_all_button, 0)
-
-        main_sizer.Add(button_sizer, 0, wx.ALIGN_RIGHT | wx.ALL, 5)
-
-        self.panel.SetSizer(main_sizer)
-
-        # Status bar for showing counts
-        self.CreateStatusBar()
-
-        # Populate the grid with logs
         self.populate_logs()
-
-        # Update component list
         self.update_component_list()
 
-        # Center the frame on the screen
-        self.Centre()
-
-        # Set up auto-refresh timer
-        self.refresh_timer = wx.Timer(self)
-        self.Bind(wx.EVT_TIMER, self.on_timer, self.refresh_timer)
-        self.refresh_timer.Start(2000)  # Refresh every 2 seconds
-
-        # Bind the close event
-        self.Bind(wx.EVT_CLOSE, self.on_close)
+        # Auto-refresh timer
+        self.refresh_timer = QTimer(self)
+        self.refresh_timer.timeout.connect(self.on_timer)
+        self.refresh_timer.start(2000)
 
     def populate_logs(self):
-        """Populate the grid with filtered logs."""
-        # Clear the grid
-        if self.log_grid.GetNumberRows() > 0:
-            self.log_grid.DeleteRows(0, self.log_grid.GetNumberRows())
-
-        # Get filtered records
+        """Populate the table with filtered logs."""
+        self.log_table.setRowCount(0)
         records = self.get_filtered_records()
 
-        # Add records to the grid
+        self.log_table.setRowCount(len(records))
         for i, record in enumerate(records):
-            self.log_grid.AppendRows(1)
-            self.log_grid.SetCellValue(i, 0, record.timestamp)
-            self.log_grid.SetCellValue(i, 1, record.level)
-            self.log_grid.SetCellValue(i, 2, record.name)
-            self.log_grid.SetCellValue(i, 3, record.message)
+            self.log_table.setItem(i, 0, QTableWidgetItem(record.timestamp))
+            self.log_table.setItem(i, 1, QTableWidgetItem(record.level))
+            self.log_table.setItem(i, 2, QTableWidgetItem(record.name))
+            self.log_table.setItem(i, 3, QTableWidgetItem(record.message))
+            self.log_table.setItem(
+                i, 4, QTableWidgetItem(os.path.basename(record.pathname) if record.pathname else "")
+            )
+            self.log_table.setItem(
+                i, 5, QTableWidgetItem(str(record.lineno) if record.lineno else "")
+            )
 
-            if record.pathname:
-                self.log_grid.SetCellValue(i, 4, os.path.basename(record.pathname))
-
-            if record.lineno:
-                self.log_grid.SetCellValue(i, 5, str(record.lineno))
-
-            # Color the row based on log level
+            bg = fg = bold = None
             if record.level == "CRITICAL":
-                for col in range(6):
-                    self.log_grid.SetCellBackgroundColour(i, col, wx.Colour(255, 150, 150))
-                    self.log_grid.SetCellTextColour(i, col, wx.Colour(128, 0, 0))
-                    self.log_grid.SetCellFont(
-                        i,
-                        col,
-                        wx.Font(
-                            wx.NORMAL_FONT.GetPointSize(),
-                            wx.FONTFAMILY_DEFAULT,
-                            wx.FONTSTYLE_NORMAL,
-                            wx.FONTWEIGHT_BOLD,
-                        ),
-                    )
+                bg, fg, bold = QColor(255, 150, 150), QColor(128, 0, 0), True
             elif record.level == "ERROR":
-                for col in range(6):
-                    self.log_grid.SetCellBackgroundColour(i, col, wx.Colour(255, 200, 200))
-                    self.log_grid.SetCellTextColour(i, col, wx.Colour(139, 0, 0))
+                bg, fg = QColor(255, 200, 200), QColor(139, 0, 0)
             elif record.level == "WARNING":
-                for col in range(6):
-                    self.log_grid.SetCellBackgroundColour(i, col, wx.Colour(255, 200, 200))
-                    self.log_grid.SetCellTextColour(i, col, wx.Colour(139, 0, 0))
+                bg, fg = QColor(255, 200, 200), QColor(139, 0, 0)
             elif record.level == "INFO":
-                # Normal color, slightly highlighted
-                for col in range(6):
-                    self.log_grid.SetCellBackgroundColour(i, col, wx.Colour(240, 255, 240))
+                bg = QColor(240, 255, 240)
             elif record.level == "DEBUG":
-                # Lighter gray for debug
-                for col in range(6):
-                    self.log_grid.SetCellBackgroundColour(i, col, wx.Colour(240, 240, 240))
-                    self.log_grid.SetCellTextColour(i, col, wx.Colour(100, 100, 100))
+                bg, fg = QColor(240, 240, 240), QColor(100, 100, 100)
 
-        # If we have search results, highlight them
+            if bg or fg or bold:
+                for col in range(6):
+                    item = self.log_table.item(i, col)
+                    if item:
+                        if bg:
+                            item.setBackground(bg)
+                        if fg:
+                            item.setForeground(fg)
+                        if bold:
+                            f = item.font()
+                            f.setBold(True)
+                            item.setFont(f)
+
         if self.search_results:
             self.highlight_search_results()
 
-        # Update status bar with counts
         total_records = len(self.in_memory_handler.records)
         filtered_records = len(records)
-
-        # Count by level
-        level_counts = {}
+        level_counts: Dict[str, int] = {}
         for record in records:
             level_counts[record.level] = level_counts.get(record.level, 0) + 1
-
-        level_info = ", ".join([f"{level}: {count}" for level, count in level_counts.items()])
-        self.SetStatusText(
+        level_info = ", ".join([f"{lv}: {ct}" for lv, ct in level_counts.items()])
+        self.statusBar().showMessage(
             f"Showing {filtered_records} of {total_records} log records ({level_info})"
         )
 
-        # Auto-scroll to the bottom if we're not in the middle of searching
         if not self.search_results and filtered_records > 0:
-            self.log_grid.GoToCell(filtered_records - 1, 0)
-            self.log_grid.SelectRow(filtered_records - 1)
+            self.log_table.scrollToItem(self.log_table.item(filtered_records - 1, 0))
+            self.log_table.selectRow(filtered_records - 1)
             self._show_details_for_row(filtered_records - 1)
 
     def get_filtered_records(self):
         """Get records filtered by the current filter settings."""
-        records = self.in_memory_handler.records.copy()  # Work with a copy to avoid race conditions
+        records = self.in_memory_handler.records.copy()
 
-        # Filter by level
-        level = self.level_choice.GetStringSelection()
+        level = self.level_choice.currentText()
         if level != "ALL":
             records = [r for r in records if r.level == level]
 
-        # Filter by component
-        component = self.component_choice.GetStringSelection()
+        component = self.component_choice.currentText()
         if component != "ALL":
             records = [r for r in records if r.name == component]
 
-        # Filter by time
-        time_filter = self.time_choice.GetStringSelection()
+        time_filter = self.time_choice.currentText()
         if time_filter != "ALL":
             now = datetime.now()
             if time_filter == "Last hour":
-                one_hour_ago = now - timedelta(hours=1)
-                records = [r for r in records if self._parse_timestamp(r.timestamp) > one_hour_ago]
+                cutoff = now - timedelta(hours=1)
+                records = [r for r in records if self._parse_timestamp(r.timestamp) > cutoff]
             elif time_filter == "Last day":
-                one_day_ago = now - timedelta(days=1)
-                records = [r for r in records if self._parse_timestamp(r.timestamp) > one_day_ago]
+                cutoff = now - timedelta(days=1)
+                records = [r for r in records if self._parse_timestamp(r.timestamp) > cutoff]
             elif time_filter == "Last week":
-                one_week_ago = now - timedelta(days=7)
-                records = [r for r in records if self._parse_timestamp(r.timestamp) > one_week_ago]
+                cutoff = now - timedelta(days=7)
+                records = [r for r in records if self._parse_timestamp(r.timestamp) > cutoff]
 
-        # Filter by search text (if not using the search navigation)
         if not self.search_results:
-            search_text = self.search_text.GetValue().lower()
+            search_text = self.search_text.currentText().lower()
             if search_text:
                 records = [
                     r
@@ -535,109 +478,62 @@ class LogViewerFrame(wx.Frame):
             return datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S,%f")
         except ValueError:
             try:
-                # Try an alternative format without milliseconds
                 return datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
             except ValueError:
-                # If parsing fails, return a very old date
                 return datetime(1970, 1, 1)
 
     def update_component_list(self):
         """Update the component filter list with available components."""
-        components = set(["ALL"])
+        components = {"ALL"}
         for record in self.in_memory_handler.records:
-            if record.name:  # Ensure we don't add empty component names
+            if record.name:
                 components.add(record.name)
 
-        current_selection = self.component_choice.GetStringSelection()
-        self.component_choice.Clear()
+        current = self.component_choice.currentText()
+        self.component_choice.blockSignals(True)
+        self.component_choice.clear()
+        for comp in sorted(components):
+            self.component_choice.addItem(comp)
 
-        for component in sorted(components):
-            self.component_choice.Append(component)
+        idx = self.component_choice.findText(current)
+        self.component_choice.setCurrentIndex(idx if idx >= 0 else 0)
+        self.component_choice.blockSignals(False)
 
-        if current_selection in components:
-            self.component_choice.SetStringSelection(current_selection)
-        else:
-            self.component_choice.SetSelection(0)
-
-    def on_filter_changed(self, event):
-        """Handle filter change events."""
+    def on_filter_changed(self):
         self.populate_logs()
 
-    def on_time_filter_changed(self, event):
-        """Handle time filter change events."""
-        selection = self.time_choice.GetStringSelection()
-        if selection == "Custom...":
-            # Show a dialog to select custom time range
-            dlg = wx.MessageDialog(
+    def on_time_filter_changed(self):
+        if self.time_choice.currentText() == "Custom...":
+            QMessageBox.information(
                 self,
-                _("Custom time range filtering will be implemented in a future version."),
                 _("Not Implemented"),
-                wx.OK | wx.ICON_INFORMATION,
+                _("Custom time range filtering will be implemented in a future version."),
             )
-            dlg.ShowModal()
-            dlg.Destroy()
-            self.time_choice.SetSelection(0)  # Reset to ALL
-
+            self.time_choice.setCurrentIndex(0)
         self.populate_logs()
 
-    def on_search_key_down(self, event):
-        """Handle key down events for the search field."""
-        # Process navigation keys
-        key_code = event.GetKeyCode()
-
-        if key_code == wx.WXK_RETURN:
-            # Enter key - perform search
-            self.on_search(event)
-            return
-        elif key_code == wx.WXK_ESCAPE:
-            # Escape key - clear search
-            self.on_search_cancel(event)
-            return
-        elif key_code == wx.WXK_UP and event.ControlDown():
-            # Ctrl+Up - go to previous search result
-            self.on_search_prev(event)
-            return
-        elif key_code == wx.WXK_DOWN and event.ControlDown():
-            # Ctrl+Down - go to next search result
-            self.on_search_next(event)
-            return
-
-        # Allow the event to propagate normally for other keys
-        event.Skip()
-
-    def on_search(self, event):
-        """Handle search events."""
-        search_text = self.search_text.GetValue().strip().lower()
+    def on_search(self):
+        search_text = self.search_text.currentText().strip().lower()
         if not search_text:
-            # Clear search results if search box is empty
             self.search_results = []
             self.current_search_index = -1
-            self.search_prev_btn.Enable(False)
-            self.search_next_btn.Enable(False)
-            self.search_count.SetLabel("")
-            self.populate_logs()  # Refresh to clear highlights
+            self.search_prev_btn.setEnabled(False)
+            self.search_next_btn.setEnabled(False)
+            self.search_count.setText("")
+            self.populate_logs()
             return
 
-        # Add to search history if not already present
         if search_text not in self.search_history:
             self.search_history.append(search_text)
-            # Keep only the last 10 searches
             if len(self.search_history) > 10:
                 self.search_history.pop(0)
+            self.search_text.clear()
+            self.search_text.addItems(self.search_history)
+            self.search_text.setEditText(search_text)
 
-            # Update the combobox with the search history
-            self.search_text.Clear()
-            for item in self.search_history:
-                self.search_text.Append(item)
-            self.search_text.SetValue(search_text)
-
-        # Get filtered records
         records = self.get_filtered_records()
-
-        # Search for matching records
         self.search_results = []
         for i, record in enumerate(records):
-            # Check in message, component name, file path, and level
             if (
                 search_text in record.message.lower()
                 or search_text in record.name.lower()
@@ -646,353 +542,219 @@ class LogViewerFrame(wx.Frame):
             ):
                 self.search_results.append(i)
 
-        # Update UI to show search results
         if self.search_results:
             self.current_search_index = 0
-            self.search_prev_btn.Enable(True)
-            self.search_next_btn.Enable(True)
-            self.search_count.SetLabel(
+            self.search_prev_btn.setEnabled(True)
+            self.search_next_btn.setEnabled(True)
+            self.search_count.setText(
                 f"Match {self.current_search_index + 1} of {len(self.search_results)}"
             )
             self.highlight_search_results()
             self.navigate_to_current_search()
         else:
             self.current_search_index = -1
-            self.search_prev_btn.Enable(False)
-            self.search_next_btn.Enable(False)
-            self.search_count.SetLabel("No matches")
-            self.populate_logs()  # Refresh to clear highlights
+            self.search_prev_btn.setEnabled(False)
+            self.search_next_btn.setEnabled(False)
+            self.search_count.setText("No matches")
+            self.populate_logs()
 
-    def on_search_cancel(self, event):
-        """Handle canceling search."""
-        self.search_text.SetValue("")
+    def on_search_cancel(self):
+        self.search_text.setEditText("")
         self.search_results = []
         self.current_search_index = -1
-        self.search_prev_btn.Enable(False)
-        self.search_next_btn.Enable(False)
-        self.search_count.SetLabel("")
-        self.populate_logs()  # Refresh to clear highlights
+        self.search_prev_btn.setEnabled(False)
+        self.search_next_btn.setEnabled(False)
+        self.search_count.setText("")
+        self.populate_logs()
 
-    def on_search_prev(self, event):
-        """Navigate to previous search result."""
+    def on_search_prev(self):
         if not self.search_results:
             return
-
         self.current_search_index = (self.current_search_index - 1) % len(self.search_results)
-        self.search_count.SetLabel(
+        self.search_count.setText(
             f"Match {self.current_search_index + 1} of {len(self.search_results)}"
         )
         self.navigate_to_current_search()
 
-    def on_search_next(self, event):
-        """Navigate to next search result."""
+    def on_search_next(self):
         if not self.search_results:
             return
-
         self.current_search_index = (self.current_search_index + 1) % len(self.search_results)
-        self.search_count.SetLabel(
+        self.search_count.setText(
             f"Match {self.current_search_index + 1} of {len(self.search_results)}"
         )
         self.navigate_to_current_search()
 
     def highlight_search_results(self):
-        """Highlight all search results in the grid."""
-        search_text = self.search_text.GetValue().strip().lower()
+        search_text = self.search_text.currentText().strip().lower()
         if not search_text:
             return
-
-        # Highlight all matches
         for i in self.search_results:
-            # Use a distinct background color for search results
             for col in range(6):
-                # Get current background color
-                current_bg = self.log_grid.GetCellBackgroundColour(i, col)
-                # Make it more yellowish while preserving the log level color
-                r, g, b = current_bg.Red(), current_bg.Green(), current_bg.Blue()
-                # Increase yellow component
-                self.log_grid.SetCellBackgroundColour(
-                    i, col, wx.Colour(min(r + 20, 255), min(g + 20, 255), b)
-                )
+                item = self.log_table.item(i, col)
+                if item:
+                    bg = item.background().color()
+                    item.setBackground(
+                        QColor(min(bg.red() + 20, 255), min(bg.green() + 20, 255), bg.blue())
+                    )
 
     def navigate_to_current_search(self):
-        """Navigate to the current search result."""
         if not self.search_results or self.current_search_index < 0:
             return
-
         row = self.search_results[self.current_search_index]
-        # Select and scroll to the row
-        self.log_grid.ClearSelection()
-        self.log_grid.GoToCell(row, 0)
-        self.log_grid.SelectRow(row)
-
-        # Show details for the selected row
+        self.log_table.clearSelection()
+        item = self.log_table.item(row, 0)
+        if item:
+            self.log_table.scrollToItem(item)
+        self.log_table.selectRow(row)
         self._show_details_for_row(row)
 
-    def on_refresh(self, event):
-        """Handle refresh button click."""
+    def on_refresh(self):
         self.update_component_list()
         self.populate_logs()
 
-    def on_timer(self, event):
-        """Handle timer events for auto-refresh."""
-        # Only refresh if auto-refresh is enabled and there are new logs
-        if self.auto_refresh_cb.GetValue():
+    def on_timer(self):
+        if self.auto_refresh_cb.isChecked():
             current_records = len(self.get_filtered_records())
-            grid_rows = self.log_grid.GetNumberRows()
-
-            # Check if the number of records has changed
-            if current_records != grid_rows:
+            if current_records != self.log_table.rowCount():
                 self.update_component_list()
                 self.populate_logs()
 
-        # Refresh the timer if needed
-        if not self.refresh_timer.IsRunning() and self.auto_refresh_cb.GetValue():
-            self.refresh_timer.Start(2000)
-
-    def on_clear(self, event):
-        """Handle clear button click."""
-        dlg = wx.MessageDialog(
+    def on_clear(self):
+        reply = QMessageBox.question(
             self,
-            _("Are you sure you want to clear all logs?"),
             _("Confirm Clear"),
-            wx.YES_NO | wx.ICON_QUESTION,
+            _("Are you sure you want to clear all logs?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
-
-        if dlg.ShowModal() == wx.ID_YES:
+        if reply == QMessageBox.StandardButton.Yes:
             self.in_memory_handler.clear()
             self.populate_logs()
 
-        dlg.Destroy()
-
-    def on_export(self, event):
-        """Handle export button click."""
-        with wx.FileDialog(
+    def on_export(self):
+        path, _ = QFileDialog.getSaveFileName(
             self,
             _("Export logs"),
-            wildcard="CSV files (*.csv)|*.csv|Text files (*.txt)|*.txt",
-            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
-        ) as file_dialog:
-            if file_dialog.ShowModal() == wx.ID_CANCEL:
-                return
-
-            path = file_dialog.GetPath()
-
-            try:
-                with open(path, "w", encoding="utf-8") as f:
-                    # Write header
-                    f.write("Timestamp,Level,Component,Message,File,Line\n")
-
-                    # Write records
-                    records = self.get_filtered_records()
-                    for record in records:
-                        f.write(
-                            f'"{record.timestamp}","{record.level}","{record.name}","{record.message}",'
-                        )
-                        if record.pathname:
-                            f.write(f'"{os.path.basename(record.pathname)}",')
-                        else:
-                            f.write('"",')
-
-                        if record.lineno:
-                            f.write(f'"{record.lineno}"\n')
-                        else:
-                            f.write('""\n')
-
-                wx.MessageBox(
-                    _("Logs exported successfully."),
-                    _("Export Complete"),
-                    wx.OK | wx.ICON_INFORMATION,
-                )
-
-            except Exception as e:
-                wx.MessageBox(
-                    _("Error exporting logs: {0}").format(str(e)),
-                    _("Export Error"),
-                    wx.OK | wx.ICON_ERROR,
-                )
-
-    def on_cell_select(self, event):
-        """Handle cell selection events."""
-        row = event.GetRow()
-        self._show_details_for_row(row)
-        event.Skip()
-
-    def on_cell_double_click(self, event):
-        """Handle double-click on a grid cell to show details in a separate dialog."""
-        row = event.GetRow()
-        records = self.get_filtered_records()
-
-        if row < len(records):
-            record = records[row]
-
-            # Create a dialog to show full details
-            dlg = wx.Dialog(
-                self,
-                title=_("Log Record Details"),
-                size=(900, 600),
-                style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER | wx.MAXIMIZE_BOX,
-            )
-
-            panel = wx.Panel(dlg)
-            sizer = wx.BoxSizer(wx.VERTICAL)
-
-            # Create a notebook for different views of the log record
-            notebook = wx.Notebook(panel)
-
-            # Basic info page
-            basic_panel = wx.Panel(notebook)
-            basic_sizer = wx.BoxSizer(wx.VERTICAL)
-
-            basic_text = wx.TextCtrl(
-                basic_panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.HSCROLL
-            )
-
-            # Set monospace font for better readability
-            font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-            basic_text.SetFont(font)
-
-            # Use the full details method from LogRecord
-            basic_text.SetValue(record.get_full_details())
-
-            basic_sizer.Add(basic_text, 1, wx.EXPAND | wx.ALL, 5)
-            basic_panel.SetSizer(basic_sizer)
-
-            # Exception info page (if available)
-            if record.exc_info:
-                exc_panel = wx.Panel(notebook)
-                exc_sizer = wx.BoxSizer(wx.VERTICAL)
-
-                exc_text = wx.TextCtrl(
-                    exc_panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.HSCROLL
-                )
-                exc_text.SetFont(font)
-                exc_text.SetValue(record.exc_info)
-                exc_sizer.Add(exc_text, 1, wx.EXPAND | wx.ALL, 5)
-                exc_panel.SetSizer(exc_sizer)
-
-                notebook.AddPage(basic_panel, _("Basic Info"))
-                notebook.AddPage(exc_panel, _("Exception Info"))
-            else:
-                notebook.AddPage(basic_panel, _("Details"))
-
-            # Context info page (stack trace or code context if available)
-            if (
-                hasattr(record, "pathname")
-                and record.pathname
-                and hasattr(record, "lineno")
-                and record.lineno
-            ):
-                try:
-                    # Try to get the source code around the log line
-                    import linecache
-
-                    context_panel = wx.Panel(notebook)
-                    context_sizer = wx.BoxSizer(wx.VERTICAL)
-
-                    context_text = wx.TextCtrl(
-                        context_panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.HSCROLL
-                    )
-                    context_text.SetFont(font)
-
-                    # Get source lines around the log line
-                    context_lines = []
-                    for i in range(max(1, record.lineno - 5), record.lineno + 6):
-                        line = linecache.getline(record.pathname, i)
-                        if line:
-                            prefix = ">" if i == record.lineno else " "
-                            context_lines.append(f"{prefix} {i:4d}: {line}")
-
-                    if context_lines:
-                        context_text.SetValue(
-                            f"Source file: {record.pathname}\n\n" + "".join(context_lines)
-                        )
-                        context_sizer.Add(context_text, 1, wx.EXPAND | wx.ALL, 5)
-                        context_panel.SetSizer(context_sizer)
-                        notebook.AddPage(context_panel, _("Source Context"))
-                except Exception as e:
-                    # If we can't get the source, don't add the page
-                    pass
-
-            sizer.Add(notebook, 1, wx.EXPAND | wx.ALL, 5)
-
-            # Add copy and close buttons
-            button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-
-            copy_button = wx.Button(panel, label=_("Copy to Clipboard"))
-            copy_button.Bind(
-                wx.EVT_BUTTON, lambda evt, rec=record: self.copy_record_to_clipboard(rec)
-            )
-
-            close_button = wx.Button(panel, wx.ID_CLOSE)
-            close_button.Bind(wx.EVT_BUTTON, lambda evt: dlg.EndModal(wx.ID_CLOSE))
-
-            button_sizer.Add(copy_button, 0, wx.RIGHT, 10)
-            button_sizer.Add(close_button, 0)
-
-            sizer.Add(button_sizer, 0, wx.ALIGN_RIGHT | wx.ALL, 5)
-
-            panel.SetSizer(sizer)
-
-            dlg.ShowModal()
-            dlg.Destroy()
-
-        event.Skip()
-
-    def copy_record_to_clipboard(self, record):
-        """Copy record details to clipboard."""
-        if wx.TheClipboard.Open():
-            wx.TheClipboard.SetData(wx.TextDataObject(record.get_full_details()))
-            wx.TheClipboard.Close()
-            wx.MessageBox(
-                _("Record details copied to clipboard."),
-                _("Copy Complete"),
-                wx.OK | wx.ICON_INFORMATION,
-            )
-
-    def _show_details_for_row(self, row):
-        """Show details for the selected row in the detail panel."""
-        records = self.get_filtered_records()
-
-        if 0 <= row < len(records):
-            record = records[row]
-            # Use the full details method from LogRecord
-            self.detail_text.SetValue(record.get_full_details())
-
-    def on_close(self, event):
-        """Handle the close event by hiding the frame instead of destroying it."""
-        # Stop the timer when hiding the frame
-        if self.refresh_timer.IsRunning():
-            self.refresh_timer.Stop()
-
-        # Hide the frame instead of destroying it
-        self.Hide()
-
-        # Log that the viewer was closed
-        logging.getLogger("invesalius.enhanced_logging").info("Log viewer closed")
-
-        # Don't call event.Skip() to prevent the default close behavior
-
-    def on_copy_all(self, event):
-        """Copy all currently filtered logs to the clipboard."""
-        records = self.get_filtered_records()
-        if not records:
-            wx.MessageBox(_("No log records to copy."), _("Copy Failed"), wx.OK | wx.ICON_WARNING)
+            "",
+            "CSV files (*.csv);;Text files (*.txt)",
+        )
+        if not path:
             return
 
-        # Format all records
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("Timestamp,Level,Component,Message,File,Line\n")
+                for record in self.get_filtered_records():
+                    f.write(
+                        f'"{record.timestamp}","{record.level}","{record.name}","{record.message}",'
+                    )
+                    f.write(f'"{os.path.basename(record.pathname) if record.pathname else ""}",')
+                    f.write(f'"{record.lineno if record.lineno else ""}"\n')
+
+            QMessageBox.information(self, _("Export Complete"), _("Logs exported successfully."))
+        except Exception as e:
+            QMessageBox.critical(
+                self, _("Export Error"), _("Error exporting logs: {0}").format(str(e))
+            )
+
+    def on_cell_select(self, row, _column):
+        self._show_details_for_row(row)
+
+    def on_cell_double_click(self, row, _column):
+        records = self.get_filtered_records()
+        if row >= len(records):
+            return
+
+        record = records[row]
+        mono_font = QFont("Monospace", 10)
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(_("Log Record Details"))
+        dlg.resize(900, 600)
+        dlg_layout = QVBoxLayout(dlg)
+
+        tabs = QTabWidget()
+
+        basic_text = QPlainTextEdit()
+        basic_text.setReadOnly(True)
+        basic_text.setFont(mono_font)
+        basic_text.setPlainText(record.get_full_details())
+
+        if record.exc_info:
+            tabs.addTab(basic_text, _("Basic Info"))
+            exc_text = QPlainTextEdit()
+            exc_text.setReadOnly(True)
+            exc_text.setFont(mono_font)
+            exc_text.setPlainText(record.exc_info)
+            tabs.addTab(exc_text, _("Exception Info"))
+        else:
+            tabs.addTab(basic_text, _("Details"))
+
+        if record.pathname and record.lineno:
+            try:
+                import linecache
+
+                context_lines = []
+                for i in range(max(1, record.lineno - 5), record.lineno + 6):
+                    line = linecache.getline(record.pathname, i)
+                    if line:
+                        prefix = ">" if i == record.lineno else " "
+                        context_lines.append(f"{prefix} {i:4d}: {line}")
+                if context_lines:
+                    ctx_text = QPlainTextEdit()
+                    ctx_text.setReadOnly(True)
+                    ctx_text.setFont(mono_font)
+                    ctx_text.setPlainText(
+                        f"Source file: {record.pathname}\n\n" + "".join(context_lines)
+                    )
+                    tabs.addTab(ctx_text, _("Source Context"))
+            except Exception:
+                pass
+
+        dlg_layout.addWidget(tabs)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        copy_btn = QPushButton(_("Copy to Clipboard"))
+        copy_btn.clicked.connect(lambda: self.copy_record_to_clipboard(record))
+        btn_layout.addWidget(copy_btn)
+        close_btn = QPushButton(_("Close"))
+        close_btn.clicked.connect(dlg.accept)
+        btn_layout.addWidget(close_btn)
+        dlg_layout.addLayout(btn_layout)
+
+        dlg.exec()
+
+    def copy_record_to_clipboard(self, record):
+        clipboard = QApplication.clipboard()
+        clipboard.setText(record.get_full_details())
+        QMessageBox.information(self, _("Copy Complete"), _("Record details copied to clipboard."))
+
+    def _show_details_for_row(self, row):
+        records = self.get_filtered_records()
+        if 0 <= row < len(records):
+            self.detail_text.setPlainText(records[row].get_full_details())
+
+    def closeEvent(self, event):
+        if self.refresh_timer.isActive():
+            self.refresh_timer.stop()
+        self.hide()
+        logging.getLogger("invesalius.enhanced_logging").info("Log viewer closed")
+        event.ignore()
+
+    def on_copy_all(self):
+        records = self.get_filtered_records()
+        if not records:
+            QMessageBox.warning(self, _("Copy Failed"), _("No log records to copy."))
+            return
+
         text = ""
         for record in records:
             text += f"{record.timestamp} - {record.level} - {record.name} - {record.message}\n"
 
-        # Copy to clipboard
-        if wx.TheClipboard.Open():
-            wx.TheClipboard.SetData(wx.TextDataObject(text))
-            wx.TheClipboard.Close()
-            wx.MessageBox(
-                _("Log records copied to clipboard."),
-                _("Copy Complete"),
-                wx.OK | wx.ICON_INFORMATION,
-            )
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+        QMessageBox.information(self, _("Copy Complete"), _("Log records copied to clipboard."))
 
 
 class EnhancedLogger:
@@ -1107,22 +869,22 @@ class EnhancedLogger:
 
         return logging.getLogger(f"invesalius.{name}")
 
-    def show_log_viewer(self, parent: Optional[wx.Window] = None) -> None:
+    def show_log_viewer(self, parent: Optional[QWidget] = None) -> None:
         """Show the log viewer."""
         try:
             if self._log_viewer_frame is None:
                 self._log_viewer_frame = LogViewerFrame(parent, self._in_memory_handler)
             else:
                 # Restart the timer if it was stopped
-                if not self._log_viewer_frame.refresh_timer.IsRunning():
-                    self._log_viewer_frame.refresh_timer.Start(2000)
+                if not self._log_viewer_frame.refresh_timer.isActive():
+                    self._log_viewer_frame.refresh_timer.start(2000)
 
                 # Refresh the log viewer with the latest logs
                 self._log_viewer_frame.update_component_list()
                 self._log_viewer_frame.populate_logs()
 
-            self._log_viewer_frame.Show()
-            self._log_viewer_frame.Raise()
+            self._log_viewer_frame.show()
+            self._log_viewer_frame.raise_()
         except Exception as e:
             import traceback
 
@@ -1220,8 +982,8 @@ class EnhancedLogger:
         try:
             if self._log_viewer_frame:
                 # Stop the timer
-                if self._log_viewer_frame.refresh_timer.IsRunning():
-                    self._log_viewer_frame.refresh_timer.Stop()
+                if self._log_viewer_frame.refresh_timer.isActive():
+                    self._log_viewer_frame.refresh_timer.stop()
 
                 # Log the cleanup
                 self._logger.info("Cleaning up enhanced logger resources")
@@ -1240,7 +1002,7 @@ def get_logger(name: Optional[str] = None) -> logging.Logger:
 
 
 # Function to show the log viewer
-def show_log_viewer(parent: Optional[wx.Window] = None) -> None:
+def show_log_viewer(parent: Optional[QWidget] = None) -> None:
     """Show the log viewer."""
     try:
         enhanced_logger.show_log_viewer(parent)

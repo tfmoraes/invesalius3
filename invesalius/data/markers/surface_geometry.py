@@ -1,5 +1,5 @@
 import vtk
-import wx
+from PySide6.QtWidgets import QDialog
 
 from invesalius.gui import dialogs
 from invesalius.i18n import tr as _
@@ -262,7 +262,7 @@ class SurfaceGeometry(metaclass=Singleton):
                     "A new highest scalp surface was identified. Do you want to update the smoothed surface?"
                 )
             )
-            if result != wx.ID_OK:
+            if result != QDialog.DialogCode.Accepted:
                 return highest_surface["smoothed"]
 
         # Reprocess if user agreed OR if no smoothed version exists yet

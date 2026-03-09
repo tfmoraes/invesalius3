@@ -22,7 +22,8 @@ from typing import TYPE_CHECKING, List, Literal, Tuple
 
 import numpy as np
 import numpy.typing as npt
-import wx
+from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtWidgets import QApplication
 from skimage.draw import polygon2mask
 from vtkmodules.vtkInteractionStyle import (
     vtkInteractorStyleRubberBandZoom,
@@ -38,6 +39,22 @@ from invesalius.data.polygon_select import PolygonSelectCanvas
 from invesalius.pubsub import pub as Publisher
 from invesalius.utils import vtkarray_to_numpy
 from invesalius_rs import mask_cut
+
+
+class _DoubleClickFilter(QObject):
+    """Event filter that captures mouse double-click events on a QWidget."""
+
+    def __init__(self, button, handler, parent=None):
+        super().__init__(parent)
+        self._button = button
+        self._handler = handler
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.MouseButtonDblClick and event.button() == self._button:
+            self._handler(event)
+            return True
+        return False
+
 
 PROP_MEASURE = 0.8
 
@@ -138,10 +155,12 @@ class DefaultInteractorStyle(Base3DInteractorStyle):
         self.AddObserver("MiddleButtonReleaseEvent", self.OnMiddleRelease)
 
         # Set camera focus using left double-click.
-        self.viewer.interactor.Bind(wx.EVT_LEFT_DCLICK, self.SetCameraFocus)
+        self._left_dblclick_filter = _DoubleClickFilter(Qt.LeftButton, self.SetCameraFocus)
+        self.viewer.interactor.installEventFilter(self._left_dblclick_filter)
 
         # Reset camera using right double-click.
-        self.viewer.interactor.Bind(wx.EVT_RIGHT_DCLICK, self.ResetCamera)
+        self._right_dblclick_filter = _DoubleClickFilter(Qt.RightButton, self.ResetCamera)
+        self.viewer.interactor.installEventFilter(self._right_dblclick_filter)
 
         self.__bind_events()
 
@@ -248,11 +267,11 @@ class DefaultInteractorStyle(Base3DInteractorStyle):
 
     def CleanUp(self):
         """Clean up the interactor style."""
-        # Note: when bind events in the viewer, they are not automatically removed when
-        # the style is cleaned up! if the bind is in the style (i.e. self.AddObserver),
-        # then it is ok.
-        self.viewer.interactor.Unbind(wx.EVT_RIGHT_DCLICK, handler=self.ResetCamera)
-        self.viewer.interactor.Unbind(wx.EVT_LEFT_DCLICK, handler=self.SetCameraFocus)
+        # Note: when installing event filters on the viewer, they are not automatically
+        # removed when the style is cleaned up! if the bind is in the style
+        # (i.e. self.AddObserver), then it is ok.
+        self.viewer.interactor.removeEventFilter(self._right_dblclick_filter)
+        self.viewer.interactor.removeEventFilter(self._left_dblclick_filter)
 
 
 class ZoomInteractorStyle(DefaultInteractorStyle):
@@ -277,14 +296,15 @@ class ZoomInteractorStyle(DefaultInteractorStyle):
 
         self.zoom_started = False
 
-        self.viewer.interactor.Bind(wx.EVT_LEFT_DCLICK, self.ResetCamera)
+        self._zoom_left_dblclick_filter = _DoubleClickFilter(Qt.LeftButton, self.ResetCamera)
+        self.viewer.interactor.installEventFilter(self._zoom_left_dblclick_filter)
 
     def SetUp(self):
         Publisher.sendMessage("Toggle toolbar item", _id=self.state_code, value=True)
 
     def CleanUp(self):
         super().CleanUp()
-        self.viewer.interactor.Unbind(wx.EVT_LEFT_DCLICK, handler=self.ResetCamera)
+        self.viewer.interactor.removeEventFilter(self._zoom_left_dblclick_filter)
         Publisher.sendMessage("Toggle toolbar item", _id=self.state_code, value=False)
 
     def OnMouseMoveZoom(self, evt, obj):
@@ -316,7 +336,8 @@ class ZoomSLInteractorStyle(vtkInteractorStyleRubberBandZoom):
 
     def __init__(self, viewer):
         self.viewer = viewer
-        self.viewer.interactor.Bind(wx.EVT_LEFT_DCLICK, self.ResetCamera)
+        self._zoomsl_left_dblclick_filter = _DoubleClickFilter(Qt.LeftButton, self.ResetCamera)
+        self.viewer.interactor.installEventFilter(self._zoomsl_left_dblclick_filter)
 
         self.state_code = const.STATE_ZOOM_SL
 
@@ -324,7 +345,7 @@ class ZoomSLInteractorStyle(vtkInteractorStyleRubberBandZoom):
         Publisher.sendMessage("Toggle toolbar item", _id=self.state_code, value=True)
 
     def CleanUp(self):
-        self.viewer.interactor.Unbind(wx.EVT_LEFT_DCLICK, handler=self.ResetCamera)
+        self.viewer.interactor.removeEventFilter(self._zoomsl_left_dblclick_filter)
         Publisher.sendMessage("Toggle toolbar item", _id=self.state_code, value=False)
 
     def ResetCamera(self, evt):
@@ -351,14 +372,15 @@ class PanMoveInteractorStyle(DefaultInteractorStyle):
         self.panning = False
 
         self.AddObserver("MouseMoveEvent", self.OnPanMove)
-        self.viewer.interactor.Bind(wx.EVT_LEFT_DCLICK, self.OnUnspan)
+        self._pan_left_dblclick_filter = _DoubleClickFilter(Qt.LeftButton, self.OnUnspan)
+        self.viewer.interactor.installEventFilter(self._pan_left_dblclick_filter)
 
     def SetUp(self):
         Publisher.sendMessage("Toggle toolbar item", _id=self.state_code, value=True)
 
     def CleanUp(self):
         super().CleanUp()
-        self.viewer.interactor.Unbind(wx.EVT_LEFT_DCLICK, handler=self.OnUnspan)
+        self.viewer.interactor.removeEventFilter(self._pan_left_dblclick_filter)
         Publisher.sendMessage("Toggle toolbar item", _id=self.state_code, value=False)
 
     def OnPressLeftButton(self, evt, obj):
@@ -730,7 +752,7 @@ class Mask3DEditorInteractorStyle(DefaultInteractorStyle):
     def _bind_events(self):
         ## Remove observers and bindings from super
         self.RemoveObservers("LeftButtonPressEvent")
-        self.viewer.interactor.Unbind(wx.EVT_LEFT_DCLICK, handler=self.SetCameraFocus)
+        self.viewer.interactor.removeEventFilter(self._left_dblclick_filter)
         ## Bind events for this style
         self.viewer.canvas.subscribe_event("LeftButtonPressEvent", self.OnInsertPolygonPoint)
         self.viewer.canvas.subscribe_event("LeftButtonDoubleClickEvent", self.OnInsertPolygon)
@@ -917,9 +939,9 @@ class Mask3DEditorInteractorStyle(DefaultInteractorStyle):
 
         # Get scale factor (necessary for Mac HighDPI displays where physical
         # mouse coords are scaled by 2x but viewer resolution is logical w,h)
-        import wx
-
-        scale = wx.GetApp().GetTopWindow().GetContentScaleFactor()
+        app = QApplication.instance()
+        top_window = app.activeWindow() if app else None
+        scale = top_window.devicePixelRatioF() if top_window else 1.0
 
         # polygon2mask((w, h), points_as_xy): treats (x, y) as (row, col) in a (w, h) array.
         # After the .T in CutMaskFromPolygons the result is (h, w) which the Rust code reads as

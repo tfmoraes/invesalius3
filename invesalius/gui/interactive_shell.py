@@ -17,10 +17,18 @@
 #    detalhes.
 # --------------------------------------------------------------------------
 
+import code
+import sys
 from typing import Any, Dict
 
-import wx
-import wx.py.shell
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont, QTextCursor
+from PySide6.QtWidgets import (
+    QMainWindow,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 import invesalius.constants as const
 import invesalius.session as ses
@@ -32,29 +40,117 @@ from invesalius.navigation.tracker import Tracker
 from invesalius.pubsub import pub as Publisher
 
 
-class InteractiveShellPanel(wx.Panel):
+class ShellTextEdit(QTextEdit):
+    """QTextEdit-based interactive Python console widget."""
+
+    def __init__(self, parent=None, locals_dict=None, intro_text=""):
+        super().__init__(parent)
+        self.setFont(QFont("Monospace", 10))
+        self.setAcceptRichText(False)
+
+        self._locals = locals_dict or {}
+        self.interp = code.InteractiveConsole(self._locals)
+        self._history = []
+        self._history_idx = 0
+        self._prompt = ">>> "
+        self._cont_prompt = "... "
+        self._current_prompt = self._prompt
+        self._partial_source = ""
+
+        if intro_text:
+            self.insertPlainText(intro_text + "\n")
+        self.insertPlainText(self._prompt)
+
+        self._redirect_stdout = _StdoutRedirector(self)
+
+    def keyPressEvent(self, event):
+        cursor = self.textCursor()
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            line = self._get_current_line()
+            self._history.append(line)
+            self._history_idx = len(self._history)
+            self.moveCursor(QTextCursor.End)
+            self.insertPlainText("\n")
+            self._execute(line)
+            return
+        elif event.key() == Qt.Key_Up:
+            if self._history_idx > 0:
+                self._history_idx -= 1
+                self._replace_current_line(self._history[self._history_idx])
+            return
+        elif event.key() == Qt.Key_Down:
+            if self._history_idx < len(self._history) - 1:
+                self._history_idx += 1
+                self._replace_current_line(self._history[self._history_idx])
+            else:
+                self._history_idx = len(self._history)
+                self._replace_current_line("")
+            return
+        elif event.key() == Qt.Key_Backspace:
+            if cursor.positionInBlock() <= len(self._current_prompt):
+                return
+        super().keyPressEvent(event)
+
+    def _get_current_line(self):
+        block = self.textCursor().block().text()
+        return block[len(self._current_prompt) :]
+
+    def _replace_current_line(self, text):
+        cursor = self.textCursor()
+        cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.MoveAnchor)
+        cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+        cursor.insertText(self._current_prompt + text)
+        self.setTextCursor(cursor)
+
+    def _execute(self, line):
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = self._redirect_stdout
+        sys.stderr = self._redirect_stdout
+        try:
+            source = self._partial_source + line
+            needs_more = self.interp.runsource(source, "<console>")
+            if needs_more:
+                self._partial_source = source + "\n"
+                self._current_prompt = self._cont_prompt
+            else:
+                self._partial_source = ""
+                self._current_prompt = self._prompt
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+        self.insertPlainText(self._current_prompt)
+        self.moveCursor(QTextCursor.End)
+
+
+class _StdoutRedirector:
+    def __init__(self, text_edit):
+        self._text_edit = text_edit
+
+    def write(self, text):
+        self._text_edit.moveCursor(QTextCursor.End)
+        self._text_edit.insertPlainText(text)
+
+    def flush(self):
+        pass
+
+
+class InteractiveShellPanel(QWidget):
     """
     Interactive Python shell panel for debugging and development.
     """
 
-    def __init__(self, parent: wx.Window, app_context: Dict[str, Any] = {}, introText: str = ""):
-        """
-        Initialize the shell panel.
-
-        Args:
-            parent: Parent window
-            app_context: Dictionary of objects to expose in shell namespace
-            introText: Introductory text for the shell
-        """
+    def __init__(
+        self, parent: QWidget = None, app_context: Dict[str, Any] = {}, introText: str = ""
+    ):
         super().__init__(parent)
 
-        # Create shell widget
-        self.shell = wx.py.shell.Shell(self, locals=app_context, introText=introText)
+        self.shell = ShellTextEdit(self, locals_dict=app_context, intro_text=introText)
 
-        # Layout
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.shell, 1, wx.EXPAND)
-        self.SetSizer(sizer)
+        sizer = QVBoxLayout(self)
+        sizer.setContentsMargins(0, 0, 0, 0)
+        sizer.addWidget(self.shell)
+        self.setLayout(sizer)
 
     def update_context(self, new_context):
         """Update the shell's local namespace with new objects."""
@@ -62,37 +158,21 @@ class InteractiveShellPanel(wx.Panel):
             self.shell.interp.locals.update(new_context)
 
 
-class InteractiveShellFrame(wx.Frame):
+class InteractiveShellFrame(QMainWindow):
     """
     Standalone frame for the interactive shell.
     """
 
-    def __init__(self, parent: wx.Window, app_context: Dict[str, Any] = {}, introText: str = ""):
-        """
-        Initialize the shell frame.
+    def __init__(
+        self, parent: QWidget = None, app_context: Dict[str, Any] = {}, introText: str = ""
+    ):
+        super().__init__(parent)
+        self.setWindowTitle(_("InVesalius Interactive Python Shell"))
+        self.resize(800, 600)
+        self.setWindowFlags(self.windowFlags() | Qt.Tool)
 
-        Args:
-            parent: Parent window
-            app_context: Dictionary of objects to expose in shell namespace
-            introText: Introductory text for the shell
-        """
-        super().__init__(
-            parent,
-            title=_("InVesalius Interactive Python Shell"),
-            size=(800, 600),
-            style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT,
-        )
-
-        # Create shell panel
         self.shell_panel = InteractiveShellPanel(self, app_context, introText)
-
-        # Layout
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.shell_panel, 1, wx.EXPAND)
-        self.SetSizer(sizer)
-
-        # Center on parent
-        self.CenterOnParent()
+        self.setCentralWidget(self.shell_panel)
 
         Publisher.subscribe(self.update_context, "Update shell context")
         Publisher.subscribe(
@@ -100,11 +180,7 @@ class InteractiveShellFrame(wx.Frame):
         )
 
     def update_context(self, new_context: dict):
-        """Update the shell's context.
-
-        Args:
-            new_context: Dictionary of new objects to add to the shell context
-        """
+        """Update the shell's context."""
         self.shell_panel.update_context(new_context)
 
     def add_navigation_context(self):

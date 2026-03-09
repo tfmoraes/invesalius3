@@ -21,7 +21,18 @@ import collections
 import os
 import sys
 
-import wx
+from PySide6.QtCore import QEvent, Qt, QTimer
+from PySide6.QtGui import QCursor
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QScrollBar,
+    QVBoxLayout,
+    QWidget,
+)
+from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from vtkmodules.vtkFiltersGeneral import vtkCursor3D
 from vtkmodules.vtkFiltersHybrid import vtkRenderLargeImage
 from vtkmodules.vtkInteractionStyle import vtkInteractorStyleImage
@@ -43,7 +54,6 @@ from vtkmodules.vtkRenderingCore import (
     vtkWindowToImageFilter,
     vtkWorldPointPicker,
 )
-from vtkmodules.wx.wxVTKRenderWindowInteractor import wxVTKRenderWindowInteractor
 
 import invesalius.constants as const
 import invesalius.data.cursor_actors as ca
@@ -74,6 +84,9 @@ else:
 ID_TO_TOOL_ITEM = {}
 STR_WL = "WL: %d  WW: %d"
 
+# Matches wx.FONTSIZE_LARGE for compatibility with canvas rendering in vtk_utils
+FONTSIZE_LARGE = 1
+
 ORIENTATIONS = {
     "AXIAL": const.AXIAL,
     "CORONAL": const.CORONAL,
@@ -81,15 +94,13 @@ ORIENTATIONS = {
 }
 
 
-class ContourMIPConfig(wx.Panel):
+class ContourMIPConfig(QWidget):
     def __init__(self, prnt, orientation):
-        wx.Panel.__init__(self, prnt)
+        super().__init__(prnt)
         self.mip_size_spin = InvSpinCtrl(
             self, -1, value=const.PROJECTION_MIP_SIZE, min_value=1, max_value=240
         )
-        self.mip_size_spin.SetToolTip(
-            wx.ToolTip(_("Number of slices used to compound the visualization."))
-        )
+        self.mip_size_spin.setToolTip(_("Number of slices used to compound the visualization."))
         self.mip_size_spin.CalcSizeFromTextSize("MMM")
 
         self.border_spin = InvFloatSpinCtrl(
@@ -101,101 +112,80 @@ class ContourMIPConfig(wx.Panel):
             value=const.PROJECTION_BORDER_SIZE,
             digits=1,
         )
-        self.border_spin.SetToolTip(
-            wx.ToolTip(
-                _(
-                    "Controls the sharpness of the"
-                    " contour. The greater the"
-                    " value, the sharper the"
-                    " contour."
-                )
+        self.border_spin.setToolTip(
+            _(
+                "Controls the sharpness of the"
+                " contour. The greater the"
+                " value, the sharper the"
+                " contour."
             )
         )
         self.border_spin.CalcSizeFromTextSize()
-        #  w, h = self.border_spin.GetTextExtent('M')
-        #  self.border_spin.SetMinSize((5 * w + 10, -1))
-        #  self.border_spin.SetMaxSize((5 * w + 10, -1))
 
-        self.inverted = wx.CheckBox(self, -1, _("Inverted order"))
-        self.inverted.SetToolTip(
-            wx.ToolTip(
-                _(
-                    "If checked, the slices are"
-                    " traversed in descending"
-                    " order to compound the"
-                    " visualization instead of"
-                    " ascending order."
-                )
+        self.inverted = QCheckBox(_("Inverted order"), self)
+        self.inverted.setToolTip(
+            _(
+                "If checked, the slices are"
+                " traversed in descending"
+                " order to compound the"
+                " visualization instead of"
+                " ascending order."
             )
         )
 
-        txt_mip_size = wx.StaticText(
-            self, -1, _("Number of slices"), style=wx.ALIGN_CENTER_HORIZONTAL
-        )
-        self.txt_mip_border = wx.StaticText(self, -1, _("Sharpness"))
+        txt_mip_size = QLabel(_("Number of slices"), self)
+        self.txt_mip_border = QLabel(_("Sharpness"), self)
 
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(txt_mip_size, 0, wx.ALIGN_CENTER_VERTICAL | wx.ALL, 2)
-        sizer.Add(self.mip_size_spin, 0)
-        try:
-            sizer.Add(10, 0)
-        except TypeError:
-            sizer.Add((10, 0))
-        sizer.Add(self.txt_mip_border, 0, wx.ALIGN_CENTER_VERTICAL | wx.ALL, 2)
-        sizer.Add(self.border_spin, 0, wx.EXPAND)
-        try:
-            sizer.Add(10, 0)
-        except TypeError:
-            sizer.Add((10, 0))
-        sizer.Add(self.inverted, 0, wx.EXPAND)
-        self.SetSizer(sizer)
-        sizer.Fit(self)
-
-        self.Layout()
-        self.Update()
-        self.SetAutoLayout(1)
+        sizer = QHBoxLayout()
+        sizer.setContentsMargins(2, 2, 2, 2)
+        sizer.addWidget(txt_mip_size)
+        sizer.addWidget(self.mip_size_spin)
+        sizer.addSpacing(10)
+        sizer.addWidget(self.txt_mip_border)
+        sizer.addWidget(self.border_spin)
+        sizer.addSpacing(10)
+        sizer.addWidget(self.inverted)
+        self.setLayout(sizer)
 
         self.orientation = orientation
         self.canvas = None
 
-        self.mip_size_spin.Bind(wx.EVT_SPINCTRL, self.OnSetMIPSize)
-        self.border_spin.Bind(wx.EVT_SPINCTRL, self.OnSetMIPBorder)
-        self.inverted.Bind(wx.EVT_CHECKBOX, self.OnCheckInverted)
+        self.mip_size_spin.valueChanged.connect(self.OnSetMIPSize)
+        self.border_spin.valueChanged.connect(self.OnSetMIPBorder)
+        self.inverted.stateChanged.connect(self.OnCheckInverted)
 
         Publisher.subscribe(self._set_projection_type, "Set projection type")
 
-    def OnSetMIPSize(self, number_slices):
+    def OnSetMIPSize(self):
         val = self.mip_size_spin.GetValue()
         Publisher.sendMessage(f"Set MIP size {self.orientation}", number_slices=val)
 
-    def OnSetMIPBorder(self, evt):
+    def OnSetMIPBorder(self):
         val = self.border_spin.GetValue()
         Publisher.sendMessage(f"Set MIP border {self.orientation}", border_size=val)
 
-    def OnCheckInverted(self, evt):
-        val = self.inverted.GetValue()
+    def OnCheckInverted(self):
+        val = self.inverted.isChecked()
         Publisher.sendMessage(f"Set MIP Invert {self.orientation}", invert=val)
 
     def _set_projection_type(self, projection_id):
         if projection_id in (const.PROJECTION_MIDA, const.PROJECTION_CONTOUR_MIDA):
-            self.inverted.Enable()
+            self.inverted.setEnabled(True)
         else:
-            self.inverted.Disable()
+            self.inverted.setEnabled(False)
 
         if projection_id in (const.PROJECTION_CONTOUR_MIP, const.PROJECTION_CONTOUR_MIDA):
-            self.border_spin.Enable()
-            self.txt_mip_border.Enable()
+            self.border_spin.setEnabled(True)
+            self.txt_mip_border.setEnabled(True)
         else:
-            self.border_spin.Disable()
-            self.txt_mip_border.Disable()
+            self.border_spin.setEnabled(False)
+            self.txt_mip_border.setEnabled(False)
 
 
-class Viewer(wx.Panel):
+class Viewer(QWidget):
     def __init__(self, prnt, orientation="AXIAL"):
-        wx.Panel.__init__(self, prnt, size=wx.Size(320, 300))
-
-        # colour = [255*c for c in const.ORIENTATION_COLOUR[orientation]]
-        # self.SetBackgroundColour(colour)
+        super().__init__(prnt)
+        self.resize(320, 300)
 
         # Interactor additional style
 
@@ -255,37 +245,37 @@ class Viewer(wx.Panel):
         self._flush_buffer = False
 
     def __init_gui(self):
-        self.interactor = wxVTKRenderWindowInteractor(self, -1, size=self.GetSize())
-        self.interactor.SetRenderWhenDisabled(True)
+        self.interactor = QVTKRenderWindowInteractor(self)
+        if hasattr(self.interactor, "SetRenderWhenDisabled"):
+            self.interactor.SetRenderWhenDisabled(True)
 
-        scroll = wx.ScrollBar(self, -1, style=wx.SB_VERTICAL)
-        self.scroll = scroll
+        self.scroll = QScrollBar(Qt.Vertical, self)
 
         self.mip_ctrls = ContourMIPConfig(self, self.orientation)
-        self.mip_ctrls.Hide()
+        self.mip_ctrls.hide()
 
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self.interactor, 1, wx.EXPAND)
-        sizer.Add(scroll, 0, wx.EXPAND | wx.GROW)
+        h_sizer = QHBoxLayout()
+        h_sizer.setContentsMargins(0, 0, 0, 0)
+        h_sizer.setSpacing(0)
+        h_sizer.addWidget(self.interactor, 1)
+        h_sizer.addWidget(self.scroll, 0)
 
-        background_sizer = wx.BoxSizer(wx.VERTICAL)
-        background_sizer.Add(sizer, 1, wx.EXPAND)
-        # background_sizer.Add(self.mip_ctrls, 0, wx.EXPAND|wx.GROW|wx.ALL, 2)
-        self.SetSizer(background_sizer)
-        background_sizer.Fit(self)
-
-        self.Layout()
-        self.Update()
-        self.SetAutoLayout(1)
+        self._bg_layout = QVBoxLayout()
+        self._bg_layout.setContentsMargins(0, 0, 0, 0)
+        self._bg_layout.setSpacing(0)
+        self._bg_layout.addLayout(h_sizer, 1)
+        self.setLayout(self._bg_layout)
 
         self.pick = vtkWorldPointPicker()
         self.interactor.SetPicker(self.pick)
 
-    def OnContextMenu(self, evt):
+    def GetContentScaleFactor(self):
+        return self.devicePixelRatioF()
+
+    def OnContextMenu(self):
         if self.last_position_mouse_move == self.interactor.GetLastEventPosition():
             self.menu.caller = self
-            self.PopupMenu(self.menu)
-        evt.Skip()
+            self.menu.exec(QCursor.pos())
 
     def SetPopupMenu(self, menu):
         self.menu = menu
@@ -365,10 +355,8 @@ class Viewer(wx.Panel):
         if not self.nav_status:
             self.UpdateRender()
 
-    def OnClutChange(self, evt):
-        Publisher.sendMessage(
-            "Change colour table from background image from widget", nodes=evt.GetNodes()
-        )
+    def OnClutChange(self, nodes):
+        Publisher.sendMessage("Change colour table from background image from widget", nodes=nodes)
         slc = sl.Slice()
         Publisher.sendMessage(
             "Update window level value", window=slc.window_width, level=slc.window_level
@@ -379,7 +367,6 @@ class Viewer(wx.Panel):
         if self.wl_text:
             self.wl_text.SetValue(value)
             self.canvas.modified = True
-            # self.interactor.Render()
 
     def EnableText(self):
         if not (self.wl_text):
@@ -389,7 +376,7 @@ class Viewer(wx.Panel):
             # Window & Level text
             self.wl_text = vtku.TextZero()
             self.wl_text.SetPosition(const.TEXT_POS_LEFT_UP)
-            self.wl_text.SetSymbolicSize(wx.FONTSIZE_LARGE)
+            self.wl_text.SetSymbolicSize(FONTSIZE_LARGE)
             self.SetWLText(proj.level, proj.window)
 
             # Orientation text
@@ -406,7 +393,7 @@ class Viewer(wx.Panel):
             left_text.SetPosition(const.TEXT_POS_VCENTRE_LEFT)
             left_text.SetVerticalJustificationToCentered()
             left_text.SetValue(values[0])
-            left_text.SetSymbolicSize(wx.FONTSIZE_LARGE)
+            left_text.SetSymbolicSize(FONTSIZE_LARGE)
 
             right_text = self.right_text = vtku.TextZero()
             right_text.ShadowOff()
@@ -415,7 +402,7 @@ class Viewer(wx.Panel):
             right_text.SetVerticalJustificationToCentered()
             right_text.SetJustificationToRight()
             right_text.SetValue(values[1])
-            right_text.SetSymbolicSize(wx.FONTSIZE_LARGE)
+            right_text.SetSymbolicSize(FONTSIZE_LARGE)
 
             up_text = self.up_text = vtku.TextZero()
             up_text.ShadowOff()
@@ -423,7 +410,7 @@ class Viewer(wx.Panel):
             up_text.SetPosition(const.TEXT_POS_HCENTRE_UP)
             up_text.SetJustificationToCentered()
             up_text.SetValue(values[2])
-            up_text.SetSymbolicSize(wx.FONTSIZE_LARGE)
+            up_text.SetSymbolicSize(FONTSIZE_LARGE)
 
             down_text = self.down_text = vtku.TextZero()
             down_text.ShadowOff()
@@ -432,7 +419,7 @@ class Viewer(wx.Panel):
             down_text.SetJustificationToCentered()
             down_text.SetVerticalJustificationToBottom()
             down_text.SetValue(values[3])
-            down_text.SetSymbolicSize(wx.FONTSIZE_LARGE)
+            down_text.SetSymbolicSize(FONTSIZE_LARGE)
 
             self.orientation_texts = [left_text, right_text, up_text, down_text]
 
@@ -578,7 +565,6 @@ class Viewer(wx.Panel):
         vtk 5.4.3
         """
         ren = slice_data.renderer
-        # size = ren.GetSize()
 
         ren.ResetCamera()
         ren.GetActiveCamera().Zoom(1.0)
@@ -602,15 +588,6 @@ class Viewer(wx.Panel):
         # Get point from base change
         px, py = self.get_slice_pixel_coord_by_world_pos(*position)
         coord = self.calcultate_scroll_position(px, py)
-        # Debugging coordinates. For a 1.0 spacing axis the coord and position is the same,
-        # but for a spacing dimension =! 1, the coord and position are different
-        # print("\nPosition: {}".format(position))
-        # print("Scroll position: {}".format(coord))
-        # print("Slice actor bounds: {}".format(self.slice_data.actor.GetBounds()))
-        # print("Scroll from int of position: {}\n".format([round(s) for s in position]))
-
-        # this call did not affect the working code
-        # self.cross.SetFocalPoint(coord)
 
         # update the image slices in all three orientations
         self.ScrollSlice(coord)
@@ -626,19 +603,42 @@ class Viewer(wx.Panel):
 
     def ScrollSlice(self, coord):
         if self.orientation == "AXIAL":
-            wx.CallAfter(Publisher.sendMessage, ("Set scroll position", "SAGITAL"), index=coord[0])
-            wx.CallAfter(Publisher.sendMessage, ("Set scroll position", "CORONAL"), index=coord[1])
+            QTimer.singleShot(
+                0,
+                lambda c=coord[0]: Publisher.sendMessage(
+                    ("Set scroll position", "SAGITAL"), index=c
+                ),
+            )
+            QTimer.singleShot(
+                0,
+                lambda c=coord[1]: Publisher.sendMessage(
+                    ("Set scroll position", "CORONAL"), index=c
+                ),
+            )
         elif self.orientation == "SAGITAL":
-            wx.CallAfter(Publisher.sendMessage, ("Set scroll position", "AXIAL"), index=coord[2])
-            wx.CallAfter(Publisher.sendMessage, ("Set scroll position", "CORONAL"), index=coord[1])
+            QTimer.singleShot(
+                0,
+                lambda c=coord[2]: Publisher.sendMessage(("Set scroll position", "AXIAL"), index=c),
+            )
+            QTimer.singleShot(
+                0,
+                lambda c=coord[1]: Publisher.sendMessage(
+                    ("Set scroll position", "CORONAL"), index=c
+                ),
+            )
         elif self.orientation == "CORONAL":
-            wx.CallAfter(Publisher.sendMessage, ("Set scroll position", "AXIAL"), index=coord[2])
-            wx.CallAfter(Publisher.sendMessage, ("Set scroll position", "SAGITAL"), index=coord[0])
+            QTimer.singleShot(
+                0,
+                lambda c=coord[2]: Publisher.sendMessage(("Set scroll position", "AXIAL"), index=c),
+            )
+            QTimer.singleShot(
+                0,
+                lambda c=coord[0]: Publisher.sendMessage(
+                    ("Set scroll position", "SAGITAL"), index=c
+                ),
+            )
 
     def get_slice_data(self, render):
-        # for slice_data in self.slice_data_list:
-        # if slice_data.renderer is render:
-        # return slice_data
         # WARN: Return the only slice_data used in this slice_viewer.
         return self.slice_data
 
@@ -692,21 +692,22 @@ class Viewer(wx.Panel):
 
     def get_vtk_mouse_position(self):
         """
-        Get Mouse position inside a wxVTKRenderWindowInteractorself. Return a
+        Get Mouse position inside the VTK render window interactor. Return a
         tuple with X and Y position.
         Please use this instead of using iren.GetEventPosition because it's
         not returning the correct values on Mac with HighDPI display, maybe
-        the same is happing with Windows and Linux, we need to test.
+        the same is happening with Windows and Linux, we need to test.
         """
-        mposx, mposy = wx.GetMousePosition()
-        cposx, cposy = self.interactor.ScreenToClient((mposx, mposy))
-        mx, my = cposx, self.interactor.GetSize()[1] - cposy
+        global_pos = QCursor.pos()
+        local_pos = self.interactor.mapFromGlobal(global_pos)
+        cposx, cposy = local_pos.x(), local_pos.y()
+        mx, my = cposx, self.interactor.height() - cposy
         if sys.platform == "darwin":
-            # It's needed to mutiple by scale factor in HighDPI because of
-            # https://docs.wxpython.org/wx.glcanvas.GLCanvas.html
+            # It's needed to multiply by scale factor in HighDPI because of
+            # https://doc.qt.io/qt-6/highdpi.html
             # For now we are doing this only on Mac but it may be needed on
             # Windows and Linux too.
-            scale = self.interactor.GetContentScaleFactor()
+            scale = self.interactor.devicePixelRatio()
             mx *= scale
             my *= scale
         return int(mx), int(my)
@@ -866,7 +867,6 @@ class Viewer(wx.Panel):
             picker = self.pick
 
         slice_data = self.slice_data
-        # renderer = slice_data.renderer
 
         coord = self.get_coordinate_cursor(picker)
         position = slice_data.actor.GetInput().FindPoint(coord)
@@ -884,15 +884,8 @@ class Viewer(wx.Panel):
         Publisher.subscribe(self.UpdateCanvas, "Redraw canvas")
         Publisher.subscribe(self.UpdateCanvas, f"Redraw canvas {self.orientation}")
         Publisher.subscribe(self.ChangeSliceNumber, ("Set scroll position", self.orientation))
-        # Publisher.subscribe(self.__update_cross_position,
-        #                     'Update cross position')
-        # Publisher.subscribe(self.__update_cross_position,
-        #                     'Update cross position %s' % self.orientation)
         Publisher.subscribe(self.SetCrossFocalPoint, "Set cross focal point")
         Publisher.subscribe(self.UpdateSlicesPosition, "Update slices position")
-        ###
-        #  Publisher.subscribe(self.ChangeBrushColour,
-        #  'Add mask')
 
         Publisher.subscribe(self.UpdateWindowLevelValue, "Update window level value")
 
@@ -942,26 +935,26 @@ class Viewer(wx.Panel):
         Publisher.subscribe(self.OnNavigationStatus, "Navigation status")
 
     def RefreshViewer(self):
-        self.Refresh()
+        self.update()
 
     def SetDefaultCursor(self):
-        self.interactor.SetCursor(wx.Cursor(wx.CURSOR_DEFAULT))
+        self.interactor.setCursor(QCursor(Qt.ArrowCursor))
 
     def SetSizeNSCursor(self):
-        self.interactor.SetCursor(wx.Cursor(wx.CURSOR_SIZENS))
+        self.interactor.setCursor(QCursor(Qt.SizeVerCursor))
 
     def SetSizeWECursor(self):
-        self.interactor.SetCursor(wx.Cursor(wx.CURSOR_SIZEWE))
+        self.interactor.setCursor(QCursor(Qt.SizeHorCursor))
 
     def SetSizeNWSECursor(self):
         if sys.platform.startswith("linux"):
-            self.interactor.SetCursor(wx.Cursor(wx.CURSOR_SIZENWSE))
+            self.interactor.setCursor(QCursor(Qt.SizeFDiagCursor))
         else:
-            self.interactor.SetCursor(wx.Cursor(wx.CURSOR_SIZING))
+            self.interactor.setCursor(QCursor(Qt.SizeAllCursor))
 
     def SetFocus(self):
         Publisher.sendMessage("Set viewer orientation focus", orientation=self.orientation)
-        super().SetFocus()
+        super().setFocus()
 
     def OnExportPicture(self, orientation, filename, filetype):
         dict = {"AXIAL": const.AXIAL, "CORONAL": const.CORONAL, "SAGITAL": const.SAGITAL}
@@ -1018,8 +1011,10 @@ class Viewer(wx.Panel):
                 writer.Write()
 
             if not os.path.exists(filename):
-                wx.MessageBox(
-                    _("InVesalius was not able to export this picture"), _("Export picture error")
+                QMessageBox.warning(
+                    self,
+                    _("Export picture error"),
+                    _("InVesalius was not able to export this picture"),
                 )
 
             for actor in view_prop_list:
@@ -1074,11 +1069,25 @@ class Viewer(wx.Panel):
         self.nav_status = nav_status
 
     def __bind_events_wx(self):
-        self.scroll.Bind(wx.EVT_SCROLL, self.OnScrollBar)
-        self.scroll.Bind(wx.EVT_SCROLL_THUMBTRACK, self.OnScrollBarRelease)
-        # self.scroll.Bind(wx.EVT_SCROLL_ENDSCROLL, self.OnScrollBarRelease)
-        self.interactor.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
-        self.interactor.Bind(wx.EVT_RIGHT_UP, self.OnContextMenu)
+        self.scroll.valueChanged.connect(self._onScrollBarSignal)
+        self.interactor.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if obj is self.interactor:
+            event_type = event.type()
+            if event_type == QEvent.KeyPress:
+                consumed = self.OnKeyDown(event)
+                if consumed:
+                    return True
+            elif event_type == QEvent.MouseButtonRelease:
+                if event.button() == Qt.RightButton:
+                    self.OnContextMenu()
+        return super().eventFilter(obj, event)
+
+    def _onScrollBarSignal(self, value):
+        self.OnScrollBar()
+        if self._flush_buffer:
+            self.slice_.apply_slice_buffer_to_mask(self.orientation)
 
     def LoadImagedata(self, mask_dict):
         self.SetInput(mask_dict)
@@ -1119,7 +1128,6 @@ class Viewer(wx.Panel):
                 x, y = const.TEXT_POS_LEFT_DOWN
                 slice_data.text.SetPosition((x + slice_xi, y + slice_yi))
                 slice_data.SetCursor(self.__create_cursor())
-                # slice_data.SetSize((w, h))
                 self.__update_camera(slice_data)
 
                 style = 0
@@ -1133,24 +1141,28 @@ class Viewer(wx.Panel):
                 if i == self.layout[0] - 1:
                     style = style | sd.BORDER_RIGHT
 
-                # slice_data.SetBorderStyle(style)
                 n += 1
 
     def __create_cursor(self):
         cursor = ca.CursorCircle()
         cursor.SetOrientation(self.orientation)
-        # self.__update_cursor_position([i for i in actor_bound[1::2]])
         cursor.SetColour(self._brush_cursor_colour)
         cursor.SetSpacing(self.slice_.spacing)
         cursor.Show(0)
         self.cursor_ = cursor
         return cursor
 
+    def _set_scroll_value(self, value):
+        """Set scroll value programmatically without triggering the signal handler."""
+        self.scroll.blockSignals(True)
+        self.scroll.setValue(value)
+        self.scroll.blockSignals(False)
+
     def SetInput(self, mask_dict):
         self.slice_ = sl.Slice()
 
         max_slice_number = sl.Slice().GetNumberOfSlices(self.orientation)
-        self.scroll.SetScrollbar(wx.SB_VERTICAL, 1, max_slice_number, max_slice_number)
+        self.scroll.setRange(0, max_slice_number - 1)
 
         self.slice_data = self.create_slice_window()
         self.slice_data.SetCursor(self.__create_cursor())
@@ -1192,7 +1204,6 @@ class Viewer(wx.Panel):
 
         cross_mapper = vtkPolyDataMapper()
         cross_mapper.SetInputConnection(cross.GetOutputPort())
-        # cross_mapper.SetTransformCoordinate(c)
 
         p = vtkProperty()
         p.SetColor(1, 0, 0)
@@ -1206,10 +1217,6 @@ class Viewer(wx.Panel):
         self.cross_actor = cross_actor
 
         renderer.AddActor(cross_actor)
-
-    # def __update_cross_position(self, arg, position):
-    #     # self.cross.SetFocalPoint(position[:3])
-    #     self.UpdateSlicesPosition(None, position)
 
     def set_cross_visibility(self, visibility):
         self.cross_actor.SetVisibility(visibility)
@@ -1246,8 +1253,6 @@ class Viewer(wx.Panel):
 
         actor = vtkImageActor()
         self.slice_actor = actor
-        # TODO: Create a option to let the user set if he wants to interpolate
-        # the slice images.
 
         session = ses.Session()
         if session.GetConfig("slice_interpolation"):
@@ -1261,10 +1266,7 @@ class Viewer(wx.Panel):
         slice_data.canvas_renderer = canvas_renderer
         slice_data.overlay_renderer = overlay_renderer
         slice_data.actor = actor
-        # slice_data.SetBorderStyle(sd.BORDER_ALL)
         renderer.AddActor(actor)
-        #  renderer.AddActor(slice_data.text.actor)
-        # renderer.AddViewProp(slice_data.box_actor)
 
         return slice_data
 
@@ -1289,15 +1291,12 @@ class Viewer(wx.Panel):
                 self.UpdateRender()
 
     def __update_camera(self):
-        # orientation = self.orientation
         proj = project.Project()
         orig_orien = proj.original_orientation
 
         self.cam.SetFocalPoint(0, 0, 0)
         self.cam.SetViewUp(const.SLICE_POSITION[orig_orien][0][self.orientation])
         self.cam.SetPosition(const.SLICE_POSITION[orig_orien][1][self.orientation])
-        # self.cam.ComputeViewPlaneNormal()
-        # self.cam.OrthogonalizeViewUp()
         self.cam.ParallelProjectionOn()
 
     def __update_display_extent(self, image):
@@ -1345,7 +1344,7 @@ class Viewer(wx.Panel):
         max_slice_number = actor.GetSliceNumberMax() / number_of_slices
         if actor.GetSliceNumberMax() % number_of_slices:
             max_slice_number += 1
-        self.scroll.SetScrollbar(wx.SB_VERTICAL, 1, max_slice_number, max_slice_number)
+        self.scroll.setRange(0, int(max_slice_number) - 1)
         self.set_scroll_position(0)
 
     @property
@@ -1360,12 +1359,11 @@ class Viewer(wx.Panel):
             buffer_.discard_buffer()
 
     def set_scroll_position(self, position):
-        self.scroll.SetThumbPosition(position)
+        self._set_scroll_value(position)
         self.OnScrollBar()
 
     def UpdateSlice3D(self, pos):
-        # original_orientation = project.Project().original_orientation
-        pos = self.scroll.GetThumbPosition()
+        pos = self.scroll.value()
         Publisher.sendMessage(
             "Change slice from slice plane", orientation=self.orientation, index=pos
         )
@@ -1405,7 +1403,7 @@ class Viewer(wx.Panel):
             pass
 
     def OnScrollBar(self, evt=None, update3D=True):
-        pos = self.scroll.GetThumbPosition()
+        pos = self.scroll.value()
         self.set_slice_number(pos)
         if update3D:
             self.UpdateSlice3D(pos)
@@ -1423,46 +1421,46 @@ class Viewer(wx.Panel):
 
         self.UpdateStatusbarInfo()
 
-        if evt:
-            if self._flush_buffer:
-                self.slice_.apply_slice_buffer_to_mask(self.orientation)
-            evt.Skip()
-
     def OnScrollBarRelease(self, evt):
-        # pos = self.scroll.GetThumbPosition()
-        evt.Skip()
+        pass
 
-    def OnKeyDown(self, evt=None, obj=None):
-        pos = self.scroll.GetThumbPosition()
+    def OnKeyDown(self, event=None, obj=None):
+        if event is None:
+            return False
+
+        pos = self.scroll.value()
         skip = True
 
-        min = 0
-        max = self.slice_.GetMaxSliceNumber(self.orientation)
+        min_val = 0
+        max_val = self.slice_.GetMaxSliceNumber(self.orientation)
+
+        key = event.key()
+        is_numpad = bool(event.modifiers() & Qt.KeypadModifier)
 
         projections = {
-            wx.WXK_NUMPAD0: const.PROJECTION_NORMAL,
-            wx.WXK_NUMPAD1: const.PROJECTION_MaxIP,
-            wx.WXK_NUMPAD2: const.PROJECTION_MinIP,
-            wx.WXK_NUMPAD3: const.PROJECTION_MeanIP,
-            wx.WXK_NUMPAD4: const.PROJECTION_MIDA,
-            wx.WXK_NUMPAD5: const.PROJECTION_CONTOUR_MIP,
-            wx.WXK_NUMPAD6: const.PROJECTION_CONTOUR_MIDA,
+            Qt.Key_0: const.PROJECTION_NORMAL,
+            Qt.Key_1: const.PROJECTION_MaxIP,
+            Qt.Key_2: const.PROJECTION_MinIP,
+            Qt.Key_3: const.PROJECTION_MeanIP,
+            Qt.Key_4: const.PROJECTION_MIDA,
+            Qt.Key_5: const.PROJECTION_CONTOUR_MIP,
+            Qt.Key_6: const.PROJECTION_CONTOUR_MIDA,
         }
 
         if self._flush_buffer:
             self.slice_.apply_slice_buffer_to_mask(self.orientation)
 
-        if evt.GetKeyCode() == wx.WXK_UP and pos > min:
+        if key == Qt.Key_Up and pos > min_val:
             self.OnScrollForward()
             self.OnScrollBar()
             skip = False
 
-        elif evt.GetKeyCode() == wx.WXK_DOWN and pos < max:
+        elif key == Qt.Key_Down and pos < max_val:
             self.OnScrollBackward()
             self.OnScrollBar()
             skip = False
 
-        elif evt.GetKeyCode() == wx.WXK_NUMPAD_ADD:
+        elif key == Qt.Key_Plus and is_numpad:
             actual_value = self.mip_ctrls.mip_size_spin.GetValue()
             self.mip_ctrls.mip_size_spin.SetValue(actual_value + 1)
             if self.mip_ctrls.mip_size_spin.GetValue() != actual_value:
@@ -1470,7 +1468,7 @@ class Viewer(wx.Panel):
                 self.ReloadActualSlice()
             skip = False
 
-        elif evt.GetKeyCode() == wx.WXK_NUMPAD_SUBTRACT:
+        elif key == Qt.Key_Minus and is_numpad:
             actual_value = self.mip_ctrls.mip_size_spin.GetValue()
             self.mip_ctrls.mip_size_spin.SetValue(actual_value - 1)
             if self.mip_ctrls.mip_size_spin.GetValue() != actual_value:
@@ -1478,11 +1476,9 @@ class Viewer(wx.Panel):
                 self.ReloadActualSlice()
             skip = False
 
-        elif evt.GetKeyCode() in projections:
-            self.slice_.SetTypeProjection(projections[evt.GetKeyCode()])
-            Publisher.sendMessage(
-                "Set projection type", projection_id=projections[evt.GetKeyCode()]
-            )
+        elif key in projections and is_numpad:
+            self.slice_.SetTypeProjection(projections[key])
+            Publisher.sendMessage("Set projection type", projection_id=projections[key])
             Publisher.sendMessage("Reload actual slice")
             skip = False
 
@@ -1490,33 +1486,32 @@ class Viewer(wx.Panel):
         if not self.nav_status:
             self.UpdateRender()
 
-        if evt and skip:
-            evt.Skip()
+        return not skip
 
     def OnScrollForward(self, evt=None, obj=None):
         if not self.scroll_enabled:
             return
-        pos = self.scroll.GetThumbPosition()
-        min = 0
+        pos = self.scroll.value()
+        min_val = 0
 
-        if pos > min:
+        if pos > min_val:
             if self._flush_buffer:
                 self.slice_.apply_slice_buffer_to_mask(self.orientation)
             pos = pos - 1
-            self.scroll.SetThumbPosition(pos)
+            self._set_scroll_value(pos)
             self.OnScrollBar()
 
     def OnScrollBackward(self, evt=None, obj=None):
         if not self.scroll_enabled:
             return
-        pos = self.scroll.GetThumbPosition()
-        max = self.slice_.GetMaxSliceNumber(self.orientation)
+        pos = self.scroll.value()
+        max_val = self.slice_.GetMaxSliceNumber(self.orientation)
 
-        if pos < max:
+        if pos < max_val:
             if self._flush_buffer:
                 self.slice_.apply_slice_buffer_to_mask(self.orientation)
             pos = pos + 1
-            self.scroll.SetThumbPosition(pos)
+            self._set_scroll_value(pos)
             self.OnScrollBar()
 
     def OnSetMIPSize(self, number_slices):
@@ -1537,14 +1532,12 @@ class Viewer(wx.Panel):
 
     def OnShowMIPInterface(self, flag):
         if flag:
-            if not self.mip_ctrls.Shown:
-                self.mip_ctrls.Show()
-                self.GetSizer().Add(self.mip_ctrls, 0, wx.EXPAND | wx.GROW | wx.ALL, 2)
-                self.Layout()
+            if not self.mip_ctrls.isVisible():
+                self.mip_ctrls.show()
+                self._bg_layout.addWidget(self.mip_ctrls)
         else:
-            self.mip_ctrls.Hide()
-            self.GetSizer().Detach(self.mip_ctrls)
-            self.Layout()
+            self.mip_ctrls.hide()
+            self._bg_layout.removeWidget(self.mip_ctrls)
 
     def OnSetOverwriteMask(self, flag):
         self.overwrite_mask = flag
@@ -1553,7 +1546,7 @@ class Viewer(wx.Panel):
         max_slice_number = sl.Slice().GetNumberOfSlices(self.orientation)
         index = max(index, 0)
         index = min(index, max_slice_number - 1)
-        inverted = self.mip_ctrls.inverted.GetValue()
+        inverted = self.mip_ctrls.inverted.isChecked()
         border_size = self.mip_ctrls.border_spin.GetValue()
         try:
             image = self.slice_.GetSlices(
@@ -1567,16 +1560,6 @@ class Viewer(wx.Panel):
         for actor in self.actors_by_slice_number[index]:
             self.slice_data.renderer.AddActor(actor)
 
-        #  for (m, mr) in self.measures.get(self.orientation, self.slice_data.number):
-        #  try:
-        #  self.canvas.draw_list.remove(mr)
-        #  except ValueError:
-        #  pass
-
-        #  for (m, mr) in self.measures.get(self.orientation, index):
-        #  if m.visible:
-        #  self.canvas.draw_list.append(mr)
-
         if self.slice_._type_projection == const.PROJECTION_NORMAL:
             self.slice_data.SetNumber(index)
         else:
@@ -1588,21 +1571,21 @@ class Viewer(wx.Panel):
         self._update_draw_list()
 
     def ChangeSliceNumber(self, index):
-        self.scroll.SetThumbPosition(int(index))
-        pos = self.scroll.GetThumbPosition()
+        self._set_scroll_value(int(index))
+        pos = self.scroll.value()
         self.set_slice_number(pos)
         if not self.nav_status:
             self.UpdateRender()
 
     def ReloadActualSlice(self):
-        pos = self.scroll.GetThumbPosition()
+        pos = self.scroll.value()
         self.set_slice_number(pos)
         if not self.nav_status:
             self.UpdateRender()
 
     def OnUpdateScroll(self):
         max_slice_number = sl.Slice().GetNumberOfSlices(self.orientation)
-        self.scroll.SetScrollbar(wx.SB_VERTICAL, 1, max_slice_number, max_slice_number)
+        self.scroll.setRange(0, max_slice_number - 1)
 
     def OnSwapVolumeAxes(self, axes):
         # Adjusting cursor spacing to match the spacing from the actual slice
@@ -1636,13 +1619,7 @@ class Viewer(wx.Panel):
 
     def AddActors(self, actors, slice_number):
         "Inserting actors"
-        pos = self.scroll.GetThumbPosition()
-        # try:
-        # renderer = self.renderers_by_slice_number[slice_number]
-        # for actor in actors:
-        # renderer.AddActor(actor)
-        # except KeyError:
-        # pass
+        pos = self.scroll.value()
         if pos == slice_number:
             for actor in actors:
                 self.slice_data.renderer.AddActor(actor)

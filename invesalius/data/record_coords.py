@@ -20,7 +20,6 @@
 import threading
 import time
 
-import wx
 from numpy import array, asarray, hstack, savetxt, vstack
 
 import invesalius.gui.dialogs as dlg
@@ -56,7 +55,6 @@ class Record(threading.Thread):
         filename = dlg.ShowLoadSaveDialog(
             message=_("Save coords as..."),
             wildcard=_("Coordinates files (*.csv)|*.csv"),
-            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
             default_filename="coords.csv",
             save_ext="csv",
         )

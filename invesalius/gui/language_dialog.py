@@ -20,12 +20,14 @@
 import os
 import sys
 
-import wx
-
-try:
-    from wx.adv import BitmapComboBox
-except ImportError:
-    from wx.combo import BitmapComboBox
+from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QLabel,
+    QVBoxLayout,
+)
 
 import invesalius.i18n as i18n
 from invesalius.i18n import tr as _
@@ -39,26 +41,21 @@ if hasattr(sys, "frozen") and (sys.frozen == "windows_exe" or sys.frozen == "con
     )
     ICON_DIR = os.path.abspath(os.path.join(abs_file_path, "icons"))
 
-# MAC App
 if not os.path.exists(ICON_DIR):
     ICON_DIR = os.path.abspath(os.path.join(file_path, "..", "..", "..", "..", "..", "icons"))
 
 
 class ComboBoxLanguage:
     def __init__(self, parent):
-        """Initialize combobox bitmap"""
+        """Initialize combobox with language icons"""
 
-        # Retrieve locales dictionary
         dict_locales = i18n.GetLocales()
 
-        # Retrieve locales names and sort them
         self.locales = dict_locales.values()
         self.locales = sorted(self.locales)
 
-        # Retrieve locales keys (eg: pt_BR for Portuguese(Brazilian))
         self.locales_key = [dict_locales.get_key(value) for value in self.locales]
 
-        # Find out OS locale
         self.os_locale = i18n.GetLocaleOS()
 
         try:
@@ -66,110 +63,55 @@ class ComboBoxLanguage:
         except TypeError:
             os_lang = None
 
-        # Default selection will be English
         selection = self.locales_key.index("en")
 
-        # Create bitmap combo
-        self.bitmapCmb = bitmapCmb = BitmapComboBox(parent, style=wx.CB_READONLY)
+        self.combo = QComboBox(parent)
         for key in self.locales_key:
-            # Based on composed flag filename, get bitmap
             filepath = os.path.join(ICON_DIR, f"{key}.png")
-            bmp = wx.Bitmap(filepath, wx.BITMAP_TYPE_PNG)
-            # Add bitmap and info to Combo
-            bitmapCmb.Append(dict_locales[key], bmp, key)
-            # Set default combo item if available on the list
+            icon = QIcon(QPixmap(str(filepath)))
+            self.combo.addItem(icon, dict_locales[key], key)
             if os_lang and key.startswith(os_lang):
                 selection = self.locales_key.index(key)
-                bitmapCmb.SetSelection(selection)
+
+        self.combo.setCurrentIndex(selection)
 
     def GetComboBox(self):
-        return self.bitmapCmb
+        return self.combo
 
     def GetLocalesKey(self):
         return self.locales_key
 
 
-class LanguageDialog(wx.Dialog):
-    """Class define the language to be used in the InVesalius,
-    exist chcLanguage that list language EN and PT. The language
-    selected is writing in the config.ini"""
+class LanguageDialog(QDialog):
+    """Dialog to select the language for InVesalius UI."""
 
     def __init__(self, parent=None, startApp=None):
-        super().__init__(parent, title="")
+        super().__init__(parent)
         self.__TranslateMessage__()
-        self.SetTitle(_("Language selection"))
+        self.setWindowTitle(_("Language selection"))
         self.__init_gui()
-        self.Centre()
-
-    # def __init_combobox_bitmap__(self):
-    #    """Initialize combobox bitmap"""
-
-    #    # Retrieve locales dictionary
-    #    dict_locales = i18n.GetLocales()
-
-    #    # Retrieve locales names and sort them
-    #    self.locales = dict_locales.values()
-    #    self.locales.sort()
-
-    #    # Retrieve locales keys (eg: pt_BR for Portuguese(Brazilian))
-    #    self.locales_key = [dict_locales.get_key(value)[0] for value in self.locales]
-
-    #    # Find out OS locale
-    #    self.os_locale = i18n.GetLocaleOS()
-
-    #    os_lang = self.os_locale[0:2]
-
-    #    # Default selection will be English
-    #    selection = self.locales_key.index('en')
-
-    #    # Create bitmap combo
-    #    self.bitmapCmb = bitmapCmb = BitmapComboBox(self, style=wx.CB_READONLY)
-    #    for key in self.locales_key:
-    #        # Based on composed flag filename, get bitmap
-    #        filepath =  os.path.join(ICON_DIR, "%s.png"%(key))
-    #        bmp = wx.Bitmap(filepath, wx.BITMAP_TYPE_PNG)
-    #        # Add bitmap and info to Combo
-    #        bitmapCmb.Append(dict_locales[key], bmp, key)
-    #        # Set default combo item if available on the list
-    #        if key.startswith(os_lang):
-    #            selection = self.locales_key.index(key)
-    #            bitmapCmb.SetSelection(selection)
-
-    def GetComboBox(self):
-        return self.bitmapCmb
 
     def __init_gui(self):
-        self.txtMsg = wx.StaticText(self, -1, label=_("Choose user interface language"))
+        layout = QVBoxLayout(self)
 
-        btnsizer = wx.StdDialogButtonSizer()
+        self.txtMsg = QLabel(_("Choose user interface language"))
+        layout.addWidget(self.txtMsg)
 
-        btn = wx.Button(self, wx.ID_OK)
-        btn.SetDefault()
-        btnsizer.AddButton(btn)
-
-        btn = wx.Button(self, wx.ID_CANCEL)
-        btnsizer.AddButton(btn)
-        btnsizer.Realize()
-
-        # self.__init_combobox_bitmap__()
         self.cmb = ComboBoxLanguage(self)
         self.bitmapCmb = self.cmb.GetComboBox()
+        layout.addWidget(self.bitmapCmb)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.txtMsg, 0, wx.EXPAND | wx.ALL, 5)
-        sizer.Add(self.bitmapCmb, 0, wx.EXPAND | wx.ALL, 5)
-        sizer.Add(btnsizer, 0, wx.EXPAND | wx.ALL, 5)
-
-        sizer.Fit(self)
-        self.SetSizer(sizer)
-        self.Layout()
-        self.Update()
-        self.SetAutoLayout(1)
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
 
     def GetSelectedLanguage(self):
         """Return String with Selected Language"""
         self.locales_key = self.cmb.GetLocalesKey()
-        return self.locales_key[self.bitmapCmb.GetSelection()]
+        return self.locales_key[self.bitmapCmb.currentIndex()]
 
     def __TranslateMessage__(self):
         """Translate Messages of the Window"""
@@ -183,6 +125,5 @@ class LanguageDialog(wx.Dialog):
             _ = i18n.InstallLanguage("en")
 
     def Cancel(self, event):
-        """Close Frm_Language"""
-        self.Close()
-        event.Skip()
+        """Close LanguageDialog"""
+        self.close()

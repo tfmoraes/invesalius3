@@ -20,7 +20,9 @@ import os
 import sys
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, SupportsInt, Tuple, Union
 
-import wx
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QApplication, QMessageBox, QProgressDialog
 from vtkmodules.vtkCommonMath import vtkMatrix4x4
 from vtkmodules.vtkIOGeometry import vtkOBJReader, vtkSTLReader
 from vtkmodules.vtkIOPLY import vtkPLYReader
@@ -39,6 +41,8 @@ from invesalius import inv_paths
 from invesalius.i18n import tr as _
 from invesalius.pubsub import pub as Publisher
 
+FONTSIZE_MEDIUM = 10
+
 if TYPE_CHECKING:
     import numpy as np
     from vtkmodules.vtkCommonExecutionModel import vtkAlgorithm
@@ -47,40 +51,39 @@ if TYPE_CHECKING:
 
 
 class ProgressDialog:
-    def __init__(
-        self, parent: Optional[wx.Window], maximum: int, abort: bool = False, msg: str = ""
-    ):
+    def __init__(self, parent: Optional[Any], maximum: int, abort: bool = False, msg: str = ""):
         self.title = "InVesalius 3"
         self.msg = msg if msg else _("Loading DICOM files")
         self.maximum = maximum
         self.current = 0
-        self.style = wx.PD_APP_MODAL | wx.PD_ELAPSED_TIME
+
+        cancel_text = "Cancel" if abort else ""
+        self.dlg = QProgressDialog(self.msg, cancel_text, 0, self.maximum, parent)
+        self.dlg.setWindowTitle(self.title)
+        self.dlg.setWindowModality(Qt.ApplicationModal)
         if abort:
-            self.style = self.style | wx.PD_CAN_ABORT
+            self.dlg.canceled.connect(self.Cancel)
+        else:
+            self.dlg.setCancelButton(None)
+        self.dlg.resize(250, 150)
 
-        self.dlg = wx.ProgressDialog(
-            self.title, self.msg, maximum=self.maximum, parent=parent, style=self.style
-        )
-
-        self.dlg.Bind(wx.EVT_BUTTON, self.Cancel)
-        self.dlg.SetSize(wx.Size(250, 150))
-
-    def Cancel(self, evt: wx.CommandEvent) -> None:
+    def Cancel(self) -> None:
         Publisher.sendMessage("Cancel DICOM load")
 
     def Update(self, value: SupportsInt, message: str) -> Union[Tuple[bool, bool], bool]:
         if int(value) != self.maximum:
             try:
-                return self.dlg.Update(int(value), message)
-            # TODO:
-            # Exception in the Wtindows XP 64 Bits with wxPython 2.8.10
-            except wx.PyAssertionError:
+                self.dlg.setValue(int(value))
+                self.dlg.setLabelText(message)
+                QApplication.processEvents()
+                return not self.dlg.wasCanceled()
+            except RuntimeError:
                 return True
         else:
             return False
 
     def Close(self) -> None:
-        self.dlg.Destroy()
+        self.dlg.close()
 
 
 if sys.platform == "win32":
@@ -115,8 +118,10 @@ def ShowProgress(
     progress: List[float] = [0]
     last_obj_progress: List[float] = [0]
     try:
-        dlg = ProgressDialog(wx.GetApp().GetTopWindow(), 100, msg=msg)
-    except (wx.PyNoAppError, AttributeError):
+        app = QApplication.instance()
+        parent = app.activeWindow() if app else None
+        dlg = ProgressDialog(parent, 100, msg=msg)
+    except (RuntimeError, AttributeError):
         return lambda obj, label: 0
 
     # when the pipeline is larger than 1, we have to consider this object
@@ -285,7 +290,7 @@ class TextZero:
 
         self.text = ""
         self.position = (0, 0)
-        self.symbolic_syze = wx.FONTSIZE_MEDIUM
+        self.symbolic_syze = FONTSIZE_MEDIUM
         self.bottom_pos = False
         self.right_pos = False
 
@@ -345,14 +350,14 @@ class TextZero:
     def Hide(self) -> None:
         self.actor.VisibilityOff()
 
-    def draw_to_canvas(self, gc: wx.GraphicsContext, canvas: "CanvasRendererCTX") -> None:
+    def draw_to_canvas(self, gc: Any, canvas: "CanvasRendererCTX") -> None:
         coord = vtkCoordinate()
         coord.SetCoordinateSystemToNormalizedDisplay()
         coord.SetValue(*self.position)
         x, y = coord.GetComputedDisplayValue(canvas.evt_renderer)
-        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-        font.SetSymbolicSize(self.symbolic_syze)
-        font.Scale(canvas.viewer.GetContentScaleFactor())
+        font = QFont(QApplication.font())
+        font.setPointSize(self.symbolic_syze)
+        font.setPointSizeF(font.pointSizeF() * canvas.viewer.devicePixelRatioF())
         if self.bottom_pos or self.right_pos:
             w, h = canvas.calc_text_size(self.text, font)
             if self.right_pos:
@@ -396,7 +401,9 @@ def CreateObjectPolyData(filename: str) -> Any:
         elif filename.lower().endswith(".vtp"):
             reader = vtkXMLPolyDataReader()
         else:
-            wx.MessageBox(_("File format not reconized by InVesalius"), _("Import surface error"))
+            QMessageBox.warning(
+                None, _("Import surface error"), _("File format not reconized by InVesalius")
+            )
             return
     else:
         filename = os.path.join(inv_paths.OBJ_DIR, "magstim_fig8_coil.stl")
@@ -412,8 +419,8 @@ def CreateObjectPolyData(filename: str) -> Any:
     obj_polydata = reader.GetOutput()
 
     if obj_polydata.GetNumberOfPoints() == 0:
-        wx.MessageBox(
-            _("InVesalius was not able to import this surface"), _("Import surface error")
+        QMessageBox.warning(
+            None, _("Import surface error"), _("InVesalius was not able to import this surface")
         )
         obj_polydata = None
 

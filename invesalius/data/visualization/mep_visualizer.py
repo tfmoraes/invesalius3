@@ -19,7 +19,7 @@
 from copy import deepcopy
 
 import numpy as np
-import wx
+from PySide6.QtWidgets import QMessageBox
 from scipy.spatial import cKDTree
 from vtk import vtkColorTransferFunction
 from vtkmodules.vtkCommonCore import (
@@ -120,10 +120,10 @@ class MEPVisualizer:
         if show:
             self._config_params["mep_enabled"] = True
             if not self.surface:
-                wx.MessageBox(
-                    "Please select a brain surface from preferences.",
+                QMessageBox.information(
+                    None,
                     "MEP Mapping",
-                    wx.OK | wx.ICON_INFORMATION,
+                    "Please select a brain surface from preferences.",
                 )
                 self._SaveUserParameters()
                 Publisher.sendMessage("Open preferences menu", page=0)

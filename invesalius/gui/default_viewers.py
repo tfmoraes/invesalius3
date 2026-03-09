@@ -19,11 +19,18 @@
 import os
 import sys
 
-import wx
-import wx.aui
-import wx.lib.agw.fourwaysplitter as fws
-import wx.lib.colourselect as csel
-import wx.lib.platebtn as pbtn
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QAction, QActionGroup, QColor, QCursor, QIcon, QPixmap
+from PySide6.QtWidgets import (
+    QColorDialog,
+    QHBoxLayout,
+    QInputDialog,
+    QMenu,
+    QPushButton,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
 
 import invesalius.constants as const
 import invesalius.data.viewer_slice as slice_viewer
@@ -33,103 +40,27 @@ import invesalius.project as project
 import invesalius.session as ses
 from invesalius import inv_paths
 from invesalius.constants import ID_TO_BMP
-from invesalius.gui.widgets.clut_raycasting import (
-    EVT_CLUT_CURVE_SELECT,
-    EVT_CLUT_CURVE_WL_CHANGE,
-    EVT_CLUT_POINT_RELEASE,
-    CLUTRaycastingWidget,
-)
+from invesalius.gui.widgets.clut_raycasting import CLUTRaycastingWidget
 from invesalius.i18n import tr as _
 from invesalius.pubsub import pub as Publisher
 
 
-class Panel(wx.Panel):
+class Panel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, pos=wx.Point(0, 50), size=wx.Size(744, 656))
-
-        self.__init_aui_manager()
-        self.__bind_events_wx()
+        super().__init__(parent)
+        self._maximized_widget = None
+        self.__init_splitter_layout()
         self.__bind_events()
-        # self.__init_four_way_splitter()
-        # self.__init_mix()
 
-    def __init_aui_manager(self):
-        self.aui_manager = wx.aui.AuiManager()
-        self.aui_manager.SetManagedWindow(self)
-
-        # TODO: Testar mais e verificar melhor opcao
-
-        # Position
-        # volume          | pos = 0
-        # sagital         | pos = 1
-        # coronal         | pos = 2
-        # axial           | pos = 3
-        # Automatico: assim que painel eh inserido ele ocupa local mais acima na janela (menor numero de posicao)
-
-        # Layer
-        # Layer 0 | Layer 1 | Layer 2 | ...
-        # Automatico: todos sao colocados no mesmo layer
-
-        # O que eh o Dockable?
-
-        # Row
-        # Row 0 | Row 1
-        # Idem ao layer
-
-        # Como funciona Direction?
-
-        # Primeira alternativa:
-        # modo: 2 no Layer 0, 2 no Layer 1 por exemplo - posicao automatica (ao inves de Layer pode ser utilizado Row)
-        # problema: sash control soh aparece no sentido ertical
-        # tentativa de solucionar problema seria utilizar Fixed, mas qdo se aciona maximizar nao maximiza inteiro
-
+    def __init_splitter_layout(self):
         p1 = slice_viewer.Viewer(self, "AXIAL")
-        s1 = (
-            wx.aui.AuiPaneInfo()
-            .Centre()
-            .Row(0)
-            .Name("Axial Slice")
-            .Caption(_("Axial slice"))
-            .MaximizeButton(True)
-            .CloseButton(False)
-        )
-
         p2 = slice_viewer.Viewer(self, "CORONAL")
-        s2 = (
-            wx.aui.AuiPaneInfo()
-            .Centre()
-            .Row(0)
-            .Name("Coronal Slice")
-            .Caption(_("Coronal slice"))
-            .MaximizeButton(True)
-            .CloseButton(False)
-        )
-
         p3 = slice_viewer.Viewer(self, "SAGITAL")
-        s3 = (
-            wx.aui.AuiPaneInfo()
-            .Centre()
-            .Row(1)
-            .Name("Sagittal Slice")
-            .Caption(_("Sagittal slice"))
-            .MaximizeButton(True)
-            .CloseButton(False)
-        )
-
         p4 = VolumeViewerCover(self)
-        # p4 = volume_viewer.Viewer(self)
-        s4 = (
-            wx.aui.AuiPaneInfo()
-            .Row(1)
-            .Name("Volume")
-            .Bottom()
-            .Centre()
-            .Caption(_("Volume"))
-            .MaximizeButton(True)
-            .CloseButton(False)
-        )
 
-        self.s4 = s4
+        self.p1 = p1
+        self.p2 = p2
+        self.p3 = p3
         self.p4 = p4
 
         menu = slice_menu_.SliceMenu()
@@ -137,26 +68,25 @@ class Panel(wx.Panel):
         p2.SetPopupMenu(menu)
         p3.SetPopupMenu(menu)
 
-        if sys.platform == "win32" or wx.VERSION >= (4, 1):
-            self.aui_manager.AddPane(p1, s1)
-            self.aui_manager.AddPane(p2, s2)
-            self.aui_manager.AddPane(p3, s3)
-            self.aui_manager.AddPane(p4, s4)
-        else:
-            self.aui_manager.AddPane(p4, s4)
-            self.aui_manager.AddPane(p3, s3)
-            self.aui_manager.AddPane(p2, s2)
-            self.aui_manager.AddPane(p1, s1)
+        self.h_splitter_top = QSplitter(Qt.Horizontal)
+        self.h_splitter_top.addWidget(p1)
+        self.h_splitter_top.addWidget(p2)
 
-        self.aui_manager.Update()
+        self.h_splitter_bottom = QSplitter(Qt.Horizontal)
+        self.h_splitter_bottom.addWidget(p3)
+        self.h_splitter_bottom.addWidget(p4)
+
+        self.v_splitter = QSplitter(Qt.Vertical)
+        self.v_splitter.addWidget(self.h_splitter_top)
+        self.v_splitter.addWidget(self.h_splitter_bottom)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.v_splitter)
 
         session = ses.Session()
         if session.GetConfig("mode") != const.MODE_NAVIGATOR:
             Publisher.sendMessage("Hide target button")
-
-    def __bind_events_wx(self):
-        self.aui_manager.Bind(wx.aui.EVT_AUI_PANE_MAXIMIZE, self.OnMaximize)
-        self.aui_manager.Bind(wx.aui.EVT_AUI_PANE_RESTORE, self.OnRestore)
 
     def __bind_events(self):
         Publisher.subscribe(self.OnSetTargetMode, "Set target mode")
@@ -167,12 +97,13 @@ class Panel(wx.Panel):
     def UpdateViewerCaption(self, viewer_name: str, caption: str):
         """Update the caption of a viewer pane.
 
+        QSplitter panes do not have captions, so this is currently a no-op.
+
         Args:
             viewer_name (str): The name of the viewer pane to update.
             caption (str): The new caption to set for the viewer pane.
         """
-        self.aui_manager.GetPane(viewer_name).Caption(caption)
-        self.Refresh()
+        pass
 
     def OnSetTargetMode(self, enabled=True):
         if enabled:
@@ -184,75 +115,49 @@ class Panel(wx.Panel):
         self.MaximizeViewerVolume()
 
     def RestoreViewerVolume(self):
-        self.aui_manager.RestoreMaximizedPane()
+        if self._maximized_widget is None:
+            return
+        self.h_splitter_top.show()
+        self.p3.show()
+        self._maximized_widget = None
         Publisher.sendMessage("Hide raycasting widget")
-        self.aui_manager.Update()
 
     def MaximizeViewerVolume(self):
-        # Restore volume viewer to make sure it is not already maximized before attempting to maximize it
-        # to fix the issue with panes locking into the maximized state where they cannot be restored
         self.RestoreViewerVolume()
-        self.aui_manager.MaximizePane(
-            self.aui_manager.GetAllPanes()[-1]
-        )  # Viewer volume is the last pane
+        self.h_splitter_top.hide()
+        self.p3.hide()
+        self._maximized_widget = self.p4
         Publisher.sendMessage("Show raycasting widget")
-        self.aui_manager.Update()
-
-    def OnMaximize(self, evt):
-        if evt.GetPane().name == self.s4.name:
-            Publisher.sendMessage("Show raycasting widget")
-
-    def OnRestore(self, evt):
-        if evt.GetPane().name == self.s4.name:
-            Publisher.sendMessage("Hide raycasting widget")
 
     def _Exit(self):
-        self.aui_manager.UnInit()
+        pass
 
 
-class VolumeInteraction(wx.Panel):
-    def __init__(self, parent, id):
-        super().__init__(parent, id)
+class VolumeInteraction(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
         self.can_show_raycasting_widget = 0
-        self.__init_aui_manager()
-        # sizer = wx.BoxSizer(wx.HORIZONTAL)
-        # sizer.Add(volume_viewer.Viewer(self), 1, wx.EXPAND|wx.GROW)
-        # self.SetSizer(sizer)
+        self.__init_layout()
         self.__bind_events()
-        self.__bind_events_wx()
-        # sizer.Fit(self)
 
-    def __init_aui_manager(self):
-        self.aui_manager = wx.aui.AuiManager()
-        self.aui_manager.SetManagedWindow(self)
-
+    def __init_layout(self):
         p1 = volume_viewer.Viewer(self)
-        s1 = (
-            wx.aui.AuiPaneInfo().Centre().CloseButton(False).MaximizeButton(False).CaptionVisible(0)
-        )
-        self.s1 = s1
+        self.clut_raycasting = CLUTRaycastingWidget(self)
+        self.clut_raycasting.hide()
 
-        self.clut_raycasting = CLUTRaycastingWidget(self, -1)
-        self.s2 = (
-            wx.aui.AuiPaneInfo()
-            .Bottom()
-            .BestSize((200, 200))
-            .CloseButton(False)
-            .MaximizeButton(False)
-            .CaptionVisible(0)
-            .Hide()
-        )
+        self.splitter = QSplitter(Qt.Vertical)
+        self.splitter.addWidget(p1)
+        self.splitter.addWidget(self.clut_raycasting)
+        self.splitter.setStretchFactor(0, 1)
+        self.splitter.setStretchFactor(1, 0)
 
-        self.aui_manager.AddPane(p1, s1)
-        self.aui_manager.AddPane(self.clut_raycasting, self.s2)
-        self.aui_manager.Update()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.splitter)
 
-    def __bind_events_wx(self):
-        self.clut_raycasting.Bind(EVT_CLUT_POINT_RELEASE, self.OnPointChanged)
-        self.clut_raycasting.Bind(EVT_CLUT_CURVE_SELECT, self.OnCurveSelected)
-        self.clut_raycasting.Bind(EVT_CLUT_CURVE_WL_CHANGE, self.OnChangeCurveWL)
-        # self.Bind(wx.EVT_SIZE, self.OnSize)
-        # self.Bind(wx.EVT_MAXIMIZE, self.OnMaximize)
+        self.clut_raycasting.clut_point_release.connect(self.OnPointChanged)
+        self.clut_raycasting.clut_curve_select.connect(self.OnCurveSelected)
+        self.clut_raycasting.clut_curve_wl_change.connect(self.OnChangeCurveWL)
 
     def __bind_events(self):
         Publisher.subscribe(self.ShowRaycastingWidget, "Show raycasting widget")
@@ -269,39 +174,32 @@ class VolumeInteraction(wx.Panel):
     def ShowRaycastingWidget(self):
         self.can_show_raycasting_widget = 1
         if self.clut_raycasting.to_draw_points:
-            p = self.aui_manager.GetPane(self.clut_raycasting)
-            p.Show()
-            self.aui_manager.Update()
+            self.clut_raycasting.show()
 
     def HideRaycastingWidget(self):
         self.can_show_raycasting_widget = 0
-        p = self.aui_manager.GetPane(self.clut_raycasting)
-        p.Hide()
-        self.aui_manager.Update()
+        self.clut_raycasting.hide()
 
-    def OnPointChanged(self, evt):
+    def OnPointChanged(self, curve):
         Publisher.sendMessage("Set raycasting refresh")
-        Publisher.sendMessage("Set raycasting curve", curve=evt.GetCurve())
+        Publisher.sendMessage("Set raycasting curve", curve=curve)
         Publisher.sendMessage("Render volume viewer")
 
-    def OnCurveSelected(self, evt):
-        Publisher.sendMessage("Set raycasting curve", curve=evt.GetCurve())
+    def OnCurveSelected(self, curve):
+        Publisher.sendMessage("Set raycasting curve", curve=curve)
         Publisher.sendMessage("Render volume viewer")
 
-    def OnChangeCurveWL(self, evt):
-        curve = evt.GetCurve()
+    def OnChangeCurveWL(self, curve):
         self.__update_curve_wwwl_text(curve)
         Publisher.sendMessage("Render volume viewer")
 
     def OnSetRaycastPreset(self):
         preset = project.Project().raycasting_preset
-        p = self.aui_manager.GetPane(self.clut_raycasting)
         self.clut_raycasting.SetRaycastPreset(preset)
         if self.clut_raycasting.to_draw_points and self.can_show_raycasting_widget:
-            p.Show()
+            self.clut_raycasting.show()
         else:
-            p.Hide()
-        self.aui_manager.Update()
+            self.clut_raycasting.hide()
 
     def LoadHistogram(self, histogram, init, end):
         self.clut_raycasting.SetRange((init, end))
@@ -309,78 +207,95 @@ class VolumeInteraction(wx.Panel):
 
     def RefreshPoints(self):
         self.clut_raycasting.CalculatePixelPoints()
-        self.clut_raycasting.Refresh()
+        self.clut_raycasting.update()
 
     def _Exit(self):
-        self.aui_manager.UnInit()
+        pass
 
-
-RAYCASTING_TOOLS = wx.NewIdRef()
-
-ID_TO_NAME = {}
-ID_TO_TOOL = {}
-ID_TO_TOOL_ITEM = {}
-TOOL_STATE = {}
-ID_TO_ITEMSLICEMENU = {}
-ID_TO_ITEM_3DSTEREO = {}
-ID_TO_STEREO_NAME = {}
 
 ICON_SIZE = (32, 32)
 
 
-class VolumeViewerCover(wx.Panel):
+class ColourSelectButton(QPushButton):
+    """A button that displays a colour swatch and opens a QColorDialog when clicked."""
+
+    colour_selected = Signal(list)
+
+    def __init__(self, parent, colour=(0, 0, 0), size=(32, 32)):
+        super().__init__(parent)
+        self.setFixedSize(size[0], size[1])
+        self._colour = QColor(*colour)
+        self._update_swatch()
+        self.clicked.connect(self._on_clicked)
+        self.setFlat(True)
+
+    def _update_swatch(self):
+        icon_sz = QSize(self.width() - 4, self.height() - 4)
+        self.setIconSize(icon_sz)
+        pixmap = QPixmap(icon_sz)
+        pixmap.fill(self._colour)
+        self.setIcon(QIcon(pixmap))
+
+    def _on_clicked(self):
+        colour = QColorDialog.getColor(self._colour, self)
+        if colour.isValid():
+            self._colour = colour
+            self._update_swatch()
+            self.colour_selected.emit([colour.red(), colour.green(), colour.blue()])
+
+    def SetColour(self, colour):
+        self._colour = QColor(*[int(c) for c in colour])
+        self._update_swatch()
+
+
+class VolumeViewerCover(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(VolumeInteraction(self, -1), 1, wx.EXPAND | wx.GROW)
-        sizer.Add(VolumeToolPanel(self), 0, wx.EXPAND | wx.GROW)
-        sizer.Fit(self)
-
-        self.SetSizer(sizer)
-        self.Update()
-        self.SetAutoLayout(1)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(VolumeInteraction(self), 1)
+        layout.addWidget(VolumeToolPanel(self), 0)
 
 
-class VolumeToolPanel(wx.Panel):
+class VolumeToolPanel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
-        # VOLUME RAYCASTING BUTTON
-        BMP_RAYCASTING = wx.Bitmap(
-            str(inv_paths.ICON_DIR.joinpath("volume_raycasting.png")), wx.BITMAP_TYPE_PNG
-        )
-        BMP_SLICE_PLANE = wx.Bitmap(
-            str(inv_paths.ICON_DIR.joinpath("slice_plane.png")), wx.BITMAP_TYPE_PNG
-        )
-        BMP_3D_STEREO = wx.Bitmap(
-            str(inv_paths.ICON_DIR.joinpath("3D_glasses.png")), wx.BITMAP_TYPE_PNG
-        )
-        # BMP_TARGET = wx.Bitmap(str(inv_paths.ICON_DIR.joinpath("target.png")), wx.BITMAP_TYPE_PNG)
+        icon_raycasting = QIcon(QPixmap(str(inv_paths.ICON_DIR.joinpath("volume_raycasting.png"))))
+        icon_slice_plane = QIcon(QPixmap(str(inv_paths.ICON_DIR.joinpath("slice_plane.png"))))
+        icon_3d_stereo = QIcon(QPixmap(str(inv_paths.ICON_DIR.joinpath("3D_glasses.png"))))
 
-        self.button_raycasting = pbtn.PlateButton(
-            self, -1, "", BMP_RAYCASTING, style=pbtn.PB_STYLE_SQUARE, size=ICON_SIZE
-        )
-        self.button_raycasting.SetToolTip("Raycasting view")
-        self.button_stereo = pbtn.PlateButton(
-            self, -1, "", BMP_3D_STEREO, style=pbtn.PB_STYLE_SQUARE, size=ICON_SIZE
-        )
-        self.button_stereo.SetToolTip("Real 3D")
-        self.button_slice_plane = pbtn.PlateButton(
-            self, -1, "", BMP_SLICE_PLANE, style=pbtn.PB_STYLE_SQUARE, size=ICON_SIZE
-        )
-        self.button_slice_plane.SetToolTip("Slices into 3D")
-        # self.button_target = pbtn.PlateButton(self, -1,"", BMP_TARGET, style=pbtn.PB_STYLE_SQUARE|pbtn.PB_STYLE_TOGGLE, size=ICON_SIZE)
-        # self.button_target.Enable(0)
+        self.button_raycasting = QPushButton(self)
+        self.button_raycasting.setIcon(icon_raycasting)
+        self.button_raycasting.setIconSize(QSize(*ICON_SIZE))
+        self.button_raycasting.setFixedSize(*ICON_SIZE)
+        self.button_raycasting.setFlat(True)
+        self.button_raycasting.setToolTip("Raycasting view")
 
-        # VOLUME VIEW ANGLE BUTTON
-        BMP_FRONT = wx.Bitmap(ID_TO_BMP[const.VOL_FRONT][1], wx.BITMAP_TYPE_PNG)
-        self.button_view = pbtn.PlateButton(
-            self, -1, "", BMP_FRONT, size=(32, 32), style=pbtn.PB_STYLE_SQUARE
-        )
-        self.button_view.SetToolTip("View plane")
+        self.button_stereo = QPushButton(self)
+        self.button_stereo.setIcon(icon_3d_stereo)
+        self.button_stereo.setIconSize(QSize(*ICON_SIZE))
+        self.button_stereo.setFixedSize(*ICON_SIZE)
+        self.button_stereo.setFlat(True)
+        self.button_stereo.setToolTip("Real 3D")
 
-        # VOLUME COLOUR BUTTON
+        self.button_slice_plane = QPushButton(self)
+        self.button_slice_plane.setIcon(icon_slice_plane)
+        self.button_slice_plane.setIconSize(QSize(*ICON_SIZE))
+        self.button_slice_plane.setFixedSize(*ICON_SIZE)
+        self.button_slice_plane.setFlat(True)
+        self.button_slice_plane.setToolTip("Slices into 3D")
+
+        icon_front = QIcon(QPixmap(ID_TO_BMP[const.VOL_FRONT][1]))
+        self.button_view = QPushButton(self)
+        self.button_view.setIcon(icon_front)
+        self.button_view.setIconSize(QSize(32, 32))
+        self.button_view.setFixedSize(32, 32)
+        self.button_view.setFlat(True)
+        self.button_view.setToolTip("View plane")
+
         if sys.platform.startswith("linux"):
             size = (32, 32)
             sp = 2
@@ -388,31 +303,22 @@ class VolumeToolPanel(wx.Panel):
             size = (24, 24)
             sp = 5
 
-        self.button_colour = csel.ColourSelect(self, -1, colour=(0, 0, 0), size=size)
-        self.button_colour.SetToolTip("Background Colour")
+        self.button_colour = ColourSelectButton(self, colour=(0, 0, 0), size=size)
+        self.button_colour.setToolTip("Background Colour")
 
-        # SIZER TO ORGANIZE ALL
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.button_colour, 0, wx.ALL, sp)
-        sizer.Add(self.button_raycasting, 0, wx.TOP | wx.BOTTOM, 1)
-        sizer.Add(self.button_view, 0, wx.TOP | wx.BOTTOM, 1)
-        sizer.Add(self.button_slice_plane, 0, wx.TOP | wx.BOTTOM, 1)
-        sizer.Add(self.button_stereo, 0, wx.TOP | wx.BOTTOM, 1)
-        # sizer.Add(self.button_target, 0, wx.TOP | wx.BOTTOM, 1)
-        #  sizer.Add(self.button_3d_mask, 0, wx.TOP | wx.BOTTOM, 1)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(sp, sp, sp, sp)
+        layout.setSpacing(2)
+        layout.addWidget(self.button_colour)
+        layout.addWidget(self.button_raycasting)
+        layout.addWidget(self.button_view)
+        layout.addWidget(self.button_slice_plane)
+        layout.addWidget(self.button_stereo)
+        layout.addStretch()
 
         self.navigation_status = False
-
-        # Conditions for enabling Target button:
         self.target_selected = False
         self.track_obj = False
-
-        sizer.Fit(self)
-
-        self.SetSizer(sizer)
-        self.SetAutoLayout(1)
-        self.Update()
-        self.Refresh()
 
         self.__init_menus()
         self.__bind_events()
@@ -424,97 +330,84 @@ class VolumeToolPanel(wx.Panel):
         Publisher.subscribe(self.Uncheck, "Uncheck image plane menu")
 
     def DisablePreset(self):
-        self.off_item.Check(1)
+        self.off_action.setChecked(True)
 
     def __bind_events_wx(self):
-        self.button_slice_plane.Bind(wx.EVT_LEFT_DOWN, self.OnButtonSlicePlane)
-        self.button_raycasting.Bind(wx.EVT_LEFT_DOWN, self.OnButtonRaycasting)
-        self.button_view.Bind(wx.EVT_LEFT_DOWN, self.OnButtonView)
-        self.button_colour.Bind(csel.EVT_COLOURSELECT, self.OnSelectColour)
-        self.button_stereo.Bind(wx.EVT_LEFT_DOWN, self.OnButtonStereo)
-        # self.button_target.Bind(wx.EVT_LEFT_DOWN, self.OnButtonTarget)
+        self.button_slice_plane.clicked.connect(self.OnButtonSlicePlane)
+        self.button_raycasting.clicked.connect(self.OnButtonRaycasting)
+        self.button_view.clicked.connect(self.OnButtonView)
+        self.button_colour.colour_selected.connect(self.OnSelectColour)
+        self.button_stereo.clicked.connect(self.OnButtonStereo)
 
-    def OnButtonRaycasting(self, evt):
-        # MENU RELATED TO RAYCASTING TYPES
-        self.button_raycasting.PopupMenu(self.menu_raycasting)
+    def OnButtonRaycasting(self):
+        self.menu_raycasting.exec(QCursor.pos())
 
-    def OnButtonStereo(self, evt):
-        self.button_stereo.PopupMenu(self.stereo_menu)
+    def OnButtonStereo(self):
+        self.stereo_menu.exec(QCursor.pos())
 
-    def OnButtonView(self, evt):
-        self.button_view.PopupMenu(self.menu_view)
+    def OnButtonView(self):
+        self.menu_view.exec(QCursor.pos())
 
-    def OnButtonSlicePlane(self, evt):
-        self.button_slice_plane.PopupMenu(self.slice_plane_menu)
+    def OnButtonSlicePlane(self):
+        self.slice_plane_menu.exec(QCursor.pos())
 
-    def OnSavePreset(self, evt):
-        d = wx.TextEntryDialog(self, _("Preset name"))
-        if d.ShowModal() == wx.ID_OK:
-            preset_name = d.GetValue()
+    def OnSavePreset(self):
+        preset_name, ok = QInputDialog.getText(self, _("Preset name"), _("Preset name"))
+        if ok and preset_name:
             Publisher.sendMessage("Save raycasting preset", preset_name=preset_name)
 
     def __init_menus(self):
-        # MENU RELATED TO RAYCASTING TYPES
-        menu = self.menu = wx.Menu()
-        # print "\n\n"
-        # print ">>>>", const.RAYCASTING_TYPES.sort()
-        # print "\n\n"
+        # RAYCASTING TYPES MENU
+        menu = self.menu_raycasting = QMenu(self)
+        raycasting_group = QActionGroup(self)
+        raycasting_group.setExclusive(True)
+
         for name in const.RAYCASTING_TYPES:
-            id = wx.NewIdRef()
-            item = menu.Append(id, name, kind=wx.ITEM_RADIO)
+            action = menu.addAction(name)
+            action.setCheckable(True)
+            raycasting_group.addAction(action)
             if name == const.RAYCASTING_OFF_LABEL:
-                self.off_item = item
-                item.Check(1)
-            ID_TO_NAME[id] = name
+                self.off_action = action
+                action.setChecked(True)
+            action.triggered.connect(lambda checked, n=name: self._on_raycasting_type(n))
 
-        menu.AppendSeparator()
-        # MENU RELATED TO RAYCASTING TOOLS
-        self.id_cutplane = None
-        submenu = wx.Menu()
+        menu.addSeparator()
+
+        # RAYCASTING TOOLS SUBMENU
+        self.tools_submenu = QMenu(_("Tools"), self)
+        self.tools_submenu.setEnabled(False)
+        self.tool_actions = {}
+
         for name in const.RAYCASTING_TOOLS:
-            id = wx.NewIdRef()
-            if not (self.id_cutplane):
-                self.id_cutplane = id
-            item = submenu.Append(id, name, kind=wx.ITEM_CHECK)
-            ID_TO_TOOL[id] = name
-            ID_TO_TOOL_ITEM[id] = item
-            TOOL_STATE[id] = False
-        self.submenu_raycasting_tools = submenu
-        menu.Append(RAYCASTING_TOOLS, _("Tools"), submenu)
-        menu.Enable(RAYCASTING_TOOLS, 0)
+            action = self.tools_submenu.addAction(name)
+            action.setCheckable(True)
+            self.tool_actions[name] = action
+            action.triggered.connect(lambda checked, n=name: self._on_raycasting_tool(n, checked))
 
-        self.menu_raycasting = menu
-        # In MacOS X and Windows, binding parent menu is enough. But
-        # not in GNU Linux - in the last it is necessary to bind the
-        # submenu
-        if sys.platform != "win32":
-            submenu.Bind(wx.EVT_MENU, self.OnMenuRaycasting)
-        menu.Bind(wx.EVT_MENU, self.OnMenuRaycasting)
+        menu.addMenu(self.tools_submenu)
 
-        # VOLUME VIEW ANGLE BUTTON
-        menu = wx.Menu()
-        for id in ID_TO_BMP:
-            bmp = wx.Bitmap(ID_TO_BMP[id][1], wx.BITMAP_TYPE_PNG)
-            item = menu.Append(id, ID_TO_BMP[id][0])
-            item.SetBitmap(bmp)
-        menu.Bind(wx.EVT_MENU, self.OnMenuView)
-        self.menu_view = menu
+        # VOLUME VIEW ANGLE MENU
+        self.menu_view = QMenu(self)
+        for id_val in ID_TO_BMP:
+            icon = QIcon(QPixmap(ID_TO_BMP[id_val][1]))
+            action = self.menu_view.addAction(icon, ID_TO_BMP[id_val][0])
+            action.setData(id_val)
+            action.triggered.connect(lambda checked, iv=id_val: self._on_view(iv))
 
-        # SLICE PLANES BUTTON
-        self.slice_plane_menu = slice_plane_menu = wx.Menu()
-        itens = ["Axial", "Coronal", "Sagital"]
+        # SLICE PLANES MENU
+        self.slice_plane_menu = QMenu(self)
+        self.slice_plane_actions = {}
+        for name in ("Axial", "Coronal", "Sagital"):
+            action = self.slice_plane_menu.addAction(name)
+            action.setCheckable(True)
+            self.slice_plane_actions[name] = action
+            action.triggered.connect(lambda checked, n=name: self._on_slice_plane(n, checked))
 
-        for value in itens:
-            new_id = wx.NewIdRef()
-
-            item = slice_plane_menu.Append(new_id, value, kind=wx.ITEM_CHECK)
-            ID_TO_ITEMSLICEMENU[new_id] = item
-
-        slice_plane_menu.Bind(wx.EVT_MENU, self.OnMenuPlaneSlice)
-
-        # 3D Stereo Buttons
-        self.stereo_menu = stereo_menu = wx.Menu()
-        itens = [
+        # 3D STEREO MENU
+        self.stereo_menu = QMenu(self)
+        stereo_group = QActionGroup(self)
+        stereo_group.setExclusive(True)
+        stereo_items = [
             const.STEREO_OFF,
             const.STEREO_RED_BLUE,
             const.STEREO_ANAGLYPH,
@@ -525,22 +418,39 @@ class VolumeToolPanel(wx.Panel):
             const.STEREO_DRESDEN,
             const.STEREO_CHECKBOARD,
         ]
+        for name in stereo_items:
+            action = self.stereo_menu.addAction(name)
+            action.setCheckable(True)
+            stereo_group.addAction(action)
+            action.triggered.connect(lambda checked, n=name: self._on_stereo(n))
 
-        for value in itens:
-            new_id = wx.NewIdRef()
-            item = stereo_menu.Append(new_id, value, kind=wx.ITEM_RADIO)
-            ID_TO_ITEM_3DSTEREO[new_id] = item
-            ID_TO_STEREO_NAME[new_id] = value
+    def _on_raycasting_type(self, name):
+        Publisher.sendMessage("Load raycasting preset", preset_name=name)
+        self.tools_submenu.setEnabled(name != const.RAYCASTING_OFF_LABEL)
 
-        stereo_menu.Bind(wx.EVT_MENU, self.OnMenuStereo)
+    def _on_raycasting_tool(self, name, checked):
+        flag = 1 if checked else 0
+        Publisher.sendMessage("Enable raycasting tool", tool_name=name, flag=flag)
 
-        self.Fit()
-        self.Update()
+    def _on_view(self, view_id):
+        icon = QIcon(QPixmap(ID_TO_BMP[view_id][1]))
+        self.button_view.setIcon(icon)
+        Publisher.sendMessage("Set volume view angle", view=view_id)
+
+    def _on_slice_plane(self, label, checked):
+        if checked:
+            Publisher.sendMessage("Enable plane", plane_label=label)
+        else:
+            Publisher.sendMessage("Disable plane", plane_label=label)
+
+    def _on_stereo(self, mode):
+        Publisher.sendMessage("Set stereo mode", mode=mode)
 
     def DisableVolumeCutMenu(self):
-        self.menu.Enable(RAYCASTING_TOOLS, 0)
-        item = ID_TO_TOOL_ITEM[self.id_cutplane]
-        item.Check(0)
+        self.tools_submenu.setEnabled(False)
+        first_action = next(iter(self.tool_actions.values()), None)
+        if first_action is not None:
+            first_action.setChecked(False)
 
     def BuildRaycastingMenu(self):
         presets = []
@@ -551,69 +461,15 @@ class VolumeToolPanel(wx.Panel):
                 if os.path.isfile(os.path.join(folder, filename))
             ]
 
-    def OnMenuPlaneSlice(self, evt):
-        id = evt.GetId()
-        item = ID_TO_ITEMSLICEMENU[id]
-        checked = item.IsChecked()
-        label = item.GetItemLabelText()
-
-        if not (checked):
-            Publisher.sendMessage("Disable plane", plane_label=label)
-        else:
-            Publisher.sendMessage("Enable plane", plane_label=label)
-
-    def OnMenuStereo(self, evt):
-        id = evt.GetId()
-        mode = ID_TO_STEREO_NAME[id]
-        Publisher.sendMessage("Set stereo mode", mode=mode)
-
     def Uncheck(self):
-        for item in self.slice_plane_menu.GetMenuItems():
-            if item.IsChecked():
-                item.Check(0)
+        for action in self.slice_plane_actions.values():
+            if action.isChecked():
+                action.setChecked(False)
 
     def ChangeButtonColour(self, colour):
         colour = [i * 255 for i in colour]
         self.button_colour.SetColour(colour)
 
-    def OnMenuRaycasting(self, evt):
-        """Events from raycasting menu."""
-        id = evt.GetId()
-        if id in ID_TO_NAME.keys():
-            # Raycassting type was selected
-            name = ID_TO_NAME[id]
-            Publisher.sendMessage("Load raycasting preset", preset_name=ID_TO_NAME[id])
-            # Enable or disable tools
-            if name != const.RAYCASTING_OFF_LABEL:
-                self.menu_raycasting.Enable(RAYCASTING_TOOLS, 1)
-            else:
-                self.menu_raycasting.Enable(RAYCASTING_TOOLS, 0)
-
-        else:
-            # Raycasting tool
-            # TODO: In future, when more tools are available
-            item = ID_TO_TOOL_ITEM[id]
-            # if not item.IsChecked():
-            #    for i in ID_TO_TOOL_ITEM.values():
-            #        if i is not item:
-            #            i.Check(0)
-            if not TOOL_STATE[id]:
-                Publisher.sendMessage("Enable raycasting tool", tool_name=ID_TO_TOOL[id], flag=1)
-                TOOL_STATE[id] = True
-                item.Check(1)
-            else:
-                Publisher.sendMessage("Enable raycasting tool", tool_name=ID_TO_TOOL[id], flag=0)
-                TOOL_STATE[id] = False
-                item.Check(0)
-
-    def OnMenuView(self, evt):
-        """Events from button menus."""
-        bmp = wx.Bitmap(ID_TO_BMP[evt.GetId()][1], wx.BITMAP_TYPE_PNG)
-        self.button_view.SetBitmapSelected(bmp)
-
-        Publisher.sendMessage("Set volume view angle", view=evt.GetId())
-        self.Refresh()
-
-    def OnSelectColour(self, evt):
-        colour = [i / 255.0 for i in evt.GetValue()]
+    def OnSelectColour(self, colour_values):
+        colour = [i / 255.0 for i in colour_values]
         Publisher.sendMessage("Change volume viewer background colour", colour=colour)

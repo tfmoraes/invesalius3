@@ -20,7 +20,7 @@
 from typing import TYPE_CHECKING
 
 import numpy as np
-import wx
+from PySide6.QtWidgets import QDialog
 
 import invesalius.data.bases as db
 import invesalius.gui.dialogs as dlg
@@ -82,7 +82,7 @@ class IterativeClosestPoint(metaclass=Singleton):
 
         dialog.Destroy()
 
-        if success != wx.ID_OK or self.m_icp is None:
+        if success != QDialog.DialogCode.Accepted or self.m_icp is None:
             self.use_icp = False
             return
 

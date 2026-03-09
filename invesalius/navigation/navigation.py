@@ -22,7 +22,8 @@ import threading
 from time import sleep
 
 import numpy as np
-import wx
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QMessageBox
 
 import invesalius.constants as const
 import invesalius.data.bases as db
@@ -157,28 +158,35 @@ class UpdateNavigationScene(threading.Thread):
                 probe_coord = coords.pop("probe")
                 probe_m_img = m_imgs.pop("probe")
 
-                # use of CallAfter is mandatory otherwise crashes the wx interface
+                # use of QTimer.singleShot is mandatory otherwise crashes the Qt interface
                 if self.view_tracts:
                     bundle, affine_vtk, coord_offset, coord_offset_w = (
                         self.tracts_queue.get_nowait()
                     )
                     # TODO: Check if possible to combine the Remove tracts with Update tracts in a single command
-                    wx.CallAfter(Publisher.sendMessage, "Remove tracts")
-                    wx.CallAfter(
-                        Publisher.sendMessage,
-                        "Update tracts",
-                        root=bundle,
-                        affine_vtk=affine_vtk,
-                        coord_offset=coord_offset,
-                        coord_offset_w=coord_offset_w,
+                    QTimer.singleShot(0, lambda: Publisher.sendMessage("Remove tracts"))
+                    QTimer.singleShot(
+                        0,
+                        lambda _b=bundle, _a=affine_vtk, _co=coord_offset, _cow=coord_offset_w: (
+                            Publisher.sendMessage(
+                                "Update tracts",
+                                root=_b,
+                                affine_vtk=_a,
+                                coord_offset=_co,
+                                coord_offset_w=_cow,
+                            )
+                        ),
                     )
                     self.tracts_queue.task_done()
 
                 if self.serial_port_enabled:
                     trigger_on = self.serial_port_queue.get_nowait()
                     if trigger_on:
-                        wx.CallAfter(
-                            Publisher.sendMessage, "Create marker", marker_type=MarkerType.COIL_POSE
+                        QTimer.singleShot(
+                            0,
+                            lambda: Publisher.sendMessage(
+                                "Create marker", marker_type=MarkerType.COIL_POSE
+                            ),
                         )
                     self.serial_port_queue.task_done()
 
@@ -186,57 +194,90 @@ class UpdateNavigationScene(threading.Thread):
                 # see the red cross in the position of the offset marker
 
                 # Update the slice viewers to show the current position of the tracked object.
-                wx.CallAfter(Publisher.sendMessage, "Update slices position", position=coord[:3])
+                _coord = coord
+                QTimer.singleShot(
+                    0,
+                    lambda _c=_coord: Publisher.sendMessage(
+                        "Update slices position", position=_c[:3]
+                    ),
+                )
 
                 # Update the cross position to the current position of the tracked object, so that, e.g., when a
                 # new marker is created, it is created in the current position of the object.
-                wx.CallAfter(Publisher.sendMessage, "Set cross focal point", position=coord)
+                QTimer.singleShot(
+                    0, lambda _c=_coord: Publisher.sendMessage("Set cross focal point", position=_c)
+                )
 
-                wx.CallAfter(
-                    Publisher.sendMessage,
-                    "Update volume viewer pointer",
-                    position=[coord[0], -coord[1], coord[2]],
+                QTimer.singleShot(
+                    0,
+                    lambda _c=_coord: Publisher.sendMessage(
+                        "Update volume viewer pointer",
+                        position=[_c[0], -_c[1], _c[2]],
+                    ),
                 )
 
                 if coil_visible:
+                    _m_imgs = m_imgs
+                    _coords = coords
+                    _main_coil = main_coil
+                    _peel = self.peel_loaded
                     # Check pubsub "Update coil pose" dependencies
-                    wx.CallAfter(
-                        Publisher.sendMessage, "Update coil poses", m_imgs=m_imgs, coords=coords
+                    QTimer.singleShot(
+                        0,
+                        lambda _mi=_m_imgs, _co=_coords: Publisher.sendMessage(
+                            "Update coil poses", m_imgs=_mi, coords=_co
+                        ),
                     )
-                    wx.CallAfter(  # LUKATODO: this is just for viewer_volume... which will be updated later to support multicoil (target, tracts & efield)
-                        Publisher.sendMessage,
-                        "Update coil pose",
-                        m_img=m_imgs[main_coil],
-                        coord=coords[main_coil],
+                    QTimer.singleShot(
+                        0,
+                        lambda _mi=_m_imgs, _co=_coords, _mc=_main_coil: (
+                            Publisher.sendMessage(  # LUKATODO: this is just for viewer_volume... which will be updated later to support multicoil (target, tracts & efield)
+                                "Update coil pose",
+                                m_img=_mi[_mc],
+                                coord=_co[_mc],
+                            )
+                        ),
                     )
-                    wx.CallAfter(
-                        Publisher.sendMessage,
-                        "From Neuronavigation: Send coil pose",
-                        coord=list(coords[main_coil]),
+                    QTimer.singleShot(
+                        0,
+                        lambda _co=_coords, _mc=_main_coil: Publisher.sendMessage(
+                            "From Neuronavigation: Send coil pose",
+                            coord=list(_co[_mc]),
+                        ),
                     )
-                    wx.CallAfter(
-                        Publisher.sendMessage,
-                        "Update object arrow matrix",
-                        m_img=m_imgs[main_coil],
-                        coord=coords[main_coil],
-                        flag=self.peel_loaded,
+                    QTimer.singleShot(
+                        0,
+                        lambda _mi=_m_imgs, _co=_coords, _mc=_main_coil, _p=_peel: (
+                            Publisher.sendMessage(
+                                "Update object arrow matrix",
+                                m_img=_mi[_mc],
+                                coord=_co[_mc],
+                                flag=_p,
+                            )
+                        ),
                     )
 
                     if self.e_field_loaded:
-                        wx.CallAfter(
-                            Publisher.sendMessage,
-                            "Update point location for e-field calculation",
-                            m_img=m_imgs[main_coil],
-                            coord=coords[main_coil],
-                            queue_IDs=self.e_field_IDs_queue,
+                        QTimer.singleShot(
+                            0,
+                            lambda _mi=_m_imgs, _co=_coords, _mc=_main_coil: Publisher.sendMessage(
+                                "Update point location for e-field calculation",
+                                m_img=_mi[_mc],
+                                coord=_co[_mc],
+                                queue_IDs=self.e_field_IDs_queue,
+                            ),
                         )
                         try:
                             enorm_data = self.e_field_norms_queue.get_nowait()
-                            wx.CallAfter(
-                                Publisher.sendMessage,
-                                "Get enorm",
-                                enorm_data=enorm_data,
-                                plot_vector=self.plot_efield_vectors,
+                            QTimer.singleShot(
+                                0,
+                                lambda _ed=enorm_data, _pv=self.plot_efield_vectors: (
+                                    Publisher.sendMessage(
+                                        "Get enorm",
+                                        enorm_data=_ed,
+                                        plot_vector=_pv,
+                                    )
+                                ),
                             )
                         except queue.Empty:
                             pass
@@ -244,16 +285,20 @@ class UpdateNavigationScene(threading.Thread):
                             self.e_field_norms_queue.task_done()
 
                 if probe_visible:
-                    wx.CallAfter(
-                        Publisher.sendMessage,
-                        "Update probe pose",
-                        m_img=probe_m_img,
-                        coord=probe_coord,
+                    _pm = probe_m_img
+                    _pc = probe_coord
+                    QTimer.singleShot(
+                        0,
+                        lambda _m=_pm, _c=_pc: Publisher.sendMessage(
+                            "Update probe pose",
+                            m_img=_m,
+                            coord=_c,
+                        ),
                     )
 
                 # Render the volume viewer and the slice viewers.
-                wx.CallAfter(Publisher.sendMessage, "Render volume viewer")
-                wx.CallAfter(Publisher.sendMessage, "Update slice viewer")
+                QTimer.singleShot(0, lambda: Publisher.sendMessage("Render volume viewer"))
+                QTimer.singleShot(0, lambda: Publisher.sendMessage("Update slice viewer"))
 
                 self.coord_queue.task_done()
 
@@ -537,11 +582,12 @@ class Navigation(metaclass=Singleton):
         Publisher.sendMessage("Navigation status", nav_status=True, vis_status=vis_components)
 
         if not self.CoilSelectionDone():
-            wx.MessageBox(
+            QMessageBox.information(
+                None,
+                _("InVesalius 3"),
                 _(
                     f"No. of coils to track is {self.n_coils}, but no. of coils registered is {len(self.coil_registrations)}"
                 ),
-                _("InVesalius 3"),
             )
         else:
             # Pre-compute obj_datas: data/matrices for each coil to be used in coregistration
@@ -558,11 +604,12 @@ class Navigation(metaclass=Singleton):
 
                 # Check that the object index is in range of Tracker coordinates
                 if obj_id >= coord_raw.shape[0]:
-                    wx.MessageBox(
+                    QMessageBox.information(
+                        None,
+                        _("InVesalius 3"),
                         _(
                             f"Coil index {obj_id} for coil {coil_name} is out of range of current Tracker! Change the coil index in Preferences - TMS Coil tab"
                         ),
-                        _("InVesalius 3"),
                     )
                     return
 
@@ -624,11 +671,10 @@ class Navigation(metaclass=Singleton):
                     jobs_list.append(self.serial_port_connection)
                 else:
                     # Connection failed - show error and disable serial port
-                    import wx
-
-                    wx.MessageBox(
-                        "Failed to connect to serial port. Navigation will continue without serial port support.",
+                    QMessageBox.information(
+                        None,
                         "InVesalius 3",
+                        "Failed to connect to serial port. Navigation will continue without serial port support.",
                     )
                     self.serial_port_in_use = False
 

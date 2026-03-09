@@ -310,7 +310,7 @@ def get_system_encoding() -> Optional[str]:
 
 def UpdateCheck() -> None:
     import requests
-    import wx
+    from PySide6.QtCore import QTimer
 
     import invesalius.session as ses
 
@@ -359,7 +359,7 @@ def UpdateCheck() -> None:
 
         if last_ver > actual_ver:
             print("  ...New update found!!! -> version:", last)
-            wx.CallAfter(wx.CallLater, 1000, _show_update_info)
+            QTimer.singleShot(1000, _show_update_info)
 
 
 def vtkarray_to_numpy(m):

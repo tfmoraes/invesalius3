@@ -17,7 +17,14 @@
 #    detalhes.
 # --------------------------------------------------------------------
 
-import wx
+from PySide6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QVBoxLayout,
+)
 
 import invesalius.project as prj
 from invesalius import constants as const
@@ -31,76 +38,63 @@ ORIENTATION_LABEL = {
 }
 
 
-class ProjectProperties(wx.Dialog):
+class ProjectProperties(QDialog):
     def __init__(self, parent):
-        super().__init__(
-            id=-1,
-            name="",
-            parent=parent,
-            style=wx.DEFAULT_FRAME_STYLE,
-            title=_("Project Properties"),
-        )
-        self.Center(wx.BOTH)
+        super().__init__(parent)
+        self.setWindowTitle(_("Project Properties"))
         self._init_gui()
 
     def _init_gui(self):
         project = prj.Project()
-        self.name_txt = wx.TextCtrl(self, -1, value=project.name)
-        self.name_txt.SetMinSize((utils.calc_width_needed(self.name_txt, 30), -1))
+        self.name_txt = QLineEdit(project.name)
+        self.name_txt.setMinimumWidth(utils.calc_width_needed(self.name_txt, 30))
 
-        modality_txt = wx.TextCtrl(self, -1, value=project.modality, style=wx.TE_READONLY)
+        modality_txt = QLineEdit(project.modality)
+        modality_txt.setReadOnly(True)
 
         try:
             orientation = ORIENTATION_LABEL[project.original_orientation]
         except KeyError:
             orientation = _("Other")
 
-        orientation_txt = wx.TextCtrl(self, -1, value=orientation, style=wx.TE_READONLY)
+        orientation_txt = QLineEdit(orientation)
+        orientation_txt.setReadOnly(True)
 
         sx, sy, sz = project.spacing
-        spacing_txt_x = wx.TextCtrl(self, -1, value=f"{sx:.5}", style=wx.TE_READONLY)
-        spacing_txt_y = wx.TextCtrl(self, -1, value=f"{sy:.5}", style=wx.TE_READONLY)
-        spacing_txt_z = wx.TextCtrl(self, -1, value=f"{sz:.5}", style=wx.TE_READONLY)
+        spacing_txt_x = QLineEdit(f"{sx:.5}")
+        spacing_txt_x.setReadOnly(True)
+        spacing_txt_y = QLineEdit(f"{sy:.5}")
+        spacing_txt_y.setReadOnly(True)
+        spacing_txt_z = QLineEdit(f"{sz:.5}")
+        spacing_txt_z.setReadOnly(True)
 
-        name_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        name_sizer.Add(wx.StaticText(self, -1, _("Name")), 0, wx.ALIGN_CENTER_VERTICAL | wx.ALL, 5)
-        name_sizer.Add(self.name_txt, 1, wx.EXPAND | wx.ALL, 5)
+        name_sizer = QHBoxLayout()
+        name_sizer.addWidget(QLabel(_("Name")))
+        name_sizer.addWidget(self.name_txt, 1)
 
-        modality_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        modality_sizer.Add(
-            wx.StaticText(self, -1, _("Modality")), 0, wx.ALIGN_CENTER_VERTICAL | wx.ALL, 5
-        )
-        modality_sizer.Add(modality_txt, 1, wx.EXPAND | wx.ALL, 5)
+        modality_sizer = QHBoxLayout()
+        modality_sizer.addWidget(QLabel(_("Modality")))
+        modality_sizer.addWidget(modality_txt, 1)
 
-        orientation_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        orientation_sizer.Add(
-            wx.StaticText(self, -1, _("Orientation")), 0, wx.ALIGN_CENTER_VERTICAL | wx.ALL, 5
-        )
-        orientation_sizer.Add(orientation_txt, 1, wx.EXPAND | wx.ALL, 5)
+        orientation_sizer = QHBoxLayout()
+        orientation_sizer.addWidget(QLabel(_("Orientation")))
+        orientation_sizer.addWidget(orientation_txt, 1)
 
-        spacing_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        spacing_sizer.Add(
-            wx.StaticText(self, -1, _("Spacing")), 0, wx.ALIGN_CENTER_VERTICAL | wx.ALL, 5
-        )
-        spacing_sizer.Add(spacing_txt_x, 1, wx.EXPAND | wx.ALL, 5)
-        spacing_sizer.Add(spacing_txt_y, 1, wx.EXPAND | wx.ALL, 5)
-        spacing_sizer.Add(spacing_txt_z, 1, wx.EXPAND | wx.ALL, 5)
+        spacing_sizer = QHBoxLayout()
+        spacing_sizer.addWidget(QLabel(_("Spacing")))
+        spacing_sizer.addWidget(spacing_txt_x, 1)
+        spacing_sizer.addWidget(spacing_txt_y, 1)
+        spacing_sizer.addWidget(spacing_txt_z, 1)
 
-        btn_sizer = wx.StdDialogButtonSizer()
-        btn_ok = wx.Button(self, wx.ID_OK)
-        btn_ok.SetDefault()
-        btn_cancel = wx.Button(self, wx.ID_CANCEL)
-        btn_sizer.AddButton(btn_ok)
-        btn_sizer.AddButton(btn_cancel)
-        btn_sizer.Realize()
+        btn_sizer = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btn_sizer.accepted.connect(self.accept)
+        btn_sizer.rejected.connect(self.reject)
 
-        main_sizer = wx.BoxSizer(wx.VERTICAL)
-        main_sizer.Add(name_sizer, 1, wx.EXPAND)
-        main_sizer.Add(modality_sizer, 1, wx.EXPAND)
-        main_sizer.Add(orientation_sizer, 1, wx.EXPAND)
-        main_sizer.Add(spacing_sizer, 1, wx.EXPAND)
-        main_sizer.Add(btn_sizer, 1, wx.EXPAND | wx.ALL, 5)
+        main_sizer = QVBoxLayout(self)
+        main_sizer.addLayout(name_sizer)
+        main_sizer.addLayout(modality_sizer)
+        main_sizer.addLayout(orientation_sizer)
+        main_sizer.addLayout(spacing_sizer)
+        main_sizer.addWidget(btn_sizer)
 
-        self.SetSizer(main_sizer)
-        main_sizer.Fit(self)
-        self.Layout()
+        self.setLayout(main_sizer)

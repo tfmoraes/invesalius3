@@ -25,7 +25,9 @@ from concurrent import futures
 from typing import Optional
 
 import numpy as np
-import wx
+from PySide6.QtCore import QEvent, QObject, QPoint, Qt
+from PySide6.QtGui import QCursor
+from PySide6.QtWidgets import QApplication, QDialog, QProgressDialog
 from scipy import ndimage
 from scipy.ndimage import generate_binary_structure, watershed_ift
 
@@ -69,6 +71,22 @@ from invesalius.pubsub import pub as Publisher
 
 # from time import sleep
 # ---
+
+
+class _DoubleClickFilter(QObject):
+    """Event filter that captures mouse double-click events on a QWidget."""
+
+    def __init__(self, button, handler, parent=None):
+        super().__init__(parent)
+        self._button = button
+        self._handler = handler
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.MouseButtonDblClick and event.button() == self._button:
+            self._handler(event)
+            return True
+        return False
+
 
 ORIENTATIONS = {
     "AXIAL": const.AXIAL,
@@ -284,12 +302,12 @@ class BaseImageEditionInteractorStyle(DefaultInteractorStyle):
         if self.viewer.slice_.buffer_slices[self.orientation].mask is None:
             return
         self.viewer.slice_data.cursor.Show()
-        self.viewer.interactor.SetCursor(wx.Cursor(wx.CURSOR_BLANK))
+        self.viewer.interactor.setCursor(QCursor(Qt.BlankCursor))
         self.viewer.interactor.Render()
 
     def OnBILeaveInteractor(self, obj, evt):
         self.viewer.slice_data.cursor.Show(0)
-        self.viewer.interactor.SetCursor(wx.Cursor(wx.CURSOR_DEFAULT))
+        self.viewer.interactor.setCursor(QCursor(Qt.ArrowCursor))
         self.viewer.interactor.Render()
 
     def OnBIBrushClick(self, obj, evt):
@@ -867,9 +885,9 @@ class LinearMeasureInteractorStyle(DefaultInteractorStyle):
         else:
             mx, my = self.GetMousePosition()
             if self._verify_clicked_display(mx, my):
-                self.viewer.interactor.SetCursor(wx.Cursor(wx.CURSOR_HAND))
+                self.viewer.interactor.setCursor(QCursor(Qt.PointingHandCursor))
             else:
-                self.viewer.interactor.SetCursor(wx.Cursor(wx.CURSOR_DEFAULT))
+                self.viewer.interactor.setCursor(QCursor(Qt.ArrowCursor))
 
     def OnLeaveMeasureInteractor(self, obj, evt):
         if self.creating or self.selected:
@@ -1089,13 +1107,14 @@ class PanMoveInteractorStyle(DefaultInteractorStyle):
         self.viewer = viewer
 
         self.AddObserver("MouseMoveEvent", self.OnPanMove)
-        self.viewer.interactor.Bind(wx.EVT_LEFT_DCLICK, self.OnUnspan)
+        self._pan_left_dblclick_filter = _DoubleClickFilter(Qt.LeftButton, self.OnUnspan)
+        self.viewer.interactor.installEventFilter(self._pan_left_dblclick_filter)
 
     def SetUp(self):
         Publisher.sendMessage("Toggle toolbar item", _id=self.state_code, value=True)
 
     def CleanUp(self):
-        self.viewer.interactor.Unbind(wx.EVT_LEFT_DCLICK)
+        self.viewer.interactor.removeEventFilter(self._pan_left_dblclick_filter)
         Publisher.sendMessage("Toggle toolbar item", _id=self.state_code, value=False)
 
     def OnPanMove(self, obj, evt):
@@ -1124,13 +1143,14 @@ class SpinInteractorStyle(DefaultInteractorStyle):
         self.viewer = viewer
 
         self.AddObserver("MouseMoveEvent", self.OnSpinMove)
-        self.viewer.interactor.Bind(wx.EVT_LEFT_DCLICK, self.OnUnspin)
+        self._spin_left_dblclick_filter = _DoubleClickFilter(Qt.LeftButton, self.OnUnspin)
+        self.viewer.interactor.installEventFilter(self._spin_left_dblclick_filter)
 
     def SetUp(self):
         Publisher.sendMessage("Toggle toolbar item", _id=self.state_code, value=True)
 
     def CleanUp(self):
-        self.viewer.interactor.Unbind(wx.EVT_LEFT_DCLICK)
+        self.viewer.interactor.removeEventFilter(self._spin_left_dblclick_filter)
         Publisher.sendMessage("Toggle toolbar item", _id=self.state_code, value=False)
 
     def OnSpinMove(self, obj, evt):
@@ -1168,13 +1188,14 @@ class ZoomInteractorStyle(DefaultInteractorStyle):
         self.viewer = viewer
 
         self.AddObserver("MouseMoveEvent", self.OnZoomMoveLeft)
-        self.viewer.interactor.Bind(wx.EVT_LEFT_DCLICK, self.OnUnZoom)
+        self._zoom_left_dblclick_filter = _DoubleClickFilter(Qt.LeftButton, self.OnUnZoom)
+        self.viewer.interactor.installEventFilter(self._zoom_left_dblclick_filter)
 
     def SetUp(self):
         Publisher.sendMessage("Toggle toolbar item", _id=self.state_code, value=True)
 
     def CleanUp(self):
-        self.viewer.interactor.Unbind(wx.EVT_LEFT_DCLICK)
+        self.viewer.interactor.removeEventFilter(self._zoom_left_dblclick_filter)
         Publisher.sendMessage("Toggle toolbar item", _id=self.state_code, value=False)
 
     def OnZoomMoveLeft(self, obj, evt):
@@ -1199,7 +1220,8 @@ class ZoomSLInteractorStyle(vtkInteractorStyleRubberBandZoom):
 
     def __init__(self, viewer):
         self.viewer = viewer
-        self.viewer.interactor.Bind(wx.EVT_LEFT_DCLICK, self.OnUnZoom)
+        self._zoomsl_left_dblclick_filter = _DoubleClickFilter(Qt.LeftButton, self.OnUnZoom)
+        self.viewer.interactor.installEventFilter(self._zoomsl_left_dblclick_filter)
 
         self.state_code = const.STATE_ZOOM_SL
 
@@ -1207,7 +1229,7 @@ class ZoomSLInteractorStyle(vtkInteractorStyleRubberBandZoom):
         Publisher.sendMessage("Toggle toolbar item", _id=self.state_code, value=True)
 
     def CleanUp(self):
-        self.viewer.interactor.Unbind(wx.EVT_LEFT_DCLICK)
+        self.viewer.interactor.removeEventFilter(self._zoomsl_left_dblclick_filter)
         Publisher.sendMessage("Toggle toolbar item", _id=self.state_code, value=False)
 
     def OnUnZoom(self, evt):
@@ -1306,15 +1328,16 @@ class EditorInteractorStyle(DefaultInteractorStyle):
         self.viewer.slice_data.cursor.Show(0)
 
     def SetUp(self):
-        x, y = self.viewer.interactor.ScreenToClient(wx.GetMousePosition())
-        if self.viewer.interactor.HitTest((x, y)) == wx.HT_WINDOW_INSIDE:
+        pos = self.viewer.interactor.mapFromGlobal(QCursor.pos())
+        x, y = pos.x(), pos.y()
+        if self.viewer.interactor.rect().contains(pos):
             self.viewer.slice_data.cursor.Show()
 
             y = self.viewer.interactor.GetSize()[1] - y
             w_x, w_y, w_z = self.viewer.get_coordinate_cursor(x, y, self.picker)
             self.viewer.slice_data.cursor.SetPosition((w_x, w_y, w_z))
 
-            self.viewer.interactor.SetCursor(wx.Cursor(wx.CURSOR_BLANK))
+            self.viewer.interactor.setCursor(QCursor(Qt.BlankCursor))
             self.viewer.interactor.Render()
 
     def CleanUp(self):
@@ -1324,7 +1347,7 @@ class EditorInteractorStyle(DefaultInteractorStyle):
         Publisher.unsubscribe(self.set_boperation, "Set edition operation")
 
         self.viewer.slice_data.cursor.Show(0)
-        self.viewer.interactor.SetCursor(wx.Cursor(wx.CURSOR_DEFAULT))
+        self.viewer.interactor.setCursor(QCursor(Qt.ArrowCursor))
         self.viewer.interactor.Render()
 
     def set_bsize(self, size):
@@ -1363,12 +1386,12 @@ class EditorInteractorStyle(DefaultInteractorStyle):
         if self.viewer.slice_.buffer_slices[self.orientation].mask is None:
             return
         self.viewer.slice_data.cursor.Show()
-        self.viewer.interactor.SetCursor(wx.Cursor(wx.CURSOR_BLANK))
+        self.viewer.interactor.setCursor(QCursor(Qt.BlankCursor))
         self.viewer.interactor.Render()
 
     def OnLeaveInteractor(self, obj, evt):
         self.viewer.slice_data.cursor.Show(0)
-        self.viewer.interactor.SetCursor(wx.Cursor(wx.CURSOR_DEFAULT))
+        self.viewer.interactor.setCursor(QCursor(Qt.ArrowCursor))
         self.viewer.interactor.Render()
 
     def OnBrushClick(self, obj, evt):
@@ -1519,23 +1542,24 @@ class WatershedProgressWindow:
         self.process = process
         self.title = "InVesalius 3"
         self.msg = _("Applying watershed ...")
-        self.style = wx.PD_APP_MODAL | wx.PD_APP_MODAL | wx.PD_CAN_ABORT
 
-        self.dlg = wx.ProgressDialog(
-            self.title, self.msg, parent=wx.GetApp().GetTopWindow(), style=self.style
-        )
+        app = QApplication.instance()
+        parent = app.activeWindow() if app else None
+        self.dlg = QProgressDialog(self.msg, "Cancel", 0, 0, parent)
+        self.dlg.setWindowTitle(self.title)
+        self.dlg.setWindowModality(Qt.ApplicationModal)
+        self.dlg.canceled.connect(self.Cancel)
+        self.dlg.show()
 
-        self.dlg.Bind(wx.EVT_BUTTON, self.Cancel)
-        self.dlg.Show()
-
-    def Cancel(self, evt):
+    def Cancel(self):
         self.process.terminate()
 
     def Update(self):
-        self.dlg.Pulse()
+        self.dlg.setValue(0)
+        QApplication.processEvents()
 
     def Close(self):
-        self.dlg.Destroy()
+        self.dlg.close()
 
 
 class WatershedConfig(metaclass=utils.Singleton):
@@ -1622,15 +1646,16 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         self.viewer.slice_.to_show_aux = "watershed"
         self.viewer.OnScrollBar()
 
-        x, y = self.viewer.interactor.ScreenToClient(wx.GetMousePosition())
-        if self.viewer.interactor.HitTest((x, y)) == wx.HT_WINDOW_INSIDE:
+        pos = self.viewer.interactor.mapFromGlobal(QCursor.pos())
+        x, y = pos.x(), pos.y()
+        if self.viewer.interactor.rect().contains(pos):
             self.viewer.slice_data.cursor.Show()
 
             y = self.viewer.interactor.GetSize()[1] - y
             w_x, w_y, w_z = self.viewer.get_coordinate_cursor(x, y, self.picker)
             self.viewer.slice_data.cursor.SetPosition((w_x, w_y, w_z))
 
-            self.viewer.interactor.SetCursor(wx.Cursor(wx.CURSOR_BLANK))
+            self.viewer.interactor.setCursor(QCursor(Qt.BlankCursor))
             self.viewer.interactor.Render()
 
     def CleanUp(self):
@@ -1643,7 +1668,7 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         self.viewer.OnScrollBar()
 
         self.viewer.slice_data.cursor.Show(0)
-        self.viewer.interactor.SetCursor(wx.Cursor(wx.CURSOR_DEFAULT))
+        self.viewer.interactor.setCursor(QCursor(Qt.ArrowCursor))
         self.viewer.interactor.Render()
 
     def _create_mask(self):
@@ -1693,12 +1718,12 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
         if self.viewer.slice_.buffer_slices[self.orientation].mask is None:
             return
         self.viewer.slice_data.cursor.Show()
-        self.viewer.interactor.SetCursor(wx.Cursor(wx.CURSOR_BLANK))
+        self.viewer.interactor.setCursor(QCursor(Qt.BlankCursor))
         self.viewer.interactor.Render()
 
     def OnLeaveInteractor(self, obj, evt):
         self.viewer.slice_data.cursor.Show(0)
-        self.viewer.interactor.SetCursor(wx.Cursor(wx.CURSOR_DEFAULT))
+        self.viewer.interactor.setCursor(QCursor(Qt.ArrowCursor))
         self.viewer.interactor.Render()
 
     def WOnScrollBackward(self, obj, evt):
@@ -2018,16 +2043,14 @@ class WaterShedInteractorStyle(DefaultInteractorStyle):
             while q.empty() and p.is_alive():
                 time.sleep(0.5)
                 wp.Update()
-                wx.Yield()
+                QApplication.processEvents()
 
             wp.Close()
             del wp
 
-            w_x, w_y = wx.GetMousePosition()
-            x, y = self.viewer.ScreenToClient((w_x, w_y))
-            flag = self.viewer.interactor.HitTest((x, y))
+            interactor_pos = self.viewer.interactor.mapFromGlobal(QCursor.pos())
 
-            if flag == wx.HT_WINDOW_INSIDE:
+            if self.viewer.interactor.rect().contains(interactor_pos):
                 self.OnEnterInteractor(None, None)
 
             if q.empty():
@@ -2106,7 +2129,8 @@ class ReorientImageInteractorStyle(DefaultInteractorStyle):
         if self.viewer.orientation == "AXIAL":
             Publisher.subscribe(self._set_reorientation_angles, "Set reorientation angles")
 
-        self.viewer.interactor.Bind(wx.EVT_LEFT_DCLICK, self.OnDblClick)
+        self._reorient_left_dblclick_filter = _DoubleClickFilter(Qt.LeftButton, self.OnDblClick)
+        self.viewer.interactor.installEventFilter(self._reorient_left_dblclick_filter)
 
     def SetUp(self):
         self.draw_lines()
@@ -2114,7 +2138,7 @@ class ReorientImageInteractorStyle(DefaultInteractorStyle):
         Publisher.sendMessage("Reload actual slice")
 
     def CleanUp(self):
-        self.viewer.interactor.Unbind(wx.EVT_LEFT_DCLICK)
+        self.viewer.interactor.removeEventFilter(self._reorient_left_dblclick_filter)
 
         for actor in self.actors:
             self.viewer.slice_data.renderer.RemoveActor(actor)
@@ -2170,12 +2194,12 @@ class ReorientImageInteractorStyle(DefaultInteractorStyle):
             dist_center = ((mx - cx) ** 2 + (my - cy) ** 2) ** 0.5
             if dist_center <= 15:
                 self._over_center = True
-                cursor = wx.Cursor(wx.CURSOR_SIZENESW)
+                cursor = QCursor(Qt.SizeBDiagCursor)
             else:
                 self._over_center = False
-                cursor = wx.Cursor(wx.CURSOR_DEFAULT)
+                cursor = QCursor(Qt.ArrowCursor)
 
-            self.viewer.interactor.SetCursor(cursor)
+            self.viewer.interactor.setCursor(cursor)
 
     def OnUpdate(self, obj, evt):
         w, h = self.viewer.slice_data.renderer.GetSize()
@@ -2444,17 +2468,19 @@ class FloodFillMaskInteractorStyle(DefaultInteractorStyle):
                     bstruct,
                 )
 
-                dlg = wx.ProgressDialog(
-                    self._progr_title,
-                    self._progr_msg,
-                    parent=wx.GetApp().GetTopWindow(),
-                    style=wx.PD_APP_MODAL,
-                )
+                app = QApplication.instance()
+                parent = app.activeWindow() if app else None
+                dlg = QProgressDialog(self._progr_msg, None, 0, 0, parent)
+                dlg.setWindowTitle(self._progr_title)
+                dlg.setWindowModality(Qt.ApplicationModal)
+                dlg.setCancelButton(None)
+                dlg.show()
                 while not future.done():
-                    dlg.Pulse()
+                    dlg.setValue(0)
+                    QApplication.processEvents()
                     time.sleep(0.1)
 
-                dlg.Destroy()
+                dlg.close()
 
             self.viewer.slice_.current_mask.save_history(
                 0, "VOLUME", self.viewer.slice_.current_mask.matrix.copy(), cp_mask
@@ -2656,7 +2682,7 @@ class SelectMaskPartsInteractorStyle(DefaultInteractorStyle):
             self.dlg = None
 
         if self.config.mask:
-            if dialog_return == wx.OK:
+            if dialog_return == QDialog.Accepted:
                 # Capture old mask before selection changes, so we can hide its 3D preview
                 old_mask = self.viewer.slice_.current_mask
 

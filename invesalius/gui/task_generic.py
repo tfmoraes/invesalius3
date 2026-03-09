@@ -18,80 +18,56 @@
 # --------------------------------------------------------------------------
 
 
-import wx
-import wx.lib.hyperlink as hl
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from invesalius.i18n import tr as _
 
 
-class TaskPanel(wx.Panel):
+class TaskPanel(QWidget):
     """
     This panel works as a "frame", drawing a white margin arround
     the panel that really matters (InnerTaskPanel).
     """
 
     def __init__(self, parent):
-        # note: don't change this class!!!
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
         inner_panel = InnerTaskPanel(self)
 
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(inner_panel, 1, wx.EXPAND | wx.GROW | wx.BOTTOM | wx.RIGHT | wx.LEFT, 7)
-        sizer.Fit(self)
-
-        self.SetSizer(sizer)
-        self.Update()
-        self.SetAutoLayout(1)
+        sizer = QHBoxLayout(self)
+        sizer.setContentsMargins(7, 0, 7, 7)
+        sizer.addWidget(inner_panel)
 
 
-class InnerTaskPanel(wx.Panel):
+class InnerTaskPanel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
-        self.SetBackgroundColour(wx.Colour(255, 255, 255))
-        self.SetAutoLayout(1)
+        super().__init__(parent)
+        self.setStyleSheet("background-color: white;")
 
-        # Build GUI
         self.__init_gui()
-
-        # Bind events
         self.__bind_events()
-        self.__bind_wx_events()
+        self.__bind_qt_events()
 
     def __init_gui(self):
-        """
-        Build widgets in current panel
-        """
-        # Create widgets to be inserted in this panel
-        link_test = hl.HyperLinkCtrl(self, -1, _("Testing..."))
-        link_test.SetUnderlines(False, False, False)
-        link_test.SetColours("BLACK", "BLACK", "BLACK")
-        link_test.AutoBrowse(False)
-        link_test.UpdateLink()
+        link_test = QPushButton(_("Testing..."), self)
+        link_test.setFlat(True)
+        link_test.setStyleSheet("color: black; text-decoration: none;")
         self.link_test = link_test
 
-        # Add line sizers into main sizer
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(link_test, 0, wx.GROW | wx.EXPAND)
-        self.SetSizer(sizer)
-        self.Fit()
+        sizer = QVBoxLayout(self)
+        sizer.setContentsMargins(0, 0, 0, 0)
+        sizer.addWidget(link_test)
 
     def __bind_events(self):
-        """
-        Bind pubsub events
-        """
-        # Example: ps.Publisher().subscribe("Test")
         pass
 
-    def __bind_wx_events(self):
-        """
-        Bind wx general events
-        """
-        # Example: self.Bind(wx.EVT_BUTTON, self.OnButton)
-        self.link_test.Bind(hl.EVT_HYPERLINK_LEFT, self.OnTest)
+    def __bind_qt_events(self):
+        self.link_test.clicked.connect(self.OnTest)
 
-    def OnTest(self, event):
-        """
-        Describe what this method does
-        """
-        event.Skip()
+    def OnTest(self):
+        pass

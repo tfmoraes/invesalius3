@@ -17,13 +17,13 @@
 #    detalhes.
 # --------------------------------------------------------------------------
 import imghdr
+import itertools
 import os
 import re
 import sys
 import tempfile
 
 import numpy
-import wx
 from imageio import imread
 from vtkmodules.util import numpy_support
 from vtkmodules.vtkCommonCore import vtkFileOutputWindow, vtkOutputWindow
@@ -43,6 +43,8 @@ import invesalius.data.converters as converters
 import invesalius.utils as utils
 from invesalius import inv_paths
 from invesalius.pubsub import pub as Publisher
+
+_bitmap_id_counter = itertools.count(start=1)
 
 # flag to control vtk error in read files
 no_error = True
@@ -202,7 +204,7 @@ class LoadBitmap:
 
             vtk_error = False
 
-        id = wx.NewIdRef()
+        id = next(_bitmap_id_counter)
 
         bmp_item = [
             self.filepath,

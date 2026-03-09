@@ -24,7 +24,7 @@ from time import sleep
 from typing import TYPE_CHECKING, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
-import wx
+from PySide6.QtCore import QTimer
 
 import invesalius.constants as const
 import invesalius.data.transformations as tr
@@ -53,34 +53,42 @@ class TrackerCoordinates:
         self.coord = coord
         self.marker_visibilities = marker_visibilities
         if not self.nav_status:
-            wx.CallAfter(
-                Publisher.sendMessage,
-                "From Neuronavigation: Update tracker poses",
-                poses=self.coord.tolist(),
-                visibilities=self.marker_visibilities,
+            QTimer.singleShot(
+                0,
+                lambda: Publisher.sendMessage(
+                    "From Neuronavigation: Update tracker poses",
+                    poses=self.coord.tolist(),
+                    visibilities=self.marker_visibilities,
+                ),
             )
             if self.previous_marker_visibilities != self.marker_visibilities:
-                wx.CallAfter(
-                    Publisher.sendMessage,
-                    "Sensors ID",
-                    marker_visibilities=self.marker_visibilities,
+                QTimer.singleShot(
+                    0,
+                    lambda: Publisher.sendMessage(
+                        "Sensors ID",
+                        marker_visibilities=self.marker_visibilities,
+                    ),
                 )
-                wx.CallAfter(Publisher.sendMessage, "Render volume viewer")
+                QTimer.singleShot(0, lambda: Publisher.sendMessage("Render volume viewer"))
                 self.previous_marker_visibilities = self.marker_visibilities
 
     def GetCoordinates(self) -> Tuple[Optional[np.ndarray], List[bool]]:
         if self.nav_status:
-            wx.CallAfter(
-                Publisher.sendMessage,
-                "From Neuronavigation: Update tracker poses",
-                poses=self.coord.tolist(),
-                visibilities=self.marker_visibilities,
+            QTimer.singleShot(
+                0,
+                lambda: Publisher.sendMessage(
+                    "From Neuronavigation: Update tracker poses",
+                    poses=self.coord.tolist(),
+                    visibilities=self.marker_visibilities,
+                ),
             )
             if self.previous_marker_visibilities != self.marker_visibilities:
-                wx.CallAfter(
-                    Publisher.sendMessage,
-                    "Sensors ID",
-                    marker_visibilities=self.marker_visibilities,
+                QTimer.singleShot(
+                    0,
+                    lambda: Publisher.sendMessage(
+                        "Sensors ID",
+                        marker_visibilities=self.marker_visibilities,
+                    ),
                 )
                 self.previous_marker_visibilities = self.marker_visibilities
 

@@ -19,8 +19,6 @@
 import logging
 from typing import TYPE_CHECKING
 
-import wx
-
 from invesalius.error_handling import (
     show_error,
     show_info,
@@ -29,16 +27,12 @@ from invesalius.error_handling import (
     show_warning,
 )
 
-# Re-export the functions from error_handling for backward compatibility
 __all__ = ["show_message", "show_info", "show_warning", "show_error", "show_question"]
 
 
-# Add these functions to make it easier to migrate existing code
-def message_dialog(message, title="InVesalius 3", style=wx.OK | wx.ICON_INFORMATION):
+def message_dialog(message, title="InVesalius 3", icon_type="information"):
     """
     Show a message dialog and log it with the appropriate level.
-
-    This is a convenience function to make it easier to migrate from wx.MessageBox.
 
     Parameters:
     -----------
@@ -46,28 +40,27 @@ def message_dialog(message, title="InVesalius 3", style=wx.OK | wx.ICON_INFORMAT
         The message to display and log.
     title : str
         The title of the message box.
-    style : int
-        The style of the message box (wx.OK, wx.ICON_INFORMATION, wx.ICON_WARNING, etc.).
+    icon_type : str
+        The icon type: 'information', 'warning', or 'error'.
 
     Returns:
     --------
     int
         The result of the message box.
     """
-    # Determine the log level based on the style
     log_level = logging.INFO
-    if style & wx.ICON_WARNING:
+    if icon_type == "warning":
         log_level = logging.WARNING
-    elif style & wx.ICON_ERROR:
+    elif icon_type == "error":
         log_level = logging.ERROR
 
-    return show_message(title, message, style, log_level)
+    return show_message(title, message, icon_type, log_level)
 
 
 if TYPE_CHECKING:
-    import wx
+    from PySide6.QtWidgets import QWidget
 
 
-def calc_width_needed(widget: "wx.Window", num_chars: int) -> int:
-    width, height = widget.GetTextExtent("M" * num_chars)
-    return width
+def calc_width_needed(widget: "QWidget", num_chars: int) -> int:
+    fm = widget.fontMetrics()
+    return fm.horizontalAdvance("M" * num_chars)

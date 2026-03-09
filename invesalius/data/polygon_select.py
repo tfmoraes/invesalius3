@@ -18,20 +18,18 @@
 # --------------------------------------------------------------------------
 
 
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Any, Tuple
 
 import invesalius.constants as const
 from invesalius.gui.widgets.canvas_renderer import CanvasHandlerBase, Polygon
 from invesalius.pubsub import pub as Publisher
 
 if TYPE_CHECKING:
-    import wx
-
     from invesalius.gui.widgets.canvas_renderer import CanvasEvent, CanvasRendererCTX
 
 
 class PolygonSelectCanvas(CanvasHandlerBase):
-    """Tool for selecting a polygon on a wx-based canvas.
+    """Tool for selecting a polygon on a canvas.
 
     Inspired on PolygonDensityMeasure, stores and renders a polygon for a canvas.
 
@@ -55,7 +53,7 @@ class PolygonSelectCanvas(CanvasHandlerBase):
 
         self.interactive = interactive
 
-    def draw_to_canvas(self, gc: "wx.GraphicsContext", canvas: "CanvasRendererCTX") -> None:
+    def draw_to_canvas(self, gc: Any, canvas: "CanvasRendererCTX") -> None:
         ## abstract method from super class. needs implementation but does nothing here
         super().draw_to_canvas(gc, canvas)
 

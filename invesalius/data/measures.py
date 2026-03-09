@@ -732,10 +732,10 @@ class LinearMeasure:
 
     def draw_to_canvas(self, gc, canvas):
         """
-        Draws to an wx.GraphicsContext.
+        Draws to a QPainter context.
 
         Parameters:
-            gc: is a wx.GraphicsContext
+            gc: is a QPainter
             canvas: the canvas it's being drawn.
         """
         coord = vtkCoordinate()
@@ -982,10 +982,10 @@ class AngularMeasure:
 
     def draw_to_canvas(self, gc, canvas):
         """
-        Draws to an wx.GraphicsContext.
+        Draws to a QPainter context.
 
         Parameters:
-            gc: is a wx.GraphicsContext
+            gc: is a QPainter
             canvas: the canvas it's being drawn.
         """
 
@@ -1251,10 +1251,10 @@ class CircleDensityMeasure(CanvasHandlerBase):
 
     def draw_to_canvas(self, gc, canvas):
         """
-        Draws to an wx.GraphicsContext.
+        Draws to a QPainter context.
 
         Parameters:
-            gc: is a wx.GraphicsContext
+            gc: is a QPainter
             canvas: the canvas it's being drawn.
         """
         #  cx, cy = self._3d_to_2d(canvas.evt_renderer, self.center)

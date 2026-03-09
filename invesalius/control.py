@@ -24,7 +24,8 @@ import tempfile
 from typing import TYPE_CHECKING, List, Literal, Optional, Sequence, Tuple
 
 import numpy as np
-import wx
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
 
 import invesalius.constants as const
 import invesalius.data.imagedata_utils as image_utils
@@ -151,7 +152,7 @@ class Controller:
     def OnShowDialogImportDirectory(self) -> None:
         self.ShowDialogImportDirectory()
 
-    def OnShowDialogImportOtherFiles(self, id_type: wx.WindowIDRef) -> None:
+    def OnShowDialogImportOtherFiles(self, id_type: int) -> None:
         self.ShowDialogImportOtherFiles(id_type)
 
     def OnShowDialogOpenProject(self) -> None:
@@ -223,7 +224,7 @@ class Controller:
         elif dirpath:
             self.StartImportPanel(dirpath)
 
-    def ShowDialogImportOtherFiles(self, id_type: wx.WindowIDRef) -> None:
+    def ShowDialogImportOtherFiles(self, id_type: int) -> None:
         # Offer to save current project if necessary
         session = ses.Session()
         project_status = session.GetConfig("project_status")
@@ -258,17 +259,19 @@ class Controller:
         try:
             if isinstance(filepath, bytes):
                 filepath = filepath.decode("utf-8")
-                
+
             import invesalius.reader.others_reader as oth
             from invesalius.reader.nifti_utils import check_is_mask, validate_mask_compatibility
-            
+
             img = oth.ReadOthers(filepath)
             if img is False:
                 raise Exception(_("Failed to read NIfTI file."))
 
             # Ensure a volume is loaded before importing a mask
             if self.Slice.matrix is None:
-                raise ValueError(_("No volume loaded. Please load a volume before importing a mask."))
+                raise ValueError(
+                    _("No volume loaded. Please load a volume before importing a mask.")
+                )
 
             # Preserve original dtype; avoid forcing float64 conversion
             data = np.asarray(img.dataobj)
@@ -287,11 +290,9 @@ class Controller:
             # Label-map threshold: strict 0-255 range for binary mask
             thresh = (0, 255)
             colour = const.MASK_COLOUR[len(prj.Project().mask_dict) % len(const.MASK_COLOUR)]
-            
-            Publisher.sendMessage(
-                "Create new mask", mask_name=name, thresh=thresh, colour=colour
-            )
-            
+
+            Publisher.sendMessage("Create new mask", mask_name=name, thresh=thresh, colour=colour)
+
             mask = self.Slice.current_mask
             if mask:
                 # Mask matrix has shape (Z+1, Y+1, X+1) with padding at index 0. Re-assign correctly.
@@ -305,15 +306,17 @@ class Controller:
                     buffer_.discard_mask()
                 Publisher.sendMessage("Reload actual slice")
 
-            Publisher.sendMessage("Update status text in GUI", label=_("Mask imported successfully."))
+            Publisher.sendMessage(
+                "Update status text in GUI", label=_("Mask imported successfully.")
+            )
 
         except Exception as e:
-            dialogs.ErrorMessageBox(None, _("Error importing mask"), str(e)).ShowModal()
+            dialogs.ErrorMessageBox(None, _("Error importing mask"), str(e)).exec()
 
     def OnShowExportMaskDialog(self, mask_indexes: list) -> None:
         if not mask_indexes:
             return
-        
+
         project = prj.Project()
         if len(mask_indexes) == 1:
             mask = project.GetMask(mask_indexes[0])
@@ -321,40 +324,42 @@ class Controller:
         else:
             default_file = "masks.nii.gz"
 
-        dlg = wx.FileDialog(
-            None, 
-            _("Export Mask as NIfTI"), 
-            defaultFile=default_file,
-            wildcard=dialogs.WILDCARD_NIFTI, 
-            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT
+        filepath, _ = QFileDialog.getSaveFileName(
+            None,
+            _("Export Mask as NIfTI"),
+            default_file,
+            "NIfTI files (*.nii *.nii.gz)",
         )
 
-        if dlg.ShowModal() == wx.ID_OK:
-            filepath = dlg.GetPath()
+        if filepath:
             if isinstance(filepath, bytes):
                 filepath = filepath.decode("utf-8")
-                
+
             if not (filepath.endswith(".nii") or filepath.endswith(".nii.gz")):
                 filepath += ".nii.gz"
-            Publisher.sendMessage("Export masks to nifti", mask_indexes=mask_indexes, filepath=filepath)
-        dlg.Destroy()
+            Publisher.sendMessage(
+                "Export masks to nifti", mask_indexes=mask_indexes, filepath=filepath
+            )
 
     def OnExportMaskNifti(self, mask_indexes: list, filepath: "str | bytes") -> None:
         try:
             import nibabel as nib
+
             project = prj.Project()
             for index in mask_indexes:
                 mask = project.GetMask(index)
                 if not mask:
                     continue
-                
+
                 # Ensure all slices have threshold data (lazy threshold only generates visited slices)
                 self.Slice.do_threshold_to_all_slices(mask)
                 # Strip 1-pixel padding from InVesalius mask matrix (padding is only at index 0)
                 mask_matrix = mask.matrix[1:, 1:, 1:]
-                
+
                 # Axis transform to NIfTI layout and cast to uint8
-                export_data = np.ascontiguousarray(np.swapaxes(np.fliplr(mask_matrix), 0, 2)).astype(np.uint8)
+                export_data = np.ascontiguousarray(
+                    np.swapaxes(np.fliplr(mask_matrix), 0, 2)
+                ).astype(np.uint8)
 
                 # Label-map enforcement: strict binary encoding (0=background, 255=mask)
                 export_data[export_data > 0] = 255
@@ -371,11 +376,11 @@ class Controller:
                     save_path = f"{base_path}_{mask.name}{ext}"
                 else:
                     save_path = filepath
-                    
+
                 nib.save(mask_nifti, save_path)
 
         except Exception as e:
-            dialogs.ErrorMessageBox(None, _("Error exporting mask"), str(e)).ShowModal()
+            dialogs.ErrorMessageBox(None, _("Error exporting mask"), str(e)).exec()
 
     def ShowDialogOpenProject(self) -> None:
         # Offer to save current project if necessary
@@ -476,7 +481,7 @@ class Controller:
                     self.ShowDialogSaveProject()
             if session.IsOpen():
                 self.CloseProject()
-            wx.CallAfter(self.OpenProject, filepath)
+            QTimer.singleShot(0, lambda: self.OpenProject(filepath))
         else:
             dialog.InexistentPath(filepath)
 
@@ -532,7 +537,7 @@ class Controller:
             try:
                 prj.Project().SavePlistProject(dirpath, filename, compress)
             except PermissionError as err:
-                if wx.GetApp() is None:
+                if QApplication.instance() is None:
                     print(
                         f"Error: Permission denied, you don't have permission to write at {dirpath}"
                     )
@@ -542,8 +547,7 @@ class Controller:
                         "Save project error",
                         f"It was not possible to save because you don't have permission to write at {dirpath}\n{err}",
                     )
-                    dlg.ShowModal()
-                    dlg.Destroy()
+                    dlg.exec()
             else:
                 # Update progress dialog
                 Publisher.sendMessage("Update Progress bar", value=70, msg="Saving project data...")
@@ -556,7 +560,7 @@ class Controller:
             )
 
         except Exception as e:
-            wx.MessageBox(f"Error: {e}", "Error", wx.OK | wx.ICON_ERROR)
+            QMessageBox.critical(None, "Error", f"Error: {e}")
             Publisher.sendMessage("Close Progress bar")
         finally:
             Publisher.sendMessage("Close Progress bar")
@@ -623,7 +627,7 @@ class Controller:
             self.img_type = 1
 
     def OnLoadImportBitmapPanel(
-        self, data: List[Tuple[bytes, str, str, int, int, str, str, wx.WindowIDRef]]
+        self, data: List[Tuple[bytes, str, str, int, int, str, str, int]]
     ) -> None:
         ok = self.LoadImportBitmapPanel(data)
         if ok:
@@ -632,7 +636,7 @@ class Controller:
             # Publisher.sendMessage("Show import panel in invesalius.gui.frame") as frame
 
     def LoadImportBitmapPanel(
-        self, data: List[Tuple[bytes, str, str, int, int, str, str, wx.WindowIDRef]]
+        self, data: List[Tuple[bytes, str, str, int, int, str, str, int]]
     ) -> bool:
         # if patient_series and isinstance(patient_series, list):
         # Publisher.sendMessage("Load import panel", patient_series)
@@ -1044,10 +1048,10 @@ class Controller:
         if resolution_percentage < 1.0:
             re_dialog = dialog.ResizeImageDialog()
             re_dialog.SetValue(int(resolution_percentage * 100))
-            re_dialog_value = re_dialog.ShowModal()
-            re_dialog.Close()
+            re_dialog_value = re_dialog.exec()
+            re_dialog.close()
 
-            if re_dialog_value == wx.ID_OK:
+            if re_dialog_value == QDialog.DialogCode.Accepted:
                 percentage = re_dialog.GetValue()
                 resolution_percentage = percentage / 100.0
             else:
@@ -1082,15 +1086,16 @@ class Controller:
         dicom = group.GetDicomSample()
         samples_per_pixel = dicom.image.samples_per_pixel
         if samples_per_pixel == 3:
-            dlg = wx.MessageDialog(
-                wx.GetApp().GetTopWindow(),
+            reply = QMessageBox.question(
+                None,
+                _("Confirm"),
                 _(
                     "this is a rgb image, it's necessary to convert to grayscale to open on invesalius.\ndo you want to convert it to grayscale?"
                 ),
-                _("Confirm"),
-                wx.YES_NO | wx.YES_DEFAULT | wx.ICON_QUESTION,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
             )
-            if dlg.ShowModal() != wx.ID_YES:
+            if reply != QMessageBox.StandardButton.Yes:
                 return
         matrix, matrix_filename, dicom = self.OpenDicomGroup(group, interval, file_range, gui=True)
         if matrix is None:
@@ -1168,10 +1173,10 @@ class Controller:
             if resolution_percentage < 1.0 and gui:
                 re_dialog = dialog.ResizeImageDialog()
                 re_dialog.SetValue(int(resolution_percentage * 100))
-                re_dialog_value = re_dialog.ShowModal()
-                re_dialog.Close()
+                re_dialog_value = re_dialog.exec()
+                re_dialog.close()
 
-                if re_dialog_value == wx.ID_OK:
+                if re_dialog_value == QDialog.DialogCode.Accepted:
                     percentage = re_dialog.GetValue()
                     resolution_percentage = percentage / 100.0
                 else:
@@ -1200,8 +1205,8 @@ class Controller:
 
         if gui and (spacing[0] == 0.0 or spacing[1] == 0.0 or spacing[2] == 0.0):
             sx, sy, sz = spacing
-            dlg = dialogs.SetSpacingDialog(wx.GetApp().GetTopWindow(), sx, sy, sz)
-            if dlg.ShowModal() == wx.ID_OK:
+            dlg = dialogs.SetSpacingDialog(QApplication.activeWindow(), sx, sy, sz)
+            if dlg.exec() == QDialog.DialogCode.Accepted:
                 spacing = dlg.spacing_new_x, dlg.spacing_new_y, dlg.spacing_new_z
             else:
                 return None, None, None

@@ -1,8 +1,18 @@
 import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
-import wx
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QFontMetricsF,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPen,
+)
+from PySide6.QtWidgets import QColorDialog, QWidget
 
 if TYPE_CHECKING:
     import numpy as np
@@ -31,38 +41,35 @@ class Node:
     colour: Tuple[int, int, int] = field(compare=False)
 
 
-class CLUTEvent(wx.PyCommandEvent):
-    def __init__(self, evtType: int, id: int, nodes: List[Node]):
-        wx.PyCommandEvent.__init__(self, evtType, id)
+class CLUTEvent:
+    def __init__(self, nodes: List[Node]):
         self.nodes = nodes
 
     def GetNodes(self) -> List[Node]:
         return self.nodes
 
 
-# Occurs when CLUT point is changing
-myEVT_CLUT_NODE_CHANGED = wx.NewEventType()
-EVT_CLUT_NODE_CHANGED = wx.PyEventBinder(myEVT_CLUT_NODE_CHANGED, 1)
-
-
-class CLUTImageDataWidget(wx.Panel):
+class CLUTImageDataWidget(QWidget):
     """
     Widget used to config the Lookup table from imagedata.
     """
 
+    clut_node_changed = Signal(object)
+
     def __init__(
         self,
-        parent: wx.Window,
+        parent: QWidget,
         id: int,
         histogram: "np.ndarray",
         init: float,
         end: float,
         nodes: Optional[List[Node]] = None,
     ):
-        super().__init__(parent, id)
+        super().__init__(parent)
 
-        self.SetFocusIgnoringChildren()
-        self.SetMinSize((400, 200))
+        self.setAttribute(Qt.WA_OpaquePaintEvent)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setMinimumSize(400, 200)
 
         self.histogram = histogram
 
@@ -105,7 +112,6 @@ class CLUTImageDataWidget(wx.Panel):
         self._d_hist: List[Tuple[float, float]] = []
 
         self._build_drawn_hist()
-        self.__bind_events_wx()
 
     @property
     def window_level(self) -> float:
@@ -121,29 +127,9 @@ class CLUTImageDataWidget(wx.Panel):
         pn = self.nodes[-1].value
         return pn - p0
 
-    def __bind_events_wx(self) -> None:
-        self.Bind(wx.EVT_ERASE_BACKGROUND, self.OnEraseBackGround)
-        self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(wx.EVT_SIZE, self.OnSize)
-
-        self.Bind(wx.EVT_MOTION, self.OnMotion)
-
-        self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
-        self.Bind(wx.EVT_MIDDLE_DOWN, self.OnMiddleClick)
-        self.Bind(wx.EVT_MIDDLE_UP, self.OnMiddleRelease)
-
-        self.Bind(wx.EVT_LEFT_DOWN, self.OnClick)
-        self.Bind(wx.EVT_LEFT_UP, self.OnRelease)
-        self.Bind(wx.EVT_LEFT_DCLICK, self.OnDoubleClick)
-
-        self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightClick)
-
-        self.Bind(wx.EVT_CHAR, self.OnKeyDown)
-
     def _build_drawn_hist(self) -> None:
-        w, h = self.GetVirtualSize()
-        # w = len(self.histogram)
-        # h = 1080
+        w = self.width()
+        h = self.height()
 
         x_init = self._init
         x_end = self._end
@@ -175,12 +161,9 @@ class CLUTImageDataWidget(wx.Panel):
         else:
             return h[int(x)]
 
-    def OnEraseBackGround(self, evt: wx.Event) -> None:
-        pass
-
-    def OnSize(self, evt: wx.Event) -> None:
+    def resizeEvent(self, event) -> None:
         if self.first_show:
-            w, h = self.GetVirtualSize()
+            w = self.width()
             init = self.pixel_to_hounsfield(-RADIUS)
             end = self.pixel_to_hounsfield(w + RADIUS)
             self._init = init
@@ -193,238 +176,236 @@ class CLUTImageDataWidget(wx.Panel):
             self.first_show = False
 
         self._build_drawn_hist()
-        self.Refresh()
-        evt.Skip()
+        self.update()
+        super().resizeEvent(event)
 
-    def OnPaint(self, evt: wx.Event) -> None:
-        dc = wx.BufferedPaintDC(self)
-        dc.SetBackground(wx.Brush("Black"))
-        dc.Clear()
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.fillRect(self.rect(), QColor(0, 0, 0))
 
-        self.draw_histogram(dc)
-        self.draw_gradient(dc)
+        self.draw_histogram(painter)
+        self.draw_gradient(painter)
 
         if self.last_selected is not None:
-            self.draw_text(dc, self.last_selected.value)
+            self.draw_text(painter, self.last_selected.value)
 
-    def OnWheel(self, evt: wx.MouseEvent) -> None:
+        painter.end()
+
+    def wheelEvent(self, event) -> None:
         """
         Increase or decrease the range from hounsfield scale showed. It
         doesn't change values in preset, only to visualization.
         """
-        direction = evt.GetWheelRotation() / evt.GetWheelDelta()
+        direction = event.angleDelta().y() / 120.0
         init = self._init - direction * self._range
         end = self._end + direction * self._range
         self.SetRange(init, end)
-        self.Refresh()
+        self.update()
 
-    def OnMiddleClick(self, evt: wx.MouseEvent) -> None:
-        self.middle_pressed = True
-        self.last_x = self.pixel_to_hounsfield(evt.GetX())
+    def mousePressEvent(self, event) -> None:
+        px = int(event.position().x())
+        py = int(event.position().y())
 
-    def OnMiddleRelease(self, evt: wx.Event) -> None:
-        self.middle_pressed = False
+        if event.button() == Qt.MiddleButton:
+            self.middle_pressed = True
+            self.last_x = self.pixel_to_hounsfield(px)
 
-    def OnClick(self, evt: wx.MouseEvent) -> None:
-        px, py = evt.GetPosition()
-        self.left_pressed = True
-        self.selected_node = self.get_node_clicked(px, py)
-        self.last_selected = self.selected_node
-        if self.selected_node is not None:
-            self.Refresh()
+        elif event.button() == Qt.LeftButton:
+            self.left_pressed = True
+            self.selected_node = self.get_node_clicked(px, py)
+            self.last_selected = self.selected_node
+            if self.selected_node is not None:
+                self.update()
 
-    def OnRelease(self, evt: wx.Event) -> None:
-        self.left_pressed = False
-        self.selected_node = None
+        elif event.button() == Qt.RightButton:
+            w = self.width()
+            h = self.height()
+            selected_node = self.get_node_clicked(px, py)
+            if selected_node:
+                self.nodes.remove(selected_node)
+                self._generate_event()
+                self.update()
 
-    def OnDoubleClick(self, evt: wx.MouseEvent) -> None:
-        w, h = self.GetVirtualSize()
-        px, py = evt.GetPosition()
+        event.accept()
 
-        # Verifying if the user double-click in a node-colour.
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.MiddleButton:
+            self.middle_pressed = False
+        elif event.button() == Qt.LeftButton:
+            self.left_pressed = False
+            self.selected_node = None
+        event.accept()
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        if event.button() != Qt.LeftButton:
+            return
+
+        px = int(event.position().x())
+        py = int(event.position().y())
+
         selected_node = self.get_node_clicked(px, py)
         if selected_node:
-            # The user double-clicked a node colour. Give the user the
-            # option to change the color from this node.
-            colour_dialog = wx.GetColourFromUser(self, (0, 0, 0))
-            if colour_dialog.IsOk():
-                r, g, b = colour_dialog.Get()[:3]
-                selected_node.colour = r, g, b
+            color = QColorDialog.getColor(QColor(0, 0, 0), self)
+            if color.isValid():
+                selected_node.colour = (color.red(), color.green(), color.blue())
                 self._generate_event()
         else:
-            # The user doesn't clicked in a node colour. Creates a new node
-            # colour with the DEFAULT_COLOUR
             vx = self.pixel_to_hounsfield(px)
             node = Node(vx, DEFAULT_COLOUR)
             self.nodes.append(node)
             self._generate_event()
 
-        self.Refresh()
+        self.update()
 
-    def OnRightClick(self, evt: wx.MouseEvent) -> None:
-        w, h = self.GetVirtualSize()
-        px, py = evt.GetPosition()
-        selected_node = self.get_node_clicked(px, py)
-
-        if selected_node:
-            self.nodes.remove(selected_node)
-            self._generate_event()
-            self.Refresh()
-
-    def OnMotion(self, evt: wx.MouseEvent) -> None:
+    def mouseMoveEvent(self, event) -> None:
         if self.middle_pressed:
-            x = self.pixel_to_hounsfield(evt.GetX())
+            x = self.pixel_to_hounsfield(int(event.position().x()))
             dx = x - self.last_x
             init = self._init - dx
             end = self._end - dx
             self.SetRange(init, end)
-            self.Refresh()
+            self.update()
             self.last_x = x
 
-        # The user is dragging a colour node
         elif self.left_pressed and self.selected_node:
-            x = self.pixel_to_hounsfield(evt.GetX())
+            x = self.pixel_to_hounsfield(int(event.position().x()))
             self.selected_node.value = float(x)
-            self.Refresh()
-
-            # A point in the preset has been changed, raising a event
+            self.update()
             self._generate_event()
 
-    def OnKeyDown(self, evt: wx.KeyEvent) -> None:
+    def keyPressEvent(self, event) -> None:
         if self.last_selected is not None:
-            # Right key - Increase node value
-            if evt.GetKeyCode() in (wx.WXK_RIGHT, wx.WXK_NUMPAD_RIGHT):
+            key = event.key()
+
+            if key in (Qt.Key_Right,):
                 n = self.last_selected
                 n.value = self.pixel_to_hounsfield(self.hounsfield_to_pixel(n.value) + 1)
-                self.Refresh()
+                self.update()
                 self._generate_event()
 
-            # Left key - Decrease node value
-            elif evt.GetKeyCode() in (wx.WXK_LEFT, wx.WXK_NUMPAD_LEFT):
+            elif key in (Qt.Key_Left,):
                 n = self.last_selected
                 n.value = self.pixel_to_hounsfield(self.hounsfield_to_pixel(n.value) - 1)
-                self.Refresh()
+                self.update()
                 self._generate_event()
 
-            # Enter key - Change node colour
-            elif evt.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+            elif key in (Qt.Key_Return, Qt.Key_Enter):
                 n = self.last_selected
-                colour_dialog = wx.GetColourFromUser(self, n.colour)
-                if colour_dialog.IsOk():
-                    r, g, b = colour_dialog.Get()
-                    n.colour = r, g, b
-                    self.Refresh()
+                color = QColorDialog.getColor(QColor(*n.colour), self)
+                if color.isValid():
+                    n.colour = (color.red(), color.green(), color.blue())
+                    self.update()
                     self._generate_event()
 
-            # Delete key - Deletes a node.
-            elif evt.GetKeyCode() in (wx.WXK_DELETE, wx.WXK_NUMPAD_DELETE):
+            elif key in (Qt.Key_Delete,):
                 n = self.last_selected
                 self.last_selected = None
                 self.nodes.remove(n)
-                self.Refresh()
+                self.update()
                 self._generate_event()
 
-            # (Shift + )Tab key - selects the (previous) next node
-            elif evt.GetKeyCode() == wx.WXK_TAB:
+            elif key == Qt.Key_Tab:
                 n = self.last_selected
                 self.nodes.sort()
                 idx = self.nodes.index(n)
-                if evt.ShiftDown():
+                if event.modifiers() & Qt.ShiftModifier:
                     nidx = (idx - 1) % len(self.nodes)
                 else:
                     nidx = (idx + 1) % len(self.nodes)
                 self.last_selected = self.nodes[nidx]
-                self.Refresh()
-        evt.Skip()
+                self.update()
 
-    def draw_histogram(
-        self, dc: Union[wx.WindowDC, wx.MemoryDC, wx.PrinterDC, wx.MetafileDC]
-    ) -> None:
-        w, h = self.GetVirtualSize()
-        ctx: wx.GraphicsContext = wx.GraphicsContext.Create(dc)
+        super().keyPressEvent(event)
 
-        ctx.SetPen(wx.Pen(HISTOGRAM_LINE_COLOUR, HISTOGRAM_LINE_WIDTH))
-        ctx.SetBrush(wx.Brush(HISTOGRAM_FILL_COLOUR))
+    def draw_histogram(self, painter: QPainter) -> None:
+        w = self.width()
+        h = self.height()
 
-        path: wx.GraphicsPath = ctx.CreatePath()
+        if not self._d_hist:
+            return
+
+        painter.save()
+
+        hist_pen = QPen(QColor(*HISTOGRAM_LINE_COLOUR), HISTOGRAM_LINE_WIDTH)
+        hist_brush = QBrush(QColor(*HISTOGRAM_FILL_COLOUR))
+
+        path = QPainterPath()
         xi, yi = self._d_hist[0]
-        path.MoveToPoint(xi, h - yi)
+        path.moveTo(xi, h - yi)
         for x, y in self._d_hist:
-            path.AddLineToPoint(x, h - y)
+            path.lineTo(x, h - y)
 
-        # w0 = self.pixel_to_hounsfield(0)
-        # w1 = self.pixel_to_hounsfield(w - 1)
-        ctx.Translate(self.hounsfield_to_pixel(self._s_init), 0)
-        ctx.Scale(self._scale, 1.0)
-        # ctx.Translate(-self.hounsfield_to_pixel(self._s_init), 0)
-        # ctx.Translate(0, h)
-        # ctx.Translate(0, -h)
-        # ctx.Translate(0, h * h/1080.0 )
-        ctx.PushState()
-        ctx.StrokePath(path)
-        ctx.PopState()
-        path.AddLineToPoint(x, h)
-        path.AddLineToPoint(xi, h)
-        path.AddLineToPoint(*self._d_hist[0])
-        ctx.FillPath(path)
+        painter.translate(self.hounsfield_to_pixel(self._s_init), 0)
+        painter.scale(self._scale, 1.0)
 
-    def draw_gradient(
-        self, dc: Union[wx.WindowDC, wx.MemoryDC, wx.PrinterDC, wx.MetafileDC]
-    ) -> None:
-        w, h = self.GetVirtualSize()
-        ctx: wx.GraphicsContext = wx.GraphicsContext.Create(dc)
+        painter.setPen(hist_pen)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawPath(path)
+
+        path.lineTo(x, h)
+        path.lineTo(xi, h)
+        path.lineTo(*self._d_hist[0])
+
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(hist_brush)
+        painter.drawPath(path)
+
+        painter.restore()
+
+    def draw_gradient(self, painter: QPainter) -> None:
+        w = self.width()
+        h = self.height()
+
         knodes = sorted(self.nodes)
         for ni, nj in zip(knodes[:-1], knodes[1:]):
             vi = round(self.hounsfield_to_pixel(ni.value))
             vj = round(self.hounsfield_to_pixel(nj.value))
 
-            path: wx.GraphicsPath = ctx.CreatePath()
-            path.AddRectangle(vi, 0, vj - vi, h)
+            ci = QColor(*ni.colour, int(GRADIENT_RGBA))
+            cj = QColor(*nj.colour, int(GRADIENT_RGBA))
 
-            ci = ni.colour + (GRADIENT_RGBA,)
-            cj = nj.colour + (GRADIENT_RGBA,)
-            b = ctx.CreateLinearGradientBrush(vi, h, vj, h, ci, cj)
-            ctx.SetBrush(b)
-            ctx.SetPen(wx.TRANSPARENT_PEN)
-            ctx.FillPath(path)
+            gradient = QLinearGradient(vi, h, vj, h)
+            gradient.setColorAt(0.0, ci)
+            gradient.setColorAt(1.0, cj)
 
-            self._draw_circle(vi, ni.colour, ctx)
-            self._draw_circle(vj, nj.colour, ctx)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QBrush(gradient))
+            painter.drawRect(QRectF(vi, 0, vj - vi, h))
 
-    def _draw_circle(self, px: float, color: Tuple[int, int, int], ctx: wx.GraphicsContext) -> None:
-        w, h = self.GetVirtualSize()
+            self._draw_circle(vi, ni.colour, painter)
+            self._draw_circle(vj, nj.colour, painter)
 
-        path: wx.GraphicsPath = ctx.CreatePath()
-        path.AddCircle(px, h / 2, RADIUS)
+    def _draw_circle(self, px: float, color: Tuple[int, int, int], painter: QPainter) -> None:
+        w = self.width()
+        h = self.height()
 
-        path.AddCircle(px, h / 2, RADIUS)
-        ctx.SetPen(wx.Pen("white", LINE_WIDTH + 1))
-        ctx.StrokePath(path)
+        center = QPointF(px, h / 2)
 
-        ctx.SetPen(wx.Pen(LINE_COLOUR, LINE_WIDTH - 1))
-        ctx.SetBrush(wx.Brush(color))
-        ctx.StrokePath(path)
-        ctx.FillPath(path)
+        painter.setPen(QPen(QColor(255, 255, 255), LINE_WIDTH + 1))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(center, RADIUS, RADIUS)
 
-    def draw_text(
-        self,
-        dc: Union[wx.WindowDC, wx.MemoryDC, wx.PrinterDC, wx.MetafileDC],
-        value: float,
-    ) -> None:
-        w, h = self.GetVirtualSize()
-        ctx = wx.GraphicsContext.Create(dc)
+        painter.setPen(QPen(QColor(*LINE_COLOUR), LINE_WIDTH - 1))
+        painter.setBrush(QBrush(QColor(*color)))
+        painter.drawEllipse(center, RADIUS, RADIUS)
+
+    def draw_text(self, painter: QPainter, value: float) -> None:
+        w = self.width()
+        h = self.height()
 
         x = self.hounsfield_to_pixel(value)
         y = h / 2
 
-        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-        font.SetWeight(wx.BOLD)
-        graphics_font = ctx.CreateFont(font, TEXT_COLOUR)
-        ctx.SetFont(graphics_font)
+        font = painter.font()
+        font.setBold(True)
+        painter.setFont(font)
 
         text = "Value: %-6d" % value
 
-        wt, ht = ctx.GetTextExtent(text)
+        fm = QFontMetricsF(font)
+        wt = fm.horizontalAdvance(text)
+        ht = fm.height()
 
         wr, hr = wt + 2 * PADDING, ht + 2 * PADDING
         xr, yr = x + RADIUS, y - RADIUS - hr
@@ -435,28 +416,32 @@ class CLUTImageDataWidget(wx.Panel):
             yr = y + RADIUS
 
         xf, yf = xr + PADDING, yr + PADDING
-        ctx.SetBrush(wx.Brush(BACKGROUND_TEXT_COLOUR_RGBA))
-        ctx.SetPen(wx.Pen(BACKGROUND_TEXT_COLOUR_RGBA))
-        ctx.DrawRectangle(xr, yr, wr, hr)
-        ctx.DrawText(text, xf, yf)
+
+        bg_color = QColor(*BACKGROUND_TEXT_COLOUR_RGBA)
+        painter.setBrush(QBrush(bg_color))
+        painter.setPen(QPen(bg_color))
+        painter.drawRect(QRectF(xr, yr, wr, hr))
+
+        painter.setPen(QPen(QColor(*TEXT_COLOUR)))
+        painter.drawText(QPointF(xf, yf + fm.ascent()), text)
 
     def _generate_event(self) -> None:
-        evt = CLUTEvent(myEVT_CLUT_NODE_CHANGED, self.GetId(), self.nodes)
-        self.GetEventHandler().ProcessEvent(evt)
+        evt = CLUTEvent(self.nodes)
+        self.clut_node_changed.emit(evt)
 
     def hounsfield_to_pixel(self, x: float) -> float:
-        w, h = self.GetVirtualSize()
+        w = self.width()
         p = (x - self._init) * w * 1.0 / (self._end - self._init)
         return p
 
     def pixel_to_hounsfield(self, x: float) -> float:
-        w, h = self.GetVirtualSize()
+        w = self.width()
         prop_x = (self._end - self._init) / (w * 1.0)
         p = x * prop_x + self._init
         return p
 
     def get_node_clicked(self, px: int, py: int) -> Optional[Node]:
-        w, h = self.GetVirtualSize()
+        h = self.height()
         for n in self.nodes:
             x = self.hounsfield_to_pixel(n.value)
             y = h / 2
@@ -474,4 +459,3 @@ class CLUTImageDataWidget(wx.Panel):
         if scale <= 10.0:
             self._scale = scale
             self._init, self._end = init, end
-            # self._build_drawn_hist()

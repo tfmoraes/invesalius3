@@ -33,12 +33,12 @@ dependencies = [
     "requests>=2.32.3",
     "scikit-image==0.24.0",
     "scipy==1.14.0",
-    "setuptools>=65,<68", # Constrained to <68 for wxPython 4.2.2 compatibility (copy_file signature issue) 
+    "setuptools>=65",
     "setuptools-scm<8",
     "tinygrad==0.10.2",
     "torch>=2.3.1",
     "vtk==9.3.0",
-    "wxpython==4.2.2",
+    "PySide6>=6.7.0",
 ]
 license = { file = "LICENSE.txt" }
 readme = { file = "README.md", content-type = "text/markdown" }
@@ -142,11 +142,8 @@ disable_error_code =  ["attr-defined", "no-redef"]
 
 
 [[tool.mypy.overrides]]
-module = 'wx.*'
-disable_error_code = ["no-redef"] # because some classes are redefined in the stubs
-[[tool.mypy.overrides]]
 module = [
-    'wx.*',
+    'PySide6.*',
     'vtkmodules.*',
     'pubsub.*',
     'scipy.*',

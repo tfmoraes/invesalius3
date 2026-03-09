@@ -51,16 +51,16 @@ def ReadOthers(dir_):
         imagedata.update_header()
 
         if len(imagedata.shape) == 4:
-            from wx import ID_OK
+            from PySide6.QtWidgets import QDialog
 
             import invesalius.gui.dialogs as dlg
 
             dialog = dlg.SelectNiftiVolumeDialog(
                 volumes=[str(n + 1) for n in range(imagedata.shape[-1])]
             )
-            status = dialog.ShowModal()
+            status = dialog.exec()
 
-            success = status == ID_OK
+            success = status == QDialog.DialogCode.Accepted
 
             if success:
                 # selected_option = int(dialog.choice.GetStringSelection())

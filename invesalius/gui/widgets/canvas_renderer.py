@@ -34,7 +34,19 @@ from typing import (
 from weakref import WeakMethod
 
 import numpy as np
-import wx
+from PySide6.QtCore import QEvent, QObject, QPointF, QRectF, Qt
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QFontMetricsF,
+    QImage,
+    QMouseEvent,
+    QPainter,
+    QPainterPath,
+    QPen,
+)
+from PySide6.QtWidgets import QApplication
 from typing_extensions import Self
 from vtkmodules.vtkRenderingCore import vtkActor2D, vtkCoordinate, vtkImageMapper
 
@@ -42,7 +54,6 @@ from invesalius.data import converters
 
 if TYPE_CHECKING:
     from vtkmodules.vtkRenderingCore import vtkRenderer
-    from wx.type_defs import BrushStyle, PenStyle  # type: ignore
 
     from invesalius.data.viewer_slice import Viewer as sliceViewer
     from invesalius.data.viewer_volume import Viewer as volumeViewer
@@ -74,7 +85,7 @@ class CanvasEvent:
         self.shift_down = shift_down
 
 
-class CanvasRendererCTX:
+class CanvasRendererCTX(QObject):
     def __init__(
         self,
         viewer: "Union[sliceViewer, volumeViewer, bitmapSingleImagePreview, dicomSingleImagePreview]",
@@ -91,11 +102,12 @@ class CanvasRendererCTX:
             canvas_renderer: the vtkRenderer where the canvas is going to be
                 added.
 
-        This class uses wx.GraphicsContext to render to a vtkImage.
+        This class uses QPainter to render to a vtkImage.
 
         TODO: Verify why in Windows the color are strange when using transparency.
         TODO: Add support to evento (ex. click on a square)
         """
+        super().__init__()
         self.viewer = viewer
         self.canvas_renderer = canvas_renderer
         self.evt_renderer = evt_renderer
@@ -103,7 +115,7 @@ class CanvasRendererCTX:
         self.draw_list: List[CanvasHandlerBase] = []
         self._ordered_draw_list: List[Tuple[int, CanvasHandlerBase]] = []
         self.orientation = orientation
-        self.gc: Optional[wx.GraphicsContext] = None
+        self.gc: Optional[QPainter] = None
         self.last_cam_modif_time: int = -1
         self.modified: bool = True
         self._drawn: bool = False
@@ -124,11 +136,23 @@ class CanvasRendererCTX:
 
     def _bind_events(self) -> None:
         iren = self.viewer.interactor
-        iren.Bind(wx.EVT_MOTION, self.OnMouseMove)
-        iren.Bind(wx.EVT_LEFT_DOWN, self.OnLeftButtonPress)
-        iren.Bind(wx.EVT_LEFT_UP, self.OnLeftButtonRelease)
-        iren.Bind(wx.EVT_LEFT_DCLICK, self.OnDoubleClick)
+        iren.installEventFilter(self)
         self.canvas_renderer.AddObserver("StartEvent", self.OnPaint)
+
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
+        event_type = event.type()
+        if event_type == QEvent.Type.MouseMove:
+            self.OnMouseMove(event)
+        elif event_type == QEvent.Type.MouseButtonPress:
+            if event.button() == Qt.MouseButton.LeftButton:
+                self.OnLeftButtonPress(event)
+        elif event_type == QEvent.Type.MouseButtonRelease:
+            if event.button() == Qt.MouseButton.LeftButton:
+                self.OnLeftButtonRelease(event)
+        elif event_type == QEvent.Type.MouseButtonDblClick:
+            if event.button() == Qt.MouseButton.LeftButton:
+                self.OnDoubleClick(event)
+        return False
 
     def subscribe_event(self, event: str, callback: Callable) -> None:
         ref = WeakMethod(callback)
@@ -170,14 +194,7 @@ class CanvasRendererCTX:
 
         self.canvas_renderer.AddActor2D(self.actor)
 
-        self.rgb = np.zeros((h, w, 3), dtype=np.uint8)
-        self.alpha = np.zeros((h, w, 1), dtype=np.uint8)
-
-        self.bitmap = wx.Bitmap.FromRGBA(w, h)
-        try:
-            self.image = wx.Image(w, h, self.rgb, self.alpha)
-        except TypeError:
-            self.image = wx.ImageFromBuffer(w, h, self.rgb, self.alpha)
+        self.qimage = QImage(w, h, QImage.Format.Format_RGBA8888)
 
     def _resize_canvas(self, w: int, h: int) -> None:
         self._array = np.zeros((h, w, 4), dtype=np.uint8)
@@ -185,20 +202,14 @@ class CanvasRendererCTX:
         self.mapper.SetInputData(self._cv_image)
         self.mapper.Update()
 
-        self.rgb = np.zeros((h, w, 3), dtype=np.uint8)
-        self.alpha = np.zeros((h, w, 1), dtype=np.uint8)
-
-        self.bitmap = wx.Bitmap.FromRGBA(w, h)
-        try:
-            self.image = wx.Image(w, h, self.rgb, self.alpha)
-        except TypeError:
-            self.image = wx.ImageFromBuffer(w, h, self.rgb, self.alpha)
+        self.qimage = QImage(w, h, QImage.Format.Format_RGBA8888)
 
         self.modified = True
 
     def remove_from_renderer(self) -> None:
         self.canvas_renderer.RemoveActor(self.actor)
         self.evt_renderer.RemoveObservers("StartEvent")
+        self.viewer.interactor.removeEventFilter(self)
 
     def get_over_mouse_obj(self, x: int, y: int) -> bool:
         for n, i in self._ordered_draw_list[::-1]:
@@ -216,13 +227,20 @@ class CanvasRendererCTX:
         self.modified = True
         self.viewer.interactor.Render()
 
-    def OnMouseMove(self, evt: wx.MouseEvent) -> None:
+    def _extract_modifiers(self, evt: QMouseEvent) -> Tuple[bool, bool, bool]:
+        modifiers = evt.modifiers()
+        control_down = bool(modifiers & Qt.KeyboardModifier.ControlModifier)
+        alt_down = bool(modifiers & Qt.KeyboardModifier.AltModifier)
+        shift_down = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+        return control_down, alt_down, shift_down
+
+    def OnMouseMove(self, evt: QMouseEvent) -> None:
         try:
             x, y = self.viewer.get_vtk_mouse_position()
         except AttributeError:
-            evt.Skip()
             return
         redraw = False
+        control_down, alt_down, shift_down = self._extract_modifiers(evt)
 
         if self._drag_obj:
             redraw = True
@@ -232,12 +250,11 @@ class CanvasRendererCTX:
                 (x, y),
                 self.viewer,
                 self.evt_renderer,
-                control_down=evt.ControlDown(),
-                alt_down=evt.AltDown(),
-                shift_down=evt.ShiftDown(),
+                control_down=control_down,
+                alt_down=alt_down,
+                shift_down=shift_down,
             )
             self.propagate_event(self._drag_obj, evt_obj)
-            #  self._drag_obj.mouse_move(evt_obj)
         else:
             was_over = self._over_obj
             redraw = bool(self.get_over_mouse_obj(x, y) or was_over)
@@ -250,9 +267,9 @@ class CanvasRendererCTX:
                         (x, y),
                         self.viewer,
                         self.evt_renderer,
-                        control_down=evt.ControlDown(),
-                        alt_down=evt.AltDown(),
-                        shift_down=evt.ShiftDown(),
+                        control_down=control_down,
+                        alt_down=alt_down,
+                        shift_down=shift_down,
                     )
                     was_over.on_mouse_leave(evt_obj)
                 except AttributeError:
@@ -266,26 +283,23 @@ class CanvasRendererCTX:
                         (x, y),
                         self.viewer,
                         self.evt_renderer,
-                        control_down=evt.ControlDown(),
-                        alt_down=evt.AltDown(),
-                        shift_down=evt.ShiftDown(),
+                        control_down=control_down,
+                        alt_down=alt_down,
+                        shift_down=shift_down,
                     )
                     self._over_obj.on_mouse_enter(evt_obj)
                 except AttributeError:
                     pass
 
         if redraw:
-            #  Publisher.sendMessage('Redraw canvas %s' % self.orientation)
             self.Refresh()
 
-        evt.Skip()
-
-    def OnLeftButtonPress(self, evt: wx.KeyEvent) -> None:
+    def OnLeftButtonPress(self, evt: QMouseEvent) -> None:
         try:
             x, y = self.viewer.get_vtk_mouse_position()
         except AttributeError:
-            evt.Skip()
             return
+        control_down, alt_down, shift_down = self._extract_modifiers(evt)
         if self._over_obj and hasattr(self._over_obj, "on_mouse_move"):
             if hasattr(self._over_obj, "on_select"):
                 try:
@@ -295,11 +309,10 @@ class CanvasRendererCTX:
                         (x, y),
                         self.viewer,
                         self.evt_renderer,
-                        control_down=evt.ControlDown(),
-                        alt_down=evt.AltDown(),
-                        shift_down=evt.ShiftDown(),
+                        control_down=control_down,
+                        alt_down=alt_down,
+                        shift_down=shift_down,
                     )
-                    #  self._selected_obj.on_deselect(evt_obj)
                     self.propagate_event(self._selected_obj, evt_obj)
                 except AttributeError:
                     pass
@@ -309,11 +322,10 @@ class CanvasRendererCTX:
                     (x, y),
                     self.viewer,
                     self.evt_renderer,
-                    control_down=evt.ControlDown(),
-                    alt_down=evt.AltDown(),
-                    shift_down=evt.ShiftDown(),
+                    control_down=control_down,
+                    alt_down=alt_down,
+                    shift_down=shift_down,
                 )
-                #  self._over_obj.on_select(evt_obj)
                 self.propagate_event(self._over_obj, evt_obj)
                 self._selected_obj = self._over_obj
                 self.Refresh()
@@ -327,11 +339,10 @@ class CanvasRendererCTX:
                     (x, y),
                     self.viewer,
                     self.evt_renderer,
-                    control_down=evt.ControlDown(),
-                    alt_down=evt.AltDown(),
-                    shift_down=evt.ShiftDown(),
+                    control_down=control_down,
+                    alt_down=alt_down,
+                    shift_down=shift_down,
                 )
-                #  self._selected_obj.on_deselect(evt_obj)
                 for cb in self._callback_events["LeftButtonPressEvent"]:
                     if cb() is not None:
                         cb()(evt_obj)
@@ -343,23 +354,21 @@ class CanvasRendererCTX:
                         (x, y),
                         self.viewer,
                         self.evt_renderer,
-                        control_down=evt.ControlDown(),
-                        alt_down=evt.AltDown(),
-                        shift_down=evt.ShiftDown(),
+                        control_down=control_down,
+                        alt_down=alt_down,
+                        shift_down=shift_down,
                     )
-                    #  self._selected_obj.on_deselect(evt_obj)
                     if self._selected_obj.on_deselect(evt_obj):
                         self.Refresh()
                 except AttributeError:
                     pass
-        evt.Skip()
 
-    def OnLeftButtonRelease(self, evt: wx.KeyEvent) -> None:
+    def OnLeftButtonRelease(self, evt: QMouseEvent) -> None:
         try:
             x, y = self.viewer.get_vtk_mouse_position()
         except AttributeError:
-            evt.Skip()
             return
+        control_down, alt_down, shift_down = self._extract_modifiers(evt)
 
         if self._drag_obj and hasattr(self._drag_obj, "on_drag_end"):
             evt_obj = CanvasEvent(
@@ -368,38 +377,36 @@ class CanvasRendererCTX:
                 (x, y),
                 self.viewer,
                 self.evt_renderer,
-                control_down=evt.ControlDown(),
-                alt_down=evt.AltDown(),
-                shift_down=evt.ShiftDown(),
+                control_down=control_down,
+                alt_down=alt_down,
+                shift_down=shift_down,
             )
             self.propagate_event(self._drag_obj, evt_obj)
         self._over_obj = None
         self._drag_obj = None
-        evt.Skip()
 
-    def OnDoubleClick(self, evt: wx.MouseEvent) -> None:
+    def OnDoubleClick(self, evt: QMouseEvent) -> None:
         try:
             x, y = self.viewer.get_vtk_mouse_position()
         except AttributeError:
-            evt.Skip()
             return
+        control_down, alt_down, shift_down = self._extract_modifiers(evt)
         evt_obj = CanvasEvent(
             "double_left_click",
             None,
             (x, y),
             self.viewer,
             self.evt_renderer,
-            control_down=evt.ControlDown(),
-            alt_down=evt.AltDown(),
-            shift_down=evt.ShiftDown(),
+            control_down=control_down,
+            alt_down=alt_down,
+            shift_down=shift_down,
         )
         for cb in self._callback_events["LeftButtonDoubleClickEvent"]:
             if cb() is not None:
                 cb()(evt_obj)
                 break
-        evt.Skip()
 
-    def OnPaint(self, evt: wx.Event, obj: Any) -> None:
+    def OnPaint(self, evt: Any, obj: Any) -> None:
         size = self.canvas_renderer.GetSize()
         w, h = size
         ew, eh = self.evt_renderer.GetSize()
@@ -417,42 +424,42 @@ class CanvasRendererCTX:
 
         vtkCoordinate()
 
-        self.image.SetDataBuffer(self.rgb)
-        self.image.SetAlphaBuffer(self.alpha)
-        self.image.Clear()
-        gc = wx.GraphicsContext.Create(self.image)
-        if sys.platform != "darwin":
-            gc.SetAntialiasMode(0)
+        self.qimage.fill(Qt.GlobalColor.transparent)
+        gc = QPainter(self.qimage)
+        if sys.platform == "darwin":
+            gc.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
         self.gc = gc
 
-        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-        #  font.SetWeight(wx.BOLD)
-        font = gc.CreateFont(font, (0, 0, 255))
-        gc.SetFont(font)
+        font = QFont(QApplication.font())
+        gc.setFont(font)
+        gc.setPen(QColor(0, 0, 255))
 
-        pen = wx.Pen(wx.Colour(255, 0, 0, 128), 2, wx.SOLID)
-        brush = wx.Brush(wx.Colour(0, 255, 0, 128))
-        gc.SetPen(pen)
-        gc.SetBrush(brush)
-        gc.Scale(1, -1)
+        pen = QPen(QColor(255, 0, 0, 128), 2, Qt.PenStyle.SolidLine)
+        brush = QBrush(QColor(0, 255, 0, 128))
+        gc.setPen(pen)
+        gc.setBrush(brush)
+        gc.scale(1, -1)
 
         self._ordered_draw_list = sorted(self._follow_draw_list(), key=lambda x: x[0])
         for (
             _,
             d,
-        ) in (
-            self._ordered_draw_list
-        ):  # sorted(self.draw_list, key=lambda x: x.layer if hasattr(x, 'layer') else 0):
+        ) in self._ordered_draw_list:
             d.draw_to_canvas(gc, self)
 
-        gc.Destroy()
+        gc.end()
 
         self.gc = None
 
         if self._drawn:
-            self.bitmap = self.image.ConvertToBitmap()
-            self.bitmap.CopyToBuffer(self._array, wx.BitmapBufferFormat_RGBA)
+            src = np.ndarray(
+                shape=(h, w, 4),
+                dtype=np.uint8,
+                buffer=self.qimage.bits(),
+                strides=(self.qimage.bytesPerLine(), 4, 1),
+            )
+            np.copyto(self._array, src)
 
         self._cv_image.Modified()
         self.modified = False
@@ -492,50 +499,55 @@ class CanvasRendererCTX:
         if size is None:
             size = self.canvas_renderer.GetSize()
         w, h = size
-        image = wx.Image(w, h)
-        image.Clear()
+        qimage = QImage(w, h, QImage.Format.Format_RGBA8888)
+        qimage.fill(Qt.GlobalColor.transparent)
 
         arr = np.zeros((h, w, 4), dtype=np.uint8)
 
-        gc = wx.GraphicsContext.Create(image)
-        if antialiasing:
-            gc.SetAntialiasMode(0)
+        gc = QPainter(qimage)
+        if not antialiasing:
+            gc.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
         old_gc = self.gc
         self.gc = gc
 
-        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-        font = gc.CreateFont(font, (0, 0, 255))
-        gc.SetFont(font)
+        font = QFont(QApplication.font())
+        gc.setFont(font)
+        gc.setPen(QColor(0, 0, 255))
 
-        pen = wx.Pen(wx.Colour(255, 0, 0, 128), 2, wx.SOLID)
-        brush = wx.Brush(wx.Colour(0, 255, 0, 128))
-        gc.SetPen(pen)
-        gc.SetBrush(brush)
-        gc.Scale(1, -1)
+        pen = QPen(QColor(255, 0, 0, 128), 2, Qt.PenStyle.SolidLine)
+        brush = QBrush(QColor(0, 255, 0, 128))
+        gc.setPen(pen)
+        gc.setBrush(brush)
+        gc.scale(1, -1)
 
         for element in elements:
             element.draw_to_canvas(gc, self)
 
-        gc.Destroy()
+        gc.end()
         self.gc = old_gc
 
-        bitmap = image.ConvertToBitmap()
-        bitmap.CopyToBuffer(arr, wx.BitmapBufferFormat_RGBA)
+        src = np.ndarray(
+            shape=(h, w, 4),
+            dtype=np.uint8,
+            buffer=qimage.bits(),
+            strides=(qimage.bytesPerLine(), 4, 1),
+        )
+        np.copyto(arr, src)
 
         if flip:
             arr = arr[::-1]
 
         return arr
 
-    def calc_text_size(self, text: str, font: Optional[wx.Font] = None) -> Tuple[int, int]:
+    def calc_text_size(self, text: str, font: Optional[QFont] = None) -> Tuple[float, float]:
         """
         Given an unicode text and a font returns the width and height of the
         rendered text in pixels.
 
         Params:
             text: An unicode text.
-            font: An wxFont.
+            font: A QFont.
 
         Returns:
             A tuple with width and height values in pixels
@@ -545,15 +557,16 @@ class CanvasRendererCTX:
         gc = self.gc
 
         if font is None:
-            font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+            font = QFont(QApplication.font())
 
-        _font = gc.CreateFont(font)
-        gc.SetFont(_font)
+        gc.setFont(font)
+        fm = QFontMetricsF(font)
 
-        w = 0
-        h = 0
+        w = 0.0
+        h = 0.0
         for t in text.split("\n"):
-            _w, _h = gc.GetTextExtent(t)
+            _w = fm.horizontalAdvance(t)
+            _h = fm.height()
             w = max(w, _w)
             h += _h
         return w, h
@@ -566,7 +579,7 @@ class CanvasRendererCTX:
         arrow_end: bool = False,
         colour: Tuple[float, float, float, float] = (255, 0, 0, 128),
         width: int = 2,
-        style: "PenStyle" = wx.SOLID,
+        style: Qt.PenStyle = Qt.PenStyle.SolidLine,
     ) -> None:
         """
         Draw a line from pos0 to pos1
@@ -578,7 +591,7 @@ class CanvasRendererCTX:
             arrow_end: if to draw a arrow at the end of the line.
             colour: RGBA line colour.
             width: the width of line.
-            style: default wx.SOLID.
+            style: default Qt.PenStyle.SolidLine.
         """
         if self.gc is None:
             return None
@@ -590,19 +603,20 @@ class CanvasRendererCTX:
         p0y = -p0y
         p1y = -p1y
 
-        pen = wx.Pen(wx.Colour(*[int(c) for c in colour]), width, wx.SOLID)
-        pen.SetCap(wx.CAP_BUTT)
-        gc.SetPen(pen)
+        pen = QPen(QColor(*[int(c) for c in colour]), width, Qt.PenStyle.SolidLine)
+        pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+        gc.setPen(pen)
 
-        path = gc.CreatePath()
-        path.MoveToPoint(p0x, p0y)
-        path.AddLineToPoint(p1x, p1y)
-        gc.StrokePath(path)
+        path = QPainterPath()
+        path.moveTo(p0x, p0y)
+        path.lineTo(p1x, p1y)
+        gc.strokePath(path, pen)
 
-        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-        font = gc.CreateFont(font)
-        gc.SetFont(font)
-        w, h = gc.GetTextExtent("M")
+        font = QFont(QApplication.font())
+        gc.setFont(font)
+        fm = gc.fontMetrics()
+        w = fm.horizontalAdvance("M")
+        h = fm.height()
 
         p0 = np.array((p0x, p0y))
         p3 = np.array((p1x, p1y))
@@ -613,12 +627,12 @@ class CanvasRendererCTX:
             p1 = p0 + w * v + iv * w / 2.0
             p2 = p0 + w * v + (-iv) * w / 2.0
 
-            path = gc.CreatePath()
-            path.MoveToPoint(p0)
-            path.AddLineToPoint(p1)
-            path.MoveToPoint(p0)
-            path.AddLineToPoint(p2)
-            gc.StrokePath(path)
+            path = QPainterPath()
+            path.moveTo(float(p0[0]), float(p0[1]))
+            path.lineTo(float(p1[0]), float(p1[1]))
+            path.moveTo(float(p0[0]), float(p0[1]))
+            path.lineTo(float(p2[0]), float(p2[1]))
+            gc.strokePath(path, pen)
 
         if arrow_end:
             v = p3 - p0
@@ -627,12 +641,12 @@ class CanvasRendererCTX:
             p1 = p3 - w * v + iv * w / 2.0
             p2 = p3 - w * v + (-iv) * w / 2.0
 
-            path = gc.CreatePath()
-            path.MoveToPoint(p3)
-            path.AddLineToPoint(p1)
-            path.MoveToPoint(p3)
-            path.AddLineToPoint(p2)
-            gc.StrokePath(path)
+            path = QPainterPath()
+            path.moveTo(float(p3[0]), float(p3[1]))
+            path.lineTo(float(p1[0]), float(p1[1]))
+            path.moveTo(float(p3[0]), float(p3[1]))
+            path.lineTo(float(p2[0]), float(p2[1]))
+            gc.strokePath(path, pen)
 
         self._drawn = True
 
@@ -658,19 +672,18 @@ class CanvasRendererCTX:
             raise ValueError("No graphics context available.")
         gc = self.gc
 
-        pen = wx.Pen(wx.Colour(*line_colour), width, wx.SOLID)
-        gc.SetPen(pen)
+        pen = QPen(QColor(*line_colour), width, Qt.PenStyle.SolidLine)
+        gc.setPen(pen)
 
-        brush = wx.Brush(wx.Colour(*fill_colour))
-        gc.SetBrush(brush)
+        brush = QBrush(QColor(*fill_colour))
+        gc.setBrush(brush)
 
         cx, cy = center
         cy = -cy
 
-        path = gc.CreatePath()
-        path.AddCircle(cx, cy, radius)
-        gc.StrokePath(path)
-        gc.FillPath(path)
+        path = QPainterPath()
+        path.addEllipse(QPointF(cx, cy), radius, radius)
+        gc.drawPath(path)
         self._drawn = True
 
         return (cx, -cy, radius * 2, radius * 2)
@@ -699,11 +712,11 @@ class CanvasRendererCTX:
             raise ValueError("No graphics context available.")
         gc = self.gc
 
-        pen = wx.Pen(wx.Colour(*line_colour), line_width, wx.SOLID)
-        gc.SetPen(pen)
+        pen = QPen(QColor(*line_colour), line_width, Qt.PenStyle.SolidLine)
+        gc.setPen(pen)
 
-        brush = wx.Brush(wx.Colour(*fill_colour))
-        gc.SetBrush(brush)
+        brush = QBrush(QColor(*fill_colour))
+        gc.setBrush(brush)
 
         cx, cy = center
         xi = cx - width / 2.0
@@ -715,10 +728,9 @@ class CanvasRendererCTX:
         cy += height / 2.0
         cy = -cy
 
-        path = gc.CreatePath()
-        path.AddEllipse(cx, cy, width, height)
-        gc.StrokePath(path)
-        gc.FillPath(path)
+        path = QPainterPath()
+        path.addEllipse(QRectF(cx, cy, width, height))
+        gc.drawPath(path)
         self._drawn = True
 
         return (xi, yi, xf, yf)
@@ -731,8 +743,8 @@ class CanvasRendererCTX:
         line_colour: Tuple[int, int, int, int] = (255, 0, 0, 128),
         fill_colour: Tuple[int, int, int, int] = (0, 0, 0, 0),
         line_width: int = 1,
-        pen_style: "PenStyle" = wx.PENSTYLE_SOLID,
-        brush_style: "BrushStyle" = wx.BRUSHSTYLE_SOLID,
+        pen_style: Qt.PenStyle = Qt.PenStyle.SolidLine,
+        brush_style: Qt.BrushStyle = Qt.BrushStyle.SolidPattern,
     ) -> None:
         """
         Draw a rectangle with its top left at pos and with the given width and height.
@@ -750,18 +762,18 @@ class CanvasRendererCTX:
 
         px, py = pos
         py = -py
-        pen = wx.Pen(wx.Colour(*line_colour), width=line_width, style=pen_style)
-        brush = wx.Brush(wx.Colour(*fill_colour), style=brush_style)
-        gc.SetPen(pen)
-        gc.SetBrush(brush)
-        gc.DrawRectangle(px, py, width, -height)
+        pen = QPen(QColor(*line_colour), line_width, pen_style)
+        brush = QBrush(QColor(*fill_colour), brush_style)
+        gc.setPen(pen)
+        gc.setBrush(brush)
+        gc.drawRect(QRectF(px, py, width, -height))
         self._drawn = True
 
     def draw_text(
         self,
         text: str,
         pos: Tuple[float, float],
-        font: Optional[wx.Font] = None,
+        font: Optional[QFont] = None,
         txt_colour: Tuple[int, int, int] = (255, 255, 255),
     ) -> None:
         """
@@ -778,17 +790,24 @@ class CanvasRendererCTX:
         gc = self.gc
 
         if font is None:
-            font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-            font.Scale(self.viewer.GetContentScaleFactor())
+            font = QFont(QApplication.font())
+            font.setPointSizeF(font.pointSizeF() * self.viewer.devicePixelRatioF())
 
-        _font = gc.CreateFont(font, txt_colour)
+        gc.setFont(font)
+        gc.setPen(QColor(*txt_colour))
+        fm = QFontMetricsF(font)
+
         px, py = pos
         for t in text.split("\n"):
             t = t.strip()
             _py = -py
             _px = px
-            gc.SetFont(_font)
-            gc.DrawText(t, _px, _py)
+
+            gc.save()
+            gc.translate(_px, _py)
+            gc.scale(1, -1)
+            gc.drawText(QPointF(0, fm.ascent()), t)
+            gc.restore()
 
             w, h = self.calc_text_size(t, font)
             py -= h
@@ -799,7 +818,7 @@ class CanvasRendererCTX:
         self,
         text: str,
         pos: Tuple[float, float],
-        font: Optional[wx.Font] = None,
+        font: Optional[QFont] = None,
         txt_colour: Tuple[int, int, int] = (255, 255, 255),
         bg_colour: Tuple[int, int, int, int] = (128, 128, 128, 128),
         border: int = 5,
@@ -820,20 +839,17 @@ class CanvasRendererCTX:
         gc = self.gc
 
         if font is None:
-            font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-            font.Scale(self.viewer.GetContentScaleFactor())
+            font = QFont(QApplication.font())
+            font.setPointSizeF(font.pointSizeF() * self.viewer.devicePixelRatioF())
 
-        _font = gc.CreateFont(font, txt_colour)
-        gc.SetFont(_font)
+        gc.setFont(font)
         w, h = self.calc_text_size(text, font)
 
         px, py = pos
 
-        # Drawing the box
         cw, ch = w + border * 2, h + border * 2
         self.draw_rectangle((px, py - ch), cw, ch, bg_colour, bg_colour)
 
-        # Drawing the text
         tpx, tpy = px + border, py - border
         self.draw_text(text, (tpx, tpy), font, txt_colour)
         self._drawn = True
@@ -861,8 +877,8 @@ class CanvasRendererCTX:
         if self.gc is None:
             return None
         gc = self.gc
-        pen = wx.Pen(wx.Colour(*line_colour), width, wx.SOLID)
-        gc.SetPen(pen)
+        pen = QPen(QColor(*line_colour), width, Qt.PenStyle.SolidLine)
+        gc.setPen(pen)
 
         c = np.array(center)
         v0 = np.array(p0) - c
@@ -885,9 +901,21 @@ class CanvasRendererCTX:
             sa = a1
             ea = a0
 
-        path = gc.CreatePath()
-        path.AddArc(float(c[0]), float(c[1]), float(min(s0, s1)), float(sa), float(ea), True)
-        gc.StrokePath(path)
+        r = float(min(s0, s1))
+        cx_f = float(c[0])
+        cy_f = float(c[1])
+        rect = QRectF(cx_f - r, cy_f - r, 2 * r, 2 * r)
+
+        sa_deg = float(np.degrees(sa))
+        ea_deg = float(np.degrees(ea))
+        sweep = ea_deg - sa_deg
+        if sweep > 0:
+            sweep -= 360.0
+
+        path = QPainterPath()
+        path.arcMoveTo(rect, sa_deg)
+        path.arcTo(rect, sa_deg, sweep)
+        gc.strokePath(path, pen)
         self._drawn = True
 
     def draw_polygon(
@@ -898,29 +926,29 @@ class CanvasRendererCTX:
         line_colour: Tuple[int, int, int, int] = (255, 255, 255, 255),
         fill_colour: Tuple[int, int, int, int] = (255, 255, 255, 255),
         width: int = 2,
-    ) -> Optional[wx.GraphicsPath]:
+    ) -> Optional[QPainterPath]:
         if self.gc is None:
             return None
         gc = self.gc
 
-        gc.SetPen(wx.Pen(wx.Colour(*line_colour), width, wx.SOLID))
-        gc.SetBrush(wx.Brush(wx.Colour(*fill_colour), wx.SOLID))
+        gc.setPen(QPen(QColor(*line_colour), width, Qt.PenStyle.SolidLine))
+        gc.setBrush(QBrush(QColor(*fill_colour), Qt.BrushStyle.SolidPattern))
 
+        path = None
         if points:
-            path = gc.CreatePath()
+            path = QPainterPath()
             px, py = points[0]
-            path.MoveToPoint((px, -py))
+            path.moveTo(px, -py)
 
             for point in points:
                 px, py = point
-                path.AddLineToPoint((px, -py))
+                path.lineTo(px, -py)
 
             if closed:
                 px, py = points[0]
-                path.AddLineToPoint((px, -py))
+                path.lineTo(px, -py)
 
-            gc.StrokePath(path)
-            gc.FillPath(path)
+            gc.drawPath(path)
 
             self._drawn = True
 
@@ -956,7 +984,7 @@ class CanvasHandlerBase(ABC):
         self.children.append(child)
 
     @abstractmethod
-    def draw_to_canvas(self, gc: wx.GraphicsContext, canvas: CanvasRendererCTX) -> None:
+    def draw_to_canvas(self, gc: QPainter, canvas: CanvasRendererCTX) -> None:
         pass
 
     def is_over(self, x: int, y: int) -> Optional[Self]:
@@ -994,7 +1022,7 @@ class TextBox(CanvasHandlerBase):
     def set_text(self, text: str) -> None:
         self.text = text
 
-    def draw_to_canvas(self, gc: wx.GraphicsContext, canvas: CanvasRendererCTX) -> None:
+    def draw_to_canvas(self, gc: QPainter, canvas: CanvasRendererCTX) -> None:
         if self.visible:
             px, py = self._3d_to_2d(canvas.evt_renderer, self.position)
 
@@ -1024,12 +1052,10 @@ class TextBox(CanvasHandlerBase):
 
         return True
 
-    def on_mouse_enter(self, evt: wx.Event) -> None:
-        #  self.layer = 99
+    def on_mouse_enter(self, evt: CanvasEvent) -> None:
         self._highlight = True
 
-    def on_mouse_leave(self, evt: wx.Event) -> None:
-        #  self.layer = 0
+    def on_mouse_leave(self, evt: CanvasEvent) -> None:
         self._highlight = False
 
     def on_select(self, evt: CanvasEvent) -> None:
@@ -1065,10 +1091,10 @@ class CircleHandler(CanvasHandlerBase):
     def on_move(self, evt_function: Callable) -> None:
         self._on_move_function = WeakMethod(evt_function)
 
-    def draw_to_canvas(self, gc: wx.GraphicsContext, canvas: CanvasRendererCTX) -> None:
+    def draw_to_canvas(self, gc: QPainter, canvas: CanvasRendererCTX) -> None:
         if self.visible:
             viewer = canvas.viewer
-            scale = viewer.GetContentScaleFactor()
+            scale = viewer.devicePixelRatioF()
             if self.is_3d:
                 px, py = self._3d_to_2d(canvas.evt_renderer, self.position)
             else:
@@ -1131,7 +1157,7 @@ class Polygon(CanvasHandlerBase):
         self.closed = closed
         self.line_colour = line_colour
 
-        self._path = None
+        self._path: Optional[QPainterPath] = None
 
         if self.fill:
             self.fill_colour = fill_colour
@@ -1152,7 +1178,7 @@ class Polygon(CanvasHandlerBase):
         for handler in self.handlers:
             handler.visible = value
 
-    def draw_to_canvas(self, gc: wx.GraphicsContext, canvas: CanvasRendererCTX) -> None:
+    def draw_to_canvas(self, gc: QPainter, canvas: CanvasRendererCTX) -> None:
         if self.visible and self.points:
             if self.is_3d:
                 points = [self._3d_to_2d(canvas.evt_renderer, p) for p in self.points]
@@ -1162,22 +1188,10 @@ class Polygon(CanvasHandlerBase):
                 points, self.fill, self.closed, self.line_colour, self.fill_colour, self.width
             )
 
-            #  if self.closed:
-            #  U, L = self.convex_hull(points, merge=False)
-            #  canvas.draw_polygon(U, self.fill, self.closed, self.line_colour, (0, 255, 0, 255), self.width)
-            #  canvas.draw_polygon(L, self.fill, self.closed, self.line_colour, (0, 0, 255, 255), self.width)
-            #  for p0, p1 in self.get_all_antipodal_pairs(points):
-            #  canvas.draw_line(p0, p1)
-
-        #  if self.interactive:
-        #  for handler in self.handlers:
-        #  handler.draw_to_canvas(gc, canvas)
-
     def append_point(self, point: Union[Tuple[float, float], Tuple[float, float]]) -> None:
         handler = CircleHandler(self, point, is_3d=self.is_3d, fill_colour=(255, 0, 0, 255))
         handler.layer = 1
         self.add_child(handler)
-        #  handler.on_move(self.on_move_point)
         self.handlers.append(handler)
         self.points.append(point)
 
@@ -1190,7 +1204,7 @@ class Polygon(CanvasHandlerBase):
                 self.points.append(handler.position)
 
     def is_over(self, x: int, y: int) -> Optional[Self]:
-        if self.closed and self._path and self._path.Contains(x, -y):
+        if self.closed and self._path and self._path.contains(QPointF(x, -y)):
             return self
 
     def on_mouse_move2(self, evt: CanvasEvent) -> Literal[True]:
@@ -1211,15 +1225,11 @@ class Polygon(CanvasHandlerBase):
 
         return True
 
-    def on_mouse_enter(self, evt: wx.Event) -> None:
+    def on_mouse_enter(self, evt: CanvasEvent) -> None:
         pass
-        #  self.interactive = True
-        #  self.layer = 99
 
-    def on_mouse_leave(self, evt: wx.Event) -> None:
+    def on_mouse_leave(self, evt: CanvasEvent) -> None:
         pass
-        #  self.interactive = False
-        #  self.layer = 0
 
     def on_select(self, evt: CanvasEvent) -> None:
         mx, my = evt.position
@@ -1231,7 +1241,7 @@ class Polygon(CanvasHandlerBase):
         else:
             self._last_position = (mx, my)
 
-    def on_deselect(self, evt: wx.Event) -> Literal[True]:
+    def on_deselect(self, evt: CanvasEvent) -> Literal[True]:
         self.interactive = False
         return True
 
@@ -1345,7 +1355,7 @@ class Ellipse(CanvasHandlerBase):
         self.handler_1.visible = value
         self.handler_2.visible = value
 
-    def draw_to_canvas(self, gc: wx.GraphicsContext, canvas: CanvasRendererCTX) -> None:
+    def draw_to_canvas(self, gc: QPainter, canvas: CanvasRendererCTX) -> None:
         if self.visible:
             if self.is_3d:
                 cx, cy = self._3d_to_2d(canvas.evt_renderer, self.center)
@@ -1362,9 +1372,6 @@ class Ellipse(CanvasHandlerBase):
             self.bbox = canvas.draw_ellipse(
                 (cx, cy), width, height, self.width, self.line_colour, self.fill_colour
             )
-            #  if self.interactive:
-            #  self.handler_1.draw_to_canvas(gc, canvas)
-            #  self.handler_2.draw_to_canvas(gc, canvas)
 
     def set_point1(self, pos: Tuple) -> None:
         self.point1 = pos
@@ -1419,12 +1426,10 @@ class Ellipse(CanvasHandlerBase):
 
             self.set_point1(tuple(point1))
 
-    def on_mouse_enter(self, evt: wx.Event) -> None:
-        #  self.interactive = True
+    def on_mouse_enter(self, evt: CanvasEvent) -> None:
         pass
 
-    def on_mouse_leave(self, evt: wx.Event) -> None:
-        #  self.interactive = False
+    def on_mouse_leave(self, evt: CanvasEvent) -> None:
         pass
 
     def is_over(self, x: float, y: float) -> Optional[Self]:
@@ -1459,6 +1464,6 @@ class Ellipse(CanvasHandlerBase):
         else:
             self._last_position = (mx, my)
 
-    def on_deselect(self, evt: wx.Event) -> Literal[True]:
+    def on_deselect(self, evt: CanvasEvent) -> Literal[True]:
         self.interactive = False
         return True

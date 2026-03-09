@@ -20,12 +20,23 @@
 import os
 import queue
 import sys
+import time
 
 import numpy as np
-import wx
 from imageio import imsave
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QCursor
+from PySide6.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QMessageBox,
+    QProgressDialog,
+    QVBoxLayout,
+    QWidget,
+)
 from scipy.spatial import distance
 from vtk import vtkCommand
+from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from vtkmodules.vtkCommonColor import vtkColorSeries, vtkNamedColors
 
 # TODO: Check that these imports are not used -- vtkLookupTable, vtkMinimalStandardRandomSequence, vtkPoints, vtkUnsignedCharArray
@@ -81,7 +92,6 @@ from vtkmodules.vtkRenderingCore import (
     vtkWindowToImageFilter,
 )
 from vtkmodules.vtkRenderingOpenGL2 import vtkCompositePolyDataMapper2
-from vtkmodules.wx.wxVTKRenderWindowInteractor import wxVTKRenderWindowInteractor
 
 import invesalius.constants as const
 import invesalius.data.coordinates as dco
@@ -122,15 +132,15 @@ PROP_MEASURE = 0.8
 #  from invesalius.gui.widgets.canvas_renderer import CanvasRendererCTX, Polygon
 
 
-class Viewer(wx.Panel):
+class Viewer(QWidget):
     def __init__(self, parent):
-        display_size = wx.GetDisplaySize()
-        # Set the initial volume wx.Panel size as half the screen resolution to fix the issue
-        # with small target guide icons when loading a state file with target selected
-        x = int(display_size[0] / 2)
-        y = int(display_size[1] / 2)
-        wx.Panel.__init__(self, parent, size=wx.Size(x, y))
-        self.SetBackgroundColour(wx.Colour(0, 0, 0))
+        screen = QApplication.primaryScreen()
+        display_size = screen.size()
+        x = int(display_size.width() / 2)
+        y = int(display_size.height() / 2)
+        QWidget.__init__(self, parent)
+        self.resize(x, y)
+        self.setStyleSheet("background-color: black;")
 
         self.interaction_style = st.StyleStateManager()
 
@@ -140,27 +150,27 @@ class Viewer(wx.Panel):
         self.plot_vector = None
         self.style = None
 
-        interactor = wxVTKRenderWindowInteractor(self, -1, size=self.GetSize())
+        interactor = QVTKRenderWindowInteractor(self)
         self.interactor = interactor
-        self.interactor.SetRenderWhenDisabled(True)
+        if hasattr(self.interactor, "SetRenderWhenDisabled"):
+            self.interactor.SetRenderWhenDisabled(True)
 
         self.enable_style(const.STATE_DEFAULT)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(interactor, 1, wx.EXPAND)
-        self.sizer = sizer
-        self.SetSizer(sizer)
-        self.Layout()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(interactor)
+        self.sizer = layout
 
         # It would be more correct (API-wise) to call interactor.Initialize() and
         # interactor.Start() here, but Initialize() calls RenderWindow.Render().
         # That Render() call will get through before we can setup the
-        # RenderWindow() to render via the wxWidgets-created context; this
+        # RenderWindow() to render via the Qt-created context; this
         # causes flashing on some platforms and downright breaks things on
         # other platforms.  Instead, we call widget.Enable().  This means
         # that the RWI::Initialized ivar is not set, but in THIS SPECIFIC CASE,
         # that doesn't matter.
-        interactor.Enable(1)
+        interactor.Enable()
 
         ren = vtkRenderer()
         self.ren = ren
@@ -189,7 +199,7 @@ class Viewer(wx.Panel):
         self.text.SetValue("")
         self.text.SetPosition(const.TEXT_POS_LEFT_UP)
         if sys.platform == "darwin":
-            font_size = const.TEXT_SIZE_LARGE * self.GetContentScaleFactor()
+            font_size = const.TEXT_SIZE_LARGE * self.devicePixelRatioF()
             self.text.SetSize(int(round(font_size, 0)))
         self.ren.AddActor(self.text.actor)
 
@@ -544,21 +554,22 @@ class Viewer(wx.Panel):
 
     def get_vtk_mouse_position(self):
         """
-        Get Mouse position inside a wxVTKRenderWindowInteractorself. Return a
+        Get Mouse position inside a QVTKRenderWindowInteractor. Return a
         tuple with X and Y position.
         Please use this instead of using iren.GetEventPosition because it's
         not returning the correct values on Mac with HighDPI display, maybe
         the same is happing with Windows and Linux, we need to test.
         """
-        mposx, mposy = wx.GetMousePosition()
-        cposx, cposy = self.interactor.ScreenToClient((mposx, mposy))
+        global_pos = QCursor.pos()
+        local_pos = self.interactor.mapFromGlobal(global_pos)
+        cposx, cposy = local_pos.x(), local_pos.y()
         mx, my = cposx, self.interactor.GetSize()[1] - cposy
         if sys.platform == "darwin":
-            # It's needed to mutiple by scale factor in HighDPI because of
-            # https://docs.wxpython.org/wx.glcanvas.GLCanvas.html
+            # It's needed to multiply by scale factor in HighDPI because of
+            # Qt's device pixel ratio handling.
             # For now we are doing this only on Mac but it may be needed on
             # Windows and Linux too.
-            scale = self.interactor.GetContentScaleFactor()
+            scale = self.interactor.devicePixelRatioF()
             mx *= scale
             my *= scale
         return int(mx), int(my)
@@ -787,8 +798,10 @@ class Viewer(wx.Panel):
             writer.Write()
 
         if not os.path.exists(filename):
-            wx.MessageBox(
-                _("InVesalius was not able to export this picture"), _("Export picture error")
+            QMessageBox.warning(
+                self,
+                _("Export picture error"),
+                _("InVesalius was not able to export this picture"),
             )
 
     def OnCloseProject(self):
@@ -1110,10 +1123,12 @@ class Viewer(wx.Panel):
             displacement_to_target_robot = dcr.ComputeRelativeDistanceToTarget(
                 target_coord=self.target_coord, m_img=m_img_flip
             )
-            wx.CallAfter(
-                Publisher.sendMessage,
-                "Neuronavigation to Robot: Update displacement to target",
-                displacement=displacement_to_target_robot,
+            QTimer.singleShot(
+                0,
+                lambda: Publisher.sendMessage(
+                    "Neuronavigation to Robot: Update displacement to target",
+                    displacement=displacement_to_target_robot,
+                ),
             )
 
             distance_to_target = displacement_to_target_robot.copy()
@@ -1230,9 +1245,15 @@ class Viewer(wx.Panel):
                 and is_under_z_angle_threshold
             )
 
-            wx.CallAfter(Publisher.sendMessage, "Coil at target", state=coil_at_target)
-            wx.CallAfter(
-                Publisher.sendMessage, "From Neuronavigation: Coil at target", state=coil_at_target
+            QTimer.singleShot(
+                0,
+                lambda: Publisher.sendMessage("Coil at target", state=coil_at_target),
+            )
+            QTimer.singleShot(
+                0,
+                lambda: Publisher.sendMessage(
+                    "From Neuronavigation: Coil at target", state=coil_at_target
+                ),
             )
 
             self.guide_arrow_actors = (
@@ -1546,9 +1567,6 @@ class Viewer(wx.Panel):
         self.static_markers_efield.append([marker_actor_brain, marker_id])
         self.ren.AddActor(marker_actor_brain)
         if self.save_automatically:
-            import time
-
-            import invesalius.gui.dialogs as dlg
             import invesalius.project as prj
 
             proj = prj.Project()
@@ -1558,8 +1576,6 @@ class Viewer(wx.Panel):
             sep = "-"
 
             if self.path_meshes is None:
-                import os
-
                 current_folder_path = os.getcwd()
             else:
                 current_folder_path = self.path_meshes
@@ -1567,11 +1583,11 @@ class Viewer(wx.Panel):
             parts = [current_folder_path, "/", stamp_date, stamp_time, proj.name, "Efield"]
             default_filename = sep.join(parts) + ".csv"
 
-            filename = dlg.ShowLoadSaveDialog(
-                message=_("Save markers as..."),
-                wildcard="(*.csv)|*.csv",
-                style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
-                default_filename=default_filename,
+            filename, _ = QFileDialog.getSaveFileName(
+                self,
+                _("Save markers as..."),
+                default_filename,
+                "CSV files (*.csv)",
             )
 
             if not filename:
@@ -1809,8 +1825,8 @@ class Viewer(wx.Panel):
 
     def ReturnToDefaultColorActor(self):
         self.efield_mesh.GetPointData().SetScalars(self.colors_init)
-        wx.CallAfter(Publisher.sendMessage, "Initialize color array")
-        wx.CallAfter(Publisher.sendMessage, "Recolor efield actor")
+        QTimer.singleShot(0, lambda: Publisher.sendMessage("Initialize color array"))
+        QTimer.singleShot(0, lambda: Publisher.sendMessage("Recolor efield actor"))
 
     def CreateLUTTableForEfield(self, min, max):
         lut = vtkLookupTable()
@@ -1835,7 +1851,7 @@ class Viewer(wx.Panel):
         self.efield_min = min
         self.efield_max = max
         # self.Idmax = np.array(self.e_field_norms).argmax()
-        wx.CallAfter(Publisher.sendMessage, "Update efield vis")
+        QTimer.singleShot(0, lambda: Publisher.sendMessage("Update efield vis"))
 
     def FindClosestValueEfieldEdges(self, arr, threshold):
         closest_value = min(arr, key=lambda x: abs(x - threshold))
@@ -2176,14 +2192,17 @@ class Viewer(wx.Panel):
                     color[j] = int(255.0 * dcolor[j])
                 self.colors_init.InsertTuple(index_id, color)
             self.efield_mesh.GetPointData().SetScalars(self.colors_init)
-            wx.CallAfter(Publisher.sendMessage, "Recolor efield actor")
+            QTimer.singleShot(0, lambda: Publisher.sendMessage("Recolor efield actor"))
             if self.vectorfield_actor is not None:
                 self.ren.RemoveActor(self.vectorfield_actor)
             if self.plot_vector:
-                wx.CallAfter(Publisher.sendMessage, "Show max Efield actor")
-                wx.CallAfter(Publisher.sendMessage, "Show CoG Efield actor")
+                QTimer.singleShot(0, lambda: Publisher.sendMessage("Show max Efield actor"))
+                QTimer.singleShot(0, lambda: Publisher.sendMessage("Show CoG Efield actor"))
                 if self.efield_tools:
-                    wx.CallAfter(Publisher.sendMessage, "Show distance between Max and CoG Efield")
+                    QTimer.singleShot(
+                        0,
+                        lambda: Publisher.sendMessage("Show distance between Max and CoG Efield"),
+                    )
                     if self.positions_above_threshold is not None:
                         self.DetectClustersEfieldSpread(self.positions_above_threshold)
                 if (
@@ -2193,11 +2212,11 @@ class Viewer(wx.Panel):
                     self.SegmentEfieldMax(self.cell_id_indexes_above_threshold)
                 self.ShowEfieldAtCortexTarget()
                 if self.plot_no_connection:
-                    wx.CallAfter(Publisher.sendMessage, "Show Efield vectors")
+                    QTimer.singleShot(0, lambda: Publisher.sendMessage("Show Efield vectors"))
                     self.plot_vector = False
                     self.plot_no_connection = False
         else:
-            wx.CallAfter(Publisher.sendMessage, "Recolor again")
+            QTimer.singleShot(0, lambda: Publisher.sendMessage("Recolor again"))
 
     def UpdateEfieldPointLocation(self, m_img, coord, queue_IDs):
         # TODO: In the future, remove the "put_nowait" and mesh processing to another module (maybe e_field.py)
@@ -2300,9 +2319,6 @@ class Viewer(wx.Panel):
                 self.max_efield_array = enorm_data[3].mvector
                 self.Idmax = enorm_data[3].maxindex  # self.Id_list[enorm_data[3].maxindex]
                 if self.save_automatically and self.plot_no_connection:
-                    import time
-
-                    import invesalius.gui.dialogs as dlg
                     import invesalius.project as prj
 
                     proj = prj.Project()
@@ -2316,8 +2332,6 @@ class Viewer(wx.Panel):
                     sep = "-"
 
                     if self.path_meshes is None:
-                        import os
-
                         current_folder_path = os.getcwd()
                     else:
                         current_folder_path = self.path_meshes
@@ -2325,11 +2339,11 @@ class Viewer(wx.Panel):
                     parts = [current_folder_path, "/", stamp_date, stamp_time, proj.name, "Efield"]
                     default_filename = sep.join(parts) + ".csv"
 
-                    filename = dlg.ShowLoadSaveDialog(
-                        message=_("Save markers as..."),
-                        wildcard="(*.csv)|*.csv",
-                        style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
-                        default_filename=default_filename,
+                    filename, _ = QFileDialog.getSaveFileName(
+                        self,
+                        _("Save markers as..."),
+                        default_filename,
+                        "CSV files (*.csv)",
                     )
 
                     if not filename:
@@ -2599,23 +2613,22 @@ class Viewer(wx.Panel):
         self.ren.AddActor(self.actor_tracts)
         if self.mark_actor:
             self.mark_actor.SetPosition(coord_offset)
-        self.Refresh()
+        self.update()
 
     def OnRemoveTracts(self):
         if self.actor_tracts:
             self.ren.RemoveActor(self.actor_tracts)
             self.actor_tracts = None
-            self.Refresh()
+            self.update()
 
     def __bind_events_wx(self):
-        # self.Bind(wx.EVT_SIZE, self.OnSize)
-        #  self.canvas.subscribe_event('LeftButtonPressEvent', self.on_insert_point)
+        # No wx event bindings needed; Qt handles events via overrides.
         pass
 
     def on_insert_point(self, evt):
         pos = evt.position
         self.polygon.append_point(pos)
-        self.canvas.Refresh()
+        self.canvas.update()
 
         arr = self.canvas.draw_element_to_array(
             [
@@ -2665,7 +2678,7 @@ class Viewer(wx.Panel):
         Publisher.sendMessage("Receive volume viewer active camera", cam=cam)
 
     def SendViewerSize(self):
-        width, height = self.GetSize()
+        width, height = self.width(), self.height()
         Publisher.sendMessage("Receive volume viewer size", size=(width, height))
 
     # Note: Not in use currently, this method is not called from anywhere.
@@ -2772,32 +2785,35 @@ class Viewer(wx.Panel):
 
         self.ChangeRenderOrderToExportFile()
 
-        progress = wx.ProgressDialog(
-            "Exporting",
-            "Preparing export...",
-            maximum=100,
-            style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE | wx.PD_CAN_ABORT | wx.PD_ELAPSED_TIME,
-        )
+        progress = QProgressDialog("Preparing export...", "Cancel", 0, 100, self)
+        progress.setWindowTitle("Exporting")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setAutoClose(True)
+        progress.setMinimumDuration(0)
         progress_destroyed = False
 
         try:
             num_updates = 20
             for i in range(num_updates):
                 percent = int(i * 89 / num_updates)
-                keep_going, _ = progress.Update(percent, f"Exporting file: {percent}%")
-                if not keep_going:
-                    progress.Destroy()
+                progress.setLabelText(f"Exporting file: {percent}%")
+                progress.setValue(percent)
+                if progress.wasCanceled():
+                    progress.close()
                     progress_destroyed = True
-                    wx.MessageBox(
-                        "Export cancelled by user.", "Export Cancelled", wx.OK | wx.ICON_INFORMATION
+                    QMessageBox.information(
+                        self,
+                        "Export Cancelled",
+                        "Export cancelled by user.",
                     )
-                    return  # If User cancels
-                wx.MilliSleep(30)
-                wx.Yield()
+                    return
+                QApplication.processEvents()
+                time.sleep(0.03)
 
-            progress.Update(90, "Finalizing export...")
-            wx.MilliSleep(100)
-            wx.Yield()
+            progress.setLabelText("Finalizing export...")
+            progress.setValue(90)
+            QApplication.processEvents()
+            time.sleep(0.1)
 
             if filetype == const.FILETYPE_RIB:
                 writer = vtkRIBExporter()
@@ -2829,23 +2845,24 @@ class Viewer(wx.Panel):
             else:
                 raise ValueError("Unsupported filetype")
 
-            progress.Update(100, "Export Complete")
-            wx.MilliSleep(100)
-            # Used by surface.py if needed
-            wx.Yield()
+            progress.setValue(100)
+            QApplication.processEvents()
+            time.sleep(0.1)
             self.export_successful = True
 
-            wx.MessageBox(
-                "Export completed successfully.", "Export success", wx.OK | wx.ICON_INFORMATION
+            QMessageBox.information(
+                self,
+                "Export success",
+                "Export completed successfully.",
             )
 
         except Exception as e:
-            wx.MessageBox(f"Export failed: {e}", "Export Error", wx.OK | wx.ICON_ERROR)
+            QMessageBox.critical(self, "Export Error", f"Export failed: {e}")
         finally:
             self.RestoreRenderOrderAfterExportFile()
             if progress and not progress_destroyed:
                 try:
-                    progress.Destroy()
+                    progress.close()
                 except Exception:
                     pass
 
@@ -2879,12 +2896,10 @@ class Viewer(wx.Panel):
         # self._to_show_ball -= 1
         # self._check_and_set_ball_visibility()
 
-    def OnSize(self, evt):
+    def resizeEvent(self, event):
         self.UpdateRender()
-        self.Refresh()
-        self.interactor.UpdateWindowUI()
-        self.interactor.Update()
-        evt.Skip()
+        self.update()
+        super().resizeEvent(event)
 
     def ChangeBackgroundColour(self, colour):
         self.ren.SetBackground(colour[:3])

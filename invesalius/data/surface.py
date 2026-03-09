@@ -30,8 +30,8 @@ import time
 import traceback
 
 import numpy as np
-import wx
-import wx.lib.agw.genericmessagedialog as GMD
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QApplication, QMessageBox, QProgressDialog
 from vtkmodules.vtkCommonCore import (
     vtkIdList,
     vtkPoints,
@@ -253,12 +253,12 @@ class SurfaceManager:
         Handle completion of batch surface creation
         """
         if created_count == 0:
-            wx.MessageBox("No valid masks", "No Surfaces Created", wx.OK | wx.ICON_WARNING)
+            QMessageBox.warning(None, "No Surfaces Created", "No valid masks")
             return
-        wx.MessageBox(
-            f"Successfully created {created_count} surfaces.",
+        QMessageBox.information(
+            None,
             "Batch Surface Creation Complete",
-            wx.OK | wx.ICON_INFORMATION,
+            f"Successfully created {created_count} surfaces.",
         )
 
     def OnDuplicate(self, surface_indexes):
@@ -420,8 +420,10 @@ class SurfaceManager:
                 polydata = self.CoverttoMetersPolydata(polydata)
 
             if polydata.GetNumberOfPoints() == 0:
-                wx.MessageBox(
-                    _("InVesalius was not able to import this surface"), _("Import surface error")
+                QMessageBox.warning(
+                    None,
+                    _("Import surface error"),
+                    _("InVesalius was not able to import this surface"),
                 )
                 return
             else:
@@ -599,7 +601,9 @@ class SurfaceManager:
             reader = vtkXMLPolyDataReader()
             scalar = True
         else:
-            wx.MessageBox(_("File format not reconized by InVesalius"), _("Import surface error"))
+            QMessageBox.warning(
+                None, _("Import surface error"), _("File format not reconized by InVesalius")
+            )
             return
 
         if _has_win32api:
@@ -611,8 +615,8 @@ class SurfaceManager:
         polydata = reader.GetOutput()
 
         if polydata.GetNumberOfPoints() == 0:
-            wx.MessageBox(
-                _("InVesalius was not able to import this surface"), _("Import surface error")
+            QMessageBox.warning(
+                None, _("Import surface error"), _("InVesalius was not able to import this surface")
             )
         else:
             name = os.path.splitext(os.path.split(filename)[-1])[0]
@@ -821,15 +825,17 @@ class SurfaceManager:
         self, args, overwrite, surface_name, colour, category, dialog
     ):
         surface_filename, surface_measures = args
-        wx.CallAfter(
-            self._show_surface,
-            surface_filename,
-            surface_measures,
-            overwrite,
-            surface_name,
-            colour,
-            category,
-            dialog,
+        QTimer.singleShot(
+            0,
+            lambda: self._show_surface(
+                surface_filename,
+                surface_measures,
+                overwrite,
+                surface_name,
+                colour,
+                category,
+                dialog,
+            ),
         )
 
     def _show_surface(
@@ -901,7 +907,7 @@ class SurfaceManager:
 
     def on_publish_surface(self):
         Publisher.sendMessage("Stop navigation")
-        wx.Yield()
+        QApplication.processEvents()
         progress = dialogs.PublishingSurfacesProgressWindow(maximum=100)
         self._publish_surfaces_worker(progress)
         progress.Close()
@@ -919,7 +925,7 @@ class SurfaceManager:
             percent = (i / total) * 100 if total else 100
 
             progress.Update(f"Processing {surface.name}...", percent)
-            wx.Yield()  # allow UI to update
+            QApplication.processEvents()
 
             # Create new instance per surface
             safe_polydata = vtkPolyData()
@@ -930,7 +936,7 @@ class SurfaceManager:
                 safe_polydata, surface.name, surface.colour, surface.transparency, surface_index=key
             )
 
-        wx.CallAfter(progress.Update, "Finishing...", 100)
+        QTimer.singleShot(0, lambda: progress.Update("Finishing...", 100))
 
     def decimate_polydata(self, polydata, reduction=0.7):
         """Reduce the number of triangles by `reduction` (0.5 = 50%)."""
@@ -1029,11 +1035,12 @@ class SurfaceManager:
         Create surface actor, save into project and send it to viewer.
         """
         if mask.matrix.max() < 127:
-            wx.MessageBox(
+            QMessageBox.warning(
+                None,
+                _("Create surface warning"),
                 _(
                     "It's not possible to create a surface because there is not any voxel selected on mask"
                 ),
-                _("Create surface warning"),
             )
             return
         t_init = time.time()
@@ -1118,7 +1125,7 @@ class SurfaceManager:
         print("Resolution", imagedata_resolution)
 
         # If InVesalius is running without GUI
-        if wx.GetApp() is None:
+        if QApplication.instance() is None:
             for i in range(n_pieces):
                 init = i * piece_size
                 end = init + piece_size + o_piece
@@ -1244,7 +1251,7 @@ class SurfaceManager:
                     break
                 time.sleep(0.25)
                 sp.Update(_("Creating 3D surface..."))
-                wx.Yield()
+                QApplication.processEvents()
 
             if not sp.WasCancelled() or sp.running:
                 f = pool.apply_async(
@@ -1280,14 +1287,13 @@ class SurfaceManager:
                         sp.Update(msg)
                     except Exception:
                         sp.Update(None)
-                    wx.Yield()
+                    QApplication.processEvents()
 
             t_end = time.time()
             print(f"Elapsed time - {t_end - t_init}")
             sp.Close()
             if sp.error:
-                dlg = GMD.GenericMessageDialog(None, sp.error, "Exception!", wx.OK | wx.ICON_ERROR)
-                dlg.ShowModal()
+                QMessageBox.critical(None, "Exception!", sp.error)
             del sp
 
         pool.close()
@@ -1392,12 +1398,13 @@ class SurfaceManager:
             try:
                 self._export_surface(temp_file, filetype, convert_to_world)
             except ValueError:
-                if wx.GetApp() is None:
+                if QApplication.instance() is None:
                     print("It was not possible to export the surface because the surface is empty")
                 else:
-                    wx.MessageBox(
-                        _("It was not possible to export the surface because the surface is empty"),
+                    QMessageBox.warning(
+                        None,
                         _("Export surface error"),
+                        _("It was not possible to export the surface because the surface is empty"),
                     )
                 return
 
@@ -1406,12 +1413,13 @@ class SurfaceManager:
 
             # Checks if file exists and is not empty
             if not os.path.exists(temp_file) or os.path.getsize(temp_file) == 0:
-                if wx.GetApp() is None:
+                if QApplication.instance() is None:
                     print("Export cancelled or resulted in empty file.")
                 else:
-                    wx.MessageBox(
-                        _("Export cancelled by user"),
+                    QMessageBox.warning(
+                        None,
                         _("Export surface error"),
+                        _("Export cancelled by user"),
                     )
                 return
 
@@ -1419,7 +1427,7 @@ class SurfaceManager:
                 shutil.move(temp_file, filename)
             except PermissionError as err:
                 dirpath = os.path.split(filename)[0]
-                if wx.GetApp() is None:
+                if QApplication.instance() is None:
                     print(
                         _(
                             f"It was not possible to export the surface because you don't have permission to write to {dirpath} folder: {err}"
@@ -1431,17 +1439,16 @@ class SurfaceManager:
                         _("Export surface error"),
                         f"It was not possible to export the surface because you don't have permission to write to {dirpath}:\n{err}",
                     )
-                    dlg.ShowModal()
-                    dlg.Destroy()
+                    dlg.exec()
                 return
 
             # If export was flagged successful, shows success message and resets the flag
             if getattr(self, "export_successful", False):
                 self.export_successful = False
-                wx.MessageBox(
-                    _("Export completed successfully."),
+                QMessageBox.information(
+                    None,
                     _("Export success"),
-                    wx.OK | wx.ICON_INFORMATION,
+                    _("Export completed successfully."),
                 )
 
             try:
@@ -1529,23 +1536,21 @@ class SurfaceManager:
             raise ValueError("Polydata has zero points.")
 
         # Initializing progress dialog
-        progress = wx.ProgressDialog(
-            "Exporting File",
-            "Preparing export...",
-            maximum=100,
-            parent=None,
-            style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE | wx.PD_CAN_ABORT | wx.PD_ELAPSED_TIME,
-        )
+        progress = QProgressDialog("Preparing export...", "Cancel", 0, 100)
+        progress.setWindowTitle("Exporting File")
+        progress.setWindowModality(Qt.ApplicationModal)
+        progress.setAutoClose(True)
         progress_destroyed = False
 
         try:
             if convert_to_world:
                 polydata = self.ConvertPolydataToInv(polydata, inverse=True)
-                keep_going, _ = progress.Update(10, "Converting coordinates...")
-                if not keep_going:
-                    progress.Destroy()
+                progress.setValue(10)
+                progress.setLabelText("Converting coordinates...")
+                if progress.wasCanceled():
+                    progress.close()
                     return
-                wx.Yield()
+                QApplication.processEvents()
 
             # Having a polydata that represents all surfaces
             # selected, we write it, according to filetype
@@ -1580,7 +1585,7 @@ class SurfaceManager:
             #   writer = vtkOBJExporter()
 
             else:
-                progress.Destroy()
+                progress.close()
                 raise ValueError(f"Unsupported filetype: {filetype}")
 
             if filetype in (const.FILETYPE_STL, const.FILETYPE_STL_ASCII, const.FILETYPE_PLY):
@@ -1604,23 +1609,25 @@ class SurfaceManager:
 
             for i in range(num_updates):
                 percent = int(i * 90 / num_updates)
-                keep_going, _ = progress.Update(10 + percent, f"Exporting file: {percent}%")
-                if not keep_going:
-                    progress.Destroy()
+                progress.setValue(10 + percent)
+                progress.setLabelText(f"Exporting file: {percent}%")
+                if progress.wasCanceled():
+                    progress.close()
                     return
                 if i < num_updates - 1:
-                    wx.MilliSleep(50)
-                wx.Yield()
+                    time.sleep(0.05)
+                QApplication.processEvents()
 
             writer.Write()
-            progress.Update(100, "Export complete.")
+            progress.setValue(100)
+            progress.setLabelText("Export complete.")
             self.export_successful = True
-            wx.Yield()
+            QApplication.processEvents()
 
         finally:
             if progress and not progress_destroyed:
                 try:
-                    progress.Destroy()
+                    progress.close()
                     progress_destroyed = True
                 except Exception as e:
                     print(f"Could not destroy progress dialog: {e}")

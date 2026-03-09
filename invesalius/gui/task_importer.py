@@ -18,167 +18,100 @@
 # --------------------------------------------------------------------------
 import os
 
-import wx
-
-try:
-    import wx.lib.agw.hyperlink as hl
-except ImportError:
-    import wx.lib.hyperlink as hl
-import wx.lib.platebtn as pbtn
+from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtWidgets import (
+    QGridLayout,
+    QHBoxLayout,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 import invesalius.constants as const
 from invesalius import inv_paths
 from invesalius.i18n import tr as _
 from invesalius.pubsub import pub as Publisher
 
-BTN_IMPORT_LOCAL = wx.NewIdRef()
-BTN_IMPORT_PACS = wx.NewIdRef()
-BTN_OPEN_PROJECT = wx.NewIdRef()
-BTN_IMPORT_NIFTI = wx.NewIdRef()
 
-
-class TaskPanel(wx.Panel):
+class TaskPanel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
         inner_panel = InnerTaskPanel(self)
 
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(inner_panel, 1, wx.EXPAND | wx.GROW | wx.BOTTOM | wx.RIGHT | wx.LEFT, 7)
-        sizer.Fit(self)
-
-        self.SetSizer(sizer)
-        self.Update()
-        self.SetAutoLayout(1)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(7, 0, 7, 7)
+        layout.addWidget(inner_panel, 1)
 
 
-class InnerTaskPanel(wx.Panel):
+class InnerTaskPanel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
+        self.setStyleSheet("background-color: white;")
 
-        backgroud_colour = wx.Colour(255, 255, 255)
-
-        self.SetBackgroundColour(backgroud_colour)
-        self.SetAutoLayout(1)
-
-        # Counter for projects loaded in current GUI
         self.proj_count = 0
-
-        # Floating items (to be inserted)
         self.float_hyper_list = []
 
-        # Fixed hyperlink items
         tooltip = _("Select DICOM files to be reconstructed")
-        link_import_local = hl.HyperLinkCtrl(self, -1, _("Import DICOM images..."))
-        link_import_local.SetUnderlines(False, False, False)
-        link_import_local.SetBold(True)
-        link_import_local.SetColours("BLACK", "BLACK", "BLACK")
-        link_import_local.SetBackgroundColour(backgroud_colour)
-        link_import_local.SetToolTip(tooltip)
-        link_import_local.AutoBrowse(False)
-        link_import_local.UpdateLink()
-        link_import_local.Bind(hl.EVT_HYPERLINK_LEFT, self.OnLinkImport)
+        link_import_local = QPushButton(_("Import DICOM images..."))
+        link_import_local.setFlat(True)
+        link_import_local.setStyleSheet(
+            "QPushButton { text-align: left; font-weight: bold; color: black; }"
+        )
+        link_import_local.setToolTip(tooltip)
+        link_import_local.clicked.connect(self.OnLinkImport)
 
         tooltip = _("Select NIFTI files to be reconstructed")
-        link_import_nifti = hl.HyperLinkCtrl(self, -1, _("Import NIFTI images..."))
-        link_import_nifti.SetUnderlines(False, False, False)
-        link_import_nifti.SetBold(True)
-        link_import_nifti.SetColours("BLACK", "BLACK", "BLACK")
-        link_import_nifti.SetBackgroundColour(backgroud_colour)
-        link_import_nifti.SetToolTip(tooltip)
-        link_import_nifti.AutoBrowse(False)
-        link_import_nifti.UpdateLink()
-        link_import_nifti.Bind(hl.EVT_HYPERLINK_LEFT, self.OnLinkImportNifti)
-
-        # tooltip = "Import DICOM files from PACS server"
-        # link_import_pacs = hl.HyperLinkCtrl(self, -1,"Load from PACS server...")
-        # link_import_pacs.SetUnderlines(False, False, False)
-        # link_import_pacs.SetColours("BLACK", "BLACK", "BLACK")
-        # link_import_pacs.SetToolTip(tooltip)
-        # link_import_pacs.AutoBrowse(False)
-        # link_import_pacs.UpdateLink()
-        # link_import_pacs.Bind(hl.EVT_HYPERLINK_LEFT, self.OnLinkImportPACS)
+        link_import_nifti = QPushButton(_("Import NIFTI images..."))
+        link_import_nifti.setFlat(True)
+        link_import_nifti.setStyleSheet(
+            "QPushButton { text-align: left; font-weight: bold; color: black; }"
+        )
+        link_import_nifti.setToolTip(tooltip)
+        link_import_nifti.clicked.connect(self.OnLinkImportNifti)
 
         tooltip = _("Open an existing InVesalius project...")
-        link_open_proj = hl.HyperLinkCtrl(self, -1, _("Open an existing project..."))
-        link_open_proj.SetUnderlines(False, False, False)
-        link_open_proj.SetBold(True)
-        link_open_proj.SetColours("BLACK", "BLACK", "BLACK")
-        link_open_proj.SetBackgroundColour(backgroud_colour)
-        link_open_proj.SetToolTip(tooltip)
-        link_open_proj.AutoBrowse(False)
-        link_open_proj.UpdateLink()
-        link_open_proj.Bind(hl.EVT_HYPERLINK_LEFT, self.OnLinkOpenProject)
-
-        # Image(s) for buttons
-        BMP_IMPORT = wx.Bitmap(
-            str(inv_paths.ICON_DIR.joinpath("file_import_original.png")), wx.BITMAP_TYPE_PNG
+        link_open_proj = QPushButton(_("Open an existing project..."))
+        link_open_proj.setFlat(True)
+        link_open_proj.setStyleSheet(
+            "QPushButton { text-align: left; font-weight: bold; color: black; }"
         )
-        BMP_OPEN_PROJECT = wx.Bitmap(
-            str(inv_paths.ICON_DIR.joinpath("file_open_original.png")), wx.BITMAP_TYPE_PNG
-        )
+        link_open_proj.setToolTip(tooltip)
+        link_open_proj.clicked.connect(self.OnLinkOpenProject)
 
-        # Buttons related to hyperlinks
-        button_style = pbtn.PB_STYLE_SQUARE | pbtn.PB_STYLE_DEFAULT
+        BMP_IMPORT = QPixmap(str(inv_paths.ICON_DIR.joinpath("file_import_original.png")))
+        BMP_OPEN_PROJECT = QPixmap(str(inv_paths.ICON_DIR.joinpath("file_open_original.png")))
 
-        button_import_local = pbtn.PlateButton(
-            self, BTN_IMPORT_LOCAL, "", BMP_IMPORT, style=button_style
-        )
-        button_import_local.SetBackgroundColour(self.GetBackgroundColour())
-        button_import_nifti = pbtn.PlateButton(
-            self, BTN_IMPORT_NIFTI, "", BMP_IMPORT, style=button_style
-        )
-        button_import_nifti.SetBackgroundColour(self.GetBackgroundColour())
-        button_open_proj = pbtn.PlateButton(
-            self, BTN_OPEN_PROJECT, "", BMP_OPEN_PROJECT, style=button_style
-        )
-        button_open_proj.SetBackgroundColour(self.GetBackgroundColour())
+        button_import_local = QPushButton("")
+        button_import_local.setIcon(QIcon(BMP_IMPORT))
+        button_import_local.setFlat(True)
+        button_import_local.clicked.connect(self.OnLinkImport)
 
-        # When using PlaneButton, it is necessary to bind events from parent win
-        self.Bind(wx.EVT_BUTTON, self.OnButton)
+        button_import_nifti = QPushButton("")
+        button_import_nifti.setIcon(QIcon(BMP_IMPORT))
+        button_import_nifti.setFlat(True)
+        button_import_nifti.clicked.connect(self.OnLinkImportNifti)
 
-        # Tags and grid sizer for fixed items
-        flag_link = wx.EXPAND | wx.GROW | wx.LEFT | wx.TOP
-        flag_button = wx.EXPAND | wx.GROW
+        button_open_proj = QPushButton("")
+        button_open_proj.setIcon(QIcon(BMP_OPEN_PROJECT))
+        button_open_proj.setFlat(True)
+        button_open_proj.clicked.connect(self.OnLinkOpenProject)
 
-        # fixed_sizer = wx.FlexGridSizer(rows=3, cols=2, hgap=2, vgap=0)
-        fixed_sizer = wx.FlexGridSizer(rows=3, cols=2, hgap=2, vgap=0)
-        fixed_sizer.AddGrowableCol(0, 1)
-        fixed_sizer.AddMany(
-            [  # (link_import_pacs, 1, flag_link, 3),
-                # (button_import_pacs, 0, flag_button),
-                (link_import_local, 1, flag_link, 3),
-                (button_import_local, 0, flag_button),
-                (link_import_nifti, 3, flag_link, 3),
-                (button_import_nifti, 0, flag_button),
-                (link_open_proj, 5, flag_link, 3),
-                (button_open_proj, 0, flag_button),
-            ]
-        )
+        fixed_layout = QGridLayout()
+        fixed_layout.setHorizontalSpacing(2)
+        fixed_layout.setVerticalSpacing(0)
+        fixed_layout.setColumnStretch(0, 1)
+        fixed_layout.addWidget(link_import_local, 0, 0)
+        fixed_layout.addWidget(button_import_local, 0, 1)
+        fixed_layout.addWidget(link_import_nifti, 1, 0)
+        fixed_layout.addWidget(button_import_nifti, 1, 1)
+        fixed_layout.addWidget(link_open_proj, 2, 0)
+        fixed_layout.addWidget(button_open_proj, 2, 1)
 
-        # Add line sizers into main sizer
-        main_sizer = wx.BoxSizer(wx.VERTICAL)
-        main_sizer.Add(fixed_sizer, 0, wx.GROW | wx.EXPAND)
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.addLayout(fixed_layout)
 
-        # Update main sizer and panel layout
-        self.SetSizer(main_sizer)
-        self.Update()
-        self.SetAutoLayout(1)
-        self.sizer = main_sizer
-
-        # Test load and unload specific projects' links
         self.TestLoadProjects2()
-        # self.__bind_events()
-
-    # def __bind_events(self):
-    #    Publisher.subscribe(self.OnLoadRecentProjects, "Load recent projects")
-
-    # def OnLoadRecentProjects(self, pubsub_evt):
-    #    projects = pubsub_evt.data
-    #    for tuple in projects:
-    #        filename = tuple[1]
-    #        path = tuple[0]
-    #        self.LoadProject(filename, path)
 
     def TestLoadProjects2(self):
         import invesalius.session as ses
@@ -200,53 +133,36 @@ class InnerTaskPanel(wx.Panel):
         Can be called 3 times in sequence.
         Call UnloadProjects to empty it.
         """
-        # TODO: What todo when it is called more than 3 times?
-        # TODO: Load from config file last 3 recent projects
-
         proj_path = os.path.join(proj_dir, proj_name)
 
         if self.proj_count < 3:
             self.proj_count += 1
 
-            # Create name to be plot on GUI
             label = "     " + str(self.proj_count) + ". " + proj_name
 
-            # Create corresponding hyperlink
-            proj_link = hl.HyperLinkCtrl(self, -1, label)
-            proj_link.SetUnderlines(False, False, False)
-            proj_link.SetColours("BLACK", "BLACK", "BLACK")
-            proj_link.SetBackgroundColour(self.GetBackgroundColour())
-            proj_link.AutoBrowse(False)
-            proj_link.UpdateLink()
-            proj_link.Bind(hl.EVT_HYPERLINK_LEFT, lambda e: self.OpenProject(proj_path))
+            proj_link = QPushButton(label)
+            proj_link.setFlat(True)
+            proj_link.setStyleSheet("QPushButton { text-align: left; color: black; }")
+            proj_link.clicked.connect(lambda checked=False, p=proj_path: self.OpenProject(p))
 
-            # Add to existing frame
-            self.sizer.Add(proj_link, 1, wx.GROW | wx.EXPAND | wx.ALL, 2)
-            self.Update()
-
-            # Add hyperlink to floating hyperlinks list
+            self.main_layout.addWidget(proj_link, 1)
             self.float_hyper_list.append(proj_link)
 
-    def OnLinkImport(self, event):
+    def OnLinkImport(self):
         self.ImportDicom()
-        event.Skip()
 
-    def OnLinkImportNifti(self, event):
+    def OnLinkImportNifti(self):
         self.ImportNifti()
-        event.Skip()
 
-    def OnLinkImportPACS(self, event):
+    def OnLinkImportPACS(self):
         self.ImportPACS()
-        event.Skip()
 
-    def OnLinkOpenProject(self, event):
+    def OnLinkOpenProject(self):
         self.OpenProject()
-        event.Skip()
 
     def ImportPACS(self):
         print("TODO: Send Signal - Import DICOM files from PACS")
 
-    #######
     def ImportDicom(self):
         Publisher.sendMessage("Show import directory dialog")
 
@@ -268,39 +184,14 @@ class InnerTaskPanel(wx.Panel):
     def CloseProject(self):
         Publisher.sendMessage("Close Project")
 
-    #######
-
-    def OnButton(self, evt):
-        id = evt.GetId()
-
-        if id == BTN_IMPORT_LOCAL:
-            self.ImportDicom()
-        elif id == BTN_IMPORT_NIFTI:
-            self.ImportNifti()
-        elif id == BTN_IMPORT_PACS:
-            self.ImportPACS()
-        else:  # elif id == BTN_OPEN_PROJECT:
-            self.OpenProject()
-
     def UnloadProjects(self):
         """
         Unload all projects from interface into import task panel.
         This will be called when the current project is closed.
         """
-
-        # Remove each project from sizer
-        for i in range(0, self.proj_count):
-            self.sizer.Remove(self.float_hyper_list[i])
-
-        # Delete hyperlinks
         for hyper in self.float_hyper_list:
-            hyper.Destroy()
-            del hyper
+            self.main_layout.removeWidget(hyper)
+            hyper.deleteLater()
 
-        # Update GUI
-        self.sizer.Layout()
-        self.Update()
-
-        # Now we set projects loaded to 0
         self.proj_count = 0
         self.float_hyper_list = []

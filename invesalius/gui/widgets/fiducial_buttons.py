@@ -18,10 +18,16 @@
 # --------------------------------------------------------------------
 from functools import partial
 
-import wx
-from wx.lib.masked.numctrl import NumCtrl
+from PySide6.QtCore import QSize
+from PySide6.QtGui import QFontMetrics
+from PySide6.QtWidgets import QDoubleSpinBox, QPushButton
 
 import invesalius.constants as const
+
+
+def _color_stylesheet(rgb_tuple):
+    r, g, b = rgb_tuple
+    return f"background-color: rgb({r}, {g}, {b});"
 
 
 class OrderedFiducialButtons:
@@ -37,11 +43,11 @@ class OrderedFiducialButtons:
         """
         Class to initialize fiducials GUI and to keep track of the order to set fiducials.
 
-        :param parent: parent for wx elements
+        :param parent: parent for Qt elements
         :param fiducial_definitions: const.OBJECT_FIDUCIALS or const.TRACKER_FIDUCIALS
         :param is_fiducial_set: Function taking fiducial index as parameter, returning True if that
                                 fiducial is set, False otherwise.
-        :param get_fiducial_coord: Function to retrieve value for NumCtrl. Takes fiducial index and
+        :param get_fiducial_coord: Function to retrieve value for spin boxes. Takes fiducial index and
                                    coordinate index as parameters, returns value.
         :param set_actor_colors: Function taking fiducial index and float color as parameter, changing
                                  the color of relevant actors to match the fiducial index.
@@ -53,38 +59,37 @@ class OrderedFiducialButtons:
         self.set_actor_colors = set_actor_colors
         self.order: list[int] = order or list(range(count))
 
-        self.buttons: list[wx.Button] = []
-        self.numctrls: list[list[NumCtrl]] = []
+        self.buttons: list[QPushButton] = []
+        self.numctrls: list[list[QDoubleSpinBox]] = []
 
         self.focused_index: int | None = None
-        self.focused: wx.Button | None = None
 
         self.COLOR_NOT_SET = 0
         self.COLOR_FOCUSED = 1
         self.COLOR_SET = 2
 
-        # Initialize buttons
         for n, fiducial in enumerate(fiducial_definitions):
-            button_id = fiducial["button_id"]
             label = fiducial["label"]
             tip = fiducial["tip"]
 
-            w, h = wx.ScreenDC().GetTextExtent("M" * len(label))
-            ctrl = wx.Button(parent, button_id, label="", size=(55, h + 5))
-            ctrl.SetLabel(label)
-            ctrl.SetToolTip(tip)
-            ctrl.Bind(wx.EVT_BUTTON, partial(self._OnButton, n=n))
+            fm = QFontMetrics(parent.font())
+            w = fm.horizontalAdvance("M" * len(label))
+            h = fm.height()
+            ctrl = QPushButton("", parent)
+            ctrl.setFixedSize(QSize(55, h + 5))
+            ctrl.setText(label)
+            ctrl.setToolTip(tip)
+            ctrl.clicked.connect(partial(self._OnButton, n=n))
             self.buttons.append(ctrl)
 
-        # Initialize NumCtrls
         for n in range(count):
             coords = []
             for coord_index in range(3):
-                numctrl = wx.lib.masked.numctrl.NumCtrl(
-                    parent=parent, integerWidth=4, fractionWidth=1
-                )
-                numctrl.Hide()
-                coords.append(numctrl)
+                spinbox = QDoubleSpinBox(parent)
+                spinbox.setDecimals(1)
+                spinbox.setRange(-9999.9, 9999.9)
+                spinbox.hide()
+                coords.append(spinbox)
             self.numctrls.append(coords)
 
         self.Update()
@@ -121,13 +126,13 @@ class OrderedFiducialButtons:
     def _SetColor(self, n, color):
         button = self.buttons[n]
         if color == self.COLOR_SET:
-            button.SetBackgroundColour(const.GREEN_COLOR_RGB)
+            button.setStyleSheet(_color_stylesheet(const.GREEN_COLOR_RGB))
             self._TrySetActorColors(n, const.GREEN_COLOR_FLOAT)
         elif color == self.COLOR_FOCUSED:
-            button.SetBackgroundColour(const.YELLOW_COLOR_RGB)
+            button.setStyleSheet(_color_stylesheet(const.YELLOW_COLOR_RGB))
             self._TrySetActorColors(n, const.YELLOW_COLOR_FLOAT)
         else:
-            button.SetBackgroundColour(const.RED_COLOR_RGB)
+            button.setStyleSheet(_color_stylesheet(const.RED_COLOR_RGB))
             self._TrySetActorColors(n, const.RED_COLOR_FLOAT)
 
     def _RefreshColors(self):
@@ -146,7 +151,7 @@ class OrderedFiducialButtons:
         for n, element in enumerate(self.numctrls):
             for i, numctrl in enumerate(element):
                 value = self.get_fiducial_coord(n, i)
-                numctrl.SetValue(value)
+                numctrl.setValue(value)
 
     def _UpdateControl(self, n):
         if self.get_fiducial_coord is None:
@@ -154,7 +159,7 @@ class OrderedFiducialButtons:
 
         for i, numctrl in enumerate(self.numctrls[n]):
             value = self.get_fiducial_coord(n, i)
-            numctrl.SetValue(value)
+            numctrl.setValue(value)
 
     def Update(self):
         self._UpdateControls()
@@ -171,7 +176,7 @@ class OrderedFiducialButtons:
             self._SetColor(self.focused_index, self.COLOR_NOT_SET)
             self.focused = None
 
-    def _OnButton(self, evt, n):
+    def _OnButton(self, n):
         self.Focus(n)
 
     def Focus(self, n):

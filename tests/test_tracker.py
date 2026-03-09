@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-import wx
+from PySide6.QtWidgets import QApplication
 
 import invesalius.constants as const
 import invesalius.data.coordinates as dco
@@ -13,8 +13,8 @@ import invesalius.data.tracker_connection as tc
 import invesalius.session as ses
 from invesalius.navigation.tracker import Tracker
 
-if not wx.GetApp():
-    app = wx.App(False)
+if not QApplication.instance():
+    app = QApplication([])
 
 
 @pytest.fixture

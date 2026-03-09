@@ -16,10 +16,10 @@
 #    PARTICULAR. Consulte a Licenca Publica Geral GNU para obter mais
 #    detalhes.
 # --------------------------------------------------------------------------
-import wx
-
 import invesalius.constants as const
 import invesalius.data.vtk_utils as vu
+
+FONTSIZE_LARGE = 12
 
 BORDER_UP = 1
 BORDER_DOWN = 2
@@ -49,7 +49,7 @@ class SliceData:
         text.SetColour(colour)
         text.SetSize(const.TEXT_SIZE_LARGE)
         text.SetPosition(const.TEXT_POS_LEFT_DOWN_ZERO)
-        text.SetSymbolicSize(wx.FONTSIZE_LARGE)
+        text.SetSymbolicSize(FONTSIZE_LARGE)
         # text.SetVerticalJustificationToBottom()
         text.SetValue(self.number)
         self.text = text

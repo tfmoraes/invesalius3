@@ -19,29 +19,47 @@
 import decimal
 from typing import Any, Optional, Union
 
-import wx
+from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtGui import QFontMetrics, QWheelEvent
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLineEdit,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 
-class InvSpinCtrl(wx.Panel):
+class InvSpinCtrl(QWidget):
+    valueChanged = Signal()
+
     def __init__(
         self,
-        parent: wx.Window,
-        id: int = wx.ID_ANY,
+        parent: QWidget,
+        id: int = -1,
         value: int = 0,
         min_value: int = 1,
         max_value: int = 100,
         increment: int = 1,
         spin_button: bool = True,
         unit: str = "",
-        size: wx.Size = wx.DefaultSize,
-        style: int = wx.TE_RIGHT,
+        size=None,
+        style: int = 0,
     ):
-        super().__init__(parent, id, size=size)
+        super().__init__(parent)
 
-        self._textctrl = wx.TextCtrl(self, -1, style=style)
-        self._spinbtn: Optional[wx.SpinButton] = None
-        if spin_button and wx.Platform != "__WXGTK__":
-            self._spinbtn = wx.SpinButton(self, -1)
+        self._textctrl = QLineEdit(self)
+        self._textctrl.setAlignment(Qt.AlignRight)
+        self._spinbtn_up: Optional[QToolButton] = None
+        self._spinbtn_down: Optional[QToolButton] = None
+
+        if spin_button:
+            self._spinbtn_up = QToolButton(self)
+            self._spinbtn_up.setArrowType(Qt.UpArrow)
+            self._spinbtn_up.setAutoRepeat(True)
+            self._spinbtn_down = QToolButton(self)
+            self._spinbtn_down.setArrowType(Qt.DownArrow)
+            self._spinbtn_down.setAutoRepeat(True)
 
         self._value = 0
         self._last_value = 0
@@ -56,22 +74,33 @@ class InvSpinCtrl(wx.Panel):
         self.SetValue(value)
         self.SetIncrement(increment)
 
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self._textctrl, 1, wx.EXPAND)
-        if self._spinbtn:
-            sizer.Add(self._spinbtn, 0, wx.EXPAND)
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self._textctrl, 1)
 
-        self.SetSizer(sizer)
-        sizer.Fit(self)
+        if self._spinbtn_up:
+            spin_layout = QVBoxLayout()
+            spin_layout.setContentsMargins(0, 0, 0, 0)
+            spin_layout.setSpacing(0)
+            spin_layout.addWidget(self._spinbtn_up)
+            spin_layout.addWidget(self._spinbtn_down)
+            layout.addLayout(spin_layout)
+
+        self.setLayout(layout)
 
         self.__bind_events()
 
     def __bind_events(self) -> None:
-        self.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
-        self._textctrl.Bind(wx.EVT_KILL_FOCUS, self.OnKillFocus)
-        if self._spinbtn:
-            self._spinbtn.Bind(wx.EVT_SPIN_UP, self.OnSpinUp)
-            self._spinbtn.Bind(wx.EVT_SPIN_DOWN, self.OnSpinDown)
+        self._textctrl.installEventFilter(self)
+        if self._spinbtn_up:
+            self._spinbtn_up.clicked.connect(self.OnSpinUp)
+            self._spinbtn_down.clicked.connect(self.OnSpinDown)
+
+    def eventFilter(self, obj, event):
+        if obj is self._textctrl and event.type() == QEvent.FocusOut:
+            self.OnKillFocus()
+        return super().eventFilter(obj, event)
 
     def SetIncrement(self, increment: int) -> None:
         self._increment = increment
@@ -96,7 +125,7 @@ class InvSpinCtrl(wx.Panel):
     def SetValue(self, value: Union[float, str]) -> None:
         try:
             value = int(value)
-        except ValueError:
+        except (ValueError, TypeError):
             value = self._last_value
 
         if value < self._min_value:
@@ -106,7 +135,7 @@ class InvSpinCtrl(wx.Panel):
             value = self._max_value
 
         self._value = value
-        self._textctrl.SetValue(f"{self._value} {self.unit}")
+        self._textctrl.setText(f"{self._value} {self.unit}")
         self._last_value = self._value
 
     def GetUnit(self) -> str:
@@ -117,84 +146,74 @@ class InvSpinCtrl(wx.Panel):
         self.SetValue(self.GetValue())
 
     def CalcSizeFromTextSize(self, text: Optional[str] = None) -> None:
-        # To calculate best width to spinctrl
         if text is None:
-            text = "{}".format(max(len(str(self._max_value)), len(str(self._min_value)), 5) * "M")
+            text = "M" * max(len(str(self._max_value)), len(str(self._min_value)), 5)
 
-        dc = wx.WindowDC(self)
-        dc.SetFont(self.GetFont())
-        width, height = dc.GetTextExtent(text)
+        fm = QFontMetrics(self.font())
+        width = fm.horizontalAdvance(text)
+        height = fm.height()
 
-        if self._spinbtn:
-            spin = wx.SpinCtrl(self, -1)
-            spin_width, spin_height = spin.GetBestSize()
-            spin.Destroy()
+        if self._spinbtn_up:
+            btn_width = self._spinbtn_up.sizeHint().width()
+            width += btn_width
 
-            spinb = wx.SpinButton(self, -1)
-            spinb_width, spinb_height = spinb.GetBestSize()
-            spinb.Destroy()
+        self.setMinimumSize(width, height)
 
-            width += spinb_width
-            if wx.Platform == "__WXMAC":
-                height = max(height, spin_height, spinb_height)
-            else:
-                height = spin_height
-        else:
-            height = -1
-
-        self.SetMinSize((width, height))
-        self.Layout()
-
-    def OnMouseWheel(self, evt: wx.MouseEvent) -> None:
-        r = evt.GetWheelRotation()
-        if r > 0:
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        delta = event.angleDelta().y()
+        if delta > 0:
             self.SetValue(self.GetValue() + self._increment)
         else:
             self.SetValue(self.GetValue() - self._increment)
         self.raise_event()
-        evt.Skip()
 
-    def OnKillFocus(self, evt: wx.FocusEvent) -> None:
-        value = self._textctrl.GetValue()
+    def OnKillFocus(self) -> None:
+        value = self._textctrl.text()
         self.SetValue(value)
         self.raise_event()
-        evt.Skip()
 
-    def OnSpinDown(self, evt: wx.SpinEvent) -> None:
+    def OnSpinDown(self) -> None:
         self.SetValue(self.GetValue() - self._increment)
         self.raise_event()
-        evt.Skip()
 
-    def OnSpinUp(self, evt: wx.SpinEvent) -> None:
+    def OnSpinUp(self) -> None:
         self.SetValue(self.GetValue() + self._increment)
         self.raise_event()
-        evt.Skip()
 
     def raise_event(self) -> None:
-        event = wx.PyCommandEvent(wx.EVT_SPINCTRL.typeId, self.GetId())
-        self.GetEventHandler().ProcessEvent(event)
+        self.valueChanged.emit()
 
 
-class InvFloatSpinCtrl(wx.Panel):
+class InvFloatSpinCtrl(QWidget):
+    valueChanged = Signal()
+
     def __init__(
         self,
-        parent: wx.Window,
-        id: int = wx.ID_ANY,
+        parent: QWidget,
+        id: int = -1,
         value: float = 0.0,
         min_value: float = 1.0,
         max_value: float = 100.0,
         increment: float = 0.1,
         digits: int = 1,
         spin_button: bool = True,
-        size: wx.Size = wx.DefaultSize,
-        style: int = wx.TE_RIGHT,
+        size=None,
+        style: int = 0,
     ):
-        super().__init__(parent, id, size=size)
+        super().__init__(parent)
 
-        self._textctrl = wx.TextCtrl(self, -1, style=style)
-        self._spinbtn: Optional[wx.SpinButton] = None
-        if spin_button and wx.Platform != "__WXGTK__":
-            self._spinbtn = wx.SpinButton(self, -1)
+        self._textctrl = QLineEdit(self)
+        self._textctrl.setAlignment(Qt.AlignRight)
+        self._spinbtn_up: Optional[QToolButton] = None
+        self._spinbtn_down: Optional[QToolButton] = None
+
+        if spin_button:
+            self._spinbtn_up = QToolButton(self)
+            self._spinbtn_up.setArrowType(Qt.UpArrow)
+            self._spinbtn_up.setAutoRepeat(True)
+            self._spinbtn_down = QToolButton(self)
+            self._spinbtn_down.setArrowType(Qt.DownArrow)
+            self._spinbtn_down.setAutoRepeat(True)
 
         self._digits = digits
         self._dec_context = decimal.Context(prec=digits)
@@ -210,22 +229,33 @@ class InvFloatSpinCtrl(wx.Panel):
         self.SetMax(max_value)
         self.SetValue(value)
 
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self._textctrl, 1, wx.EXPAND)
-        if self._spinbtn:
-            sizer.Add(self._spinbtn, 0, wx.EXPAND)
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self._textctrl, 1)
 
-        self.SetSizer(sizer)
-        sizer.Fit(self)
+        if self._spinbtn_up:
+            spin_layout = QVBoxLayout()
+            spin_layout.setContentsMargins(0, 0, 0, 0)
+            spin_layout.setSpacing(0)
+            spin_layout.addWidget(self._spinbtn_up)
+            spin_layout.addWidget(self._spinbtn_down)
+            layout.addLayout(spin_layout)
+
+        self.setLayout(layout)
 
         self.__bind_events()
 
     def __bind_events(self) -> None:
-        self.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
-        self._textctrl.Bind(wx.EVT_KILL_FOCUS, self.OnKillFocus)
-        if self._spinbtn:
-            self._spinbtn.Bind(wx.EVT_SPIN_UP, self.OnSpinUp)
-            self._spinbtn.Bind(wx.EVT_SPIN_DOWN, self.OnSpinDown)
+        self._textctrl.installEventFilter(self)
+        if self._spinbtn_up:
+            self._spinbtn_up.clicked.connect(self.OnSpinUp)
+            self._spinbtn_down.clicked.connect(self.OnSpinDown)
+
+    def eventFilter(self, obj, event):
+        if obj is self._textctrl and event.type() == QEvent.FocusOut:
+            self.OnKillFocus()
+        return super().eventFilter(obj, event)
 
     def _to_decimal(self, value: Union[decimal.Decimal, float, str]) -> decimal.Decimal:
         if not isinstance(value, str):
@@ -276,67 +306,43 @@ class InvFloatSpinCtrl(wx.Panel):
             value = self._max_value
 
         self._value = value
-        self._textctrl.SetValue(f"{self._value}")
+        self._textctrl.setText(f"{self._value}")
         self._last_value = self._value
 
     def CalcSizeFromTextSize(self, text: Optional[str] = None) -> None:
-        # To calculate best width to spinctrl
         if text is None:
-            text = "{}".format(max(len(str(self._max_value)), len(str(self._min_value))) * "M")
+            text = "M" * max(len(str(self._max_value)), len(str(self._min_value)))
 
-        dc = wx.WindowDC(self)
-        dc.SetFont(self.GetFont())
-        width, height = dc.GetTextExtent(text)
+        fm = QFontMetrics(self.font())
+        width = fm.horizontalAdvance(text)
+        height = fm.height()
 
-        spin = wx.SpinCtrl(self, -1)
-        spin_width, spin_height = spin.GetBestSize()
-        spin.Destroy()
+        if self._spinbtn_up:
+            btn_width = self._spinbtn_up.sizeHint().width()
+            width += btn_width
 
-        if self._spinbtn:
-            spin = wx.SpinCtrl(self, -1)
-            spin_width, spin_height = spin.GetBestSize()
-            spin.Destroy()
+        self.setMinimumSize(width, height)
 
-            spinb = wx.SpinButton(self, -1)
-            spinb_width, spinb_height = spinb.GetBestSize()
-            spinb.Destroy()
-
-            width += spinb_width
-            if wx.Platform == "__WXMAC":
-                height = max(height, spin_height, spinb_height)
-            else:
-                height = spin_height
-        else:
-            height = -1
-
-        self.SetMinSize((width, height))
-        self.Layout()
-
-    def OnMouseWheel(self, evt: wx.MouseEvent) -> None:
-        r = evt.GetWheelRotation()
-        if r > 0:
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        delta = event.angleDelta().y()
+        if delta > 0:
             self.SetValue(self._value + self._increment)
         else:
             self.SetValue(self._value - self._increment)
         self.raise_event()
-        evt.Skip()
 
-    def OnKillFocus(self, evt: wx.FocusEvent) -> None:
-        value = self._textctrl.GetValue()
+    def OnKillFocus(self) -> None:
+        value = self._textctrl.text()
         self.SetValue(value)
         self.raise_event()
-        evt.Skip()
 
-    def OnSpinDown(self, evt: wx.SpinEvent) -> None:
+    def OnSpinDown(self) -> None:
         self.SetValue(self._value - self._increment)
         self.raise_event()
-        evt.Skip()
 
-    def OnSpinUp(self, evt: wx.SpinEvent) -> None:
+    def OnSpinUp(self) -> None:
         self.SetValue(self._value + self._increment)
         self.raise_event()
-        evt.Skip()
 
     def raise_event(self) -> None:
-        event = wx.PyCommandEvent(wx.EVT_SPINCTRL.typeId, self.GetId())
-        self.GetEventHandler().ProcessEvent(event)
+        self.valueChanged.emit()

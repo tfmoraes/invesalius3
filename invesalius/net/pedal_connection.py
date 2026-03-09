@@ -18,10 +18,9 @@
 # --------------------------------------------------------------------------
 
 import time
-from functools import partial
 from threading import Thread
 
-import wx
+from PySide6.QtCore import QEvent, QObject
 
 import invesalius.constants as const
 from invesalius.pubsub import pub as Publisher
@@ -34,6 +33,27 @@ except ImportError:
     HAS_PEDAL_CONNECTION = False
 
 
+class _KeystrokePedalFilter(QObject):
+    """Event filter that intercepts key events for pedal emulation."""
+
+    def __init__(self, pedal_connector, widget_id):
+        super().__init__()
+        self._pedal_connector = pedal_connector
+        self._widget_id = widget_id
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.KeyPress:
+            if event.key() == const.KEYSTROKE_PEDAL_KEY:
+                callbacks = self._pedal_connector.panel_callbacks.get(self._widget_id, {})
+                for name in list(callbacks.keys()):
+                    callback, remove_when_released = callbacks[name]
+                    callback(True)
+                    if remove_when_released:
+                        callbacks.pop(name)
+                return True
+        return False
+
+
 class PedalConnector:
     """
     Interface for using any type of pedal (midi, neuronavigation_api, keystroke)
@@ -43,35 +63,28 @@ class PedalConnector:
         self.pedal_connection = MidiPedal() if HAS_PEDAL_CONNECTION else None
         self.neuronavigation_api = neuronavigation_api
         self.frame = None
+        self._event_filters = {}
 
         if const.KEYSTROKE_PEDAL_ENABLED:
             self._set_frame(window)
-            self.panel_callbacks = {}  # dict[wxpanel_id, dict[callback_name, function]]
+            self.panel_callbacks = {}
 
-    def _set_frame(self, panel):
+    def _set_frame(self, widget):
         try:
-            while panel is not None and panel.GetId() != const.ID_FRAME:
-                panel = panel.GetParent()
+            if widget is not None:
+                widget = widget.window()
         except Exception as err:
             debug("PedalConnector could not find frame: " + str(err))
 
-        self.frame = panel
+        self.frame = widget
 
-    def _bind_callbacks_to_panel(self, panel):
-        panel_id = panel.GetId()
-        self.panel_callbacks.update({panel_id: {}})
+    def _bind_callbacks_to_panel(self, widget):
+        widget_id = id(widget)
+        self.panel_callbacks[widget_id] = {}
 
-        def OnKeyPress(evt, state):
-            key_code = evt.GetKeyCode()
-            if key_code == const.KEYSTROKE_PEDAL_KEY:
-                for name in list(self.panel_callbacks[panel_id].keys()):
-                    callback, remove_when_released = self.panel_callbacks[panel_id][name]
-                    callback(state)
-                    if remove_when_released:
-                        self.panel_callbacks[panel_id].pop(name)
-            evt.Skip()
-
-        panel.Bind(wx.EVT_CHAR_HOOK, partial(OnKeyPress, state=True))
+        event_filter = _KeystrokePedalFilter(self, widget_id)
+        widget.installEventFilter(event_filter)
+        self._event_filters[widget_id] = event_filter
 
     def add_callback(self, name, callback, remove_when_released=False, panel=None):
         if self.pedal_connection is not None:
@@ -82,11 +95,11 @@ class PedalConnector:
 
         panel = panel or self.frame
         if panel is not None and const.KEYSTROKE_PEDAL_ENABLED:
-            panel_id = panel.GetId()
-            if panel_id not in self.panel_callbacks:
+            widget_id = id(panel)
+            if widget_id not in self.panel_callbacks:
                 self._bind_callbacks_to_panel(panel)
 
-            self.panel_callbacks[panel_id].update({name: (callback, remove_when_released)})
+            self.panel_callbacks[widget_id][name] = (callback, remove_when_released)
 
     def remove_callback(self, name, panel=None):
         if self.pedal_connection is not None:
@@ -98,7 +111,7 @@ class PedalConnector:
         panel = panel or self.frame
         if panel is not None and const.KEYSTROKE_PEDAL_ENABLED:
             try:
-                self.panel_callbacks[panel.GetId()].pop(name)
+                self.panel_callbacks[id(panel)].pop(name)
             except KeyError:
                 pass
 

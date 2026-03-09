@@ -460,10 +460,10 @@ class DrawCrop2DRetangle:
 
     def draw_to_canvas(self, gc, canvas):
         """
-        Draws to an wx.GraphicsContext.
+        Draws to a QPainter context.
 
         Parameters:
-            gc: is a wx.GraphicsContext
+            gc: is a QPainter
             canvas: the canvas it's being drawn.
         """
         self.canvas = canvas

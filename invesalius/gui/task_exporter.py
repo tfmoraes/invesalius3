@@ -21,14 +21,21 @@ import os
 import pathlib
 import sys
 
-import wx
-
-try:
-    import wx.lib.agw.hyperlink as hl
-except ImportError:
-    import wx.lib.hyperlink as hl
-
-import wx.lib.platebtn as pbtn
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QGridLayout,
+    QGroupBox,
+    QMenu,
+    QMessageBox,
+    QPushButton,
+    QRadioButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 import invesalius.constants as const
 import invesalius.gui.dialogs as dlgs
@@ -39,23 +46,18 @@ from invesalius.data.slice_ import Slice
 from invesalius.i18n import tr as _
 from invesalius.pubsub import pub as Publisher
 
-BTN_MASK = wx.NewIdRef()
-BTN_PICTURE = wx.NewIdRef()
-BTN_SURFACE = wx.NewIdRef()
-BTN_REPORT = wx.NewIdRef()
-BTN_REQUEST_RP = wx.NewIdRef()
-
-WILDCARD_SAVE_3D = (
-    "Inventor (*.iv)|*.iv|"
-    "PLY (*.ply)|*.ply|"
-    "Renderman (*.rib)|*.rib|"
-    "STL (*.stl)|*.stl|"
-    "STL ASCII (*.stl)|*.stl|"
-    "VRML (*.vrml)|*.vrml|"
-    "VTK PolyData (*.vtp)|*.vtp|"
-    "Wavefront (*.obj)|*.obj|"
-    "X3D (*.x3d)|*.x3d"
-)
+WILDCARD_SAVE_3D_FILTERS = [
+    "Inventor (*.iv)",
+    "PLY (*.ply)",
+    "Renderman (*.rib)",
+    "STL (*.stl)",
+    "STL ASCII (*.stl)",
+    "VRML (*.vrml)",
+    "VTK PolyData (*.vtp)",
+    "Wavefront (*.obj)",
+    "X3D (*.x3d)",
+]
+WILDCARD_SAVE_3D = ";;".join(WILDCARD_SAVE_3D_FILTERS)
 
 INDEX_TO_TYPE_3D = {
     0: const.FILETYPE_IV,
@@ -80,14 +82,16 @@ INDEX_TO_EXTENSION = {
     8: "x3d",
 }
 
-WILDCARD_SAVE_2D = (
-    "BMP (*.bmp)|*.bmp|"
-    "JPEG (*.jpg)|*.jpg|"
-    "PNG (*.png)|*.png|"
-    "PostScript (*.ps)|*.ps|"
-    "Povray (*.pov)|*.pov|"
-    "TIFF (*.tiff)|*.tiff"
-)
+WILDCARD_SAVE_2D_FILTERS = [
+    "BMP (*.bmp)",
+    "JPEG (*.jpg)",
+    "PNG (*.png)",
+    "PostScript (*.ps)",
+    "Povray (*.pov)",
+    "TIFF (*.tiff)",
+]
+WILDCARD_SAVE_2D = ";;".join(WILDCARD_SAVE_2D_FILTERS)
+
 INDEX_TO_TYPE_2D = {
     0: const.FILETYPE_BMP,
     1: const.FILETYPE_JPG,
@@ -97,160 +101,77 @@ INDEX_TO_TYPE_2D = {
     5: const.FILETYPE_OBJ,
 }
 
-WILDCARD_SAVE_MASK = "VTK ImageData (*.vti)|*.vti"
+WILDCARD_SAVE_MASK = "VTK ImageData (*.vti)"
 
 
-class TaskPanel(wx.Panel):
+class TaskPanel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
         inner_panel = InnerTaskPanel(self)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(inner_panel, 1, wx.EXPAND | wx.GROW | wx.BOTTOM | wx.RIGHT | wx.LEFT, 7)
-        sizer.Fit(self)
-
-        self.SetSizer(sizer)
-        self.Update()
-        self.SetAutoLayout(1)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(7, 0, 7, 7)
+        layout.addWidget(inner_panel, 1)
 
 
-class InnerTaskPanel(wx.Panel):
+class InnerTaskPanel(QWidget):
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent)
-        backgroud_colour = wx.Colour(255, 255, 255)
-        self.SetBackgroundColour(backgroud_colour)
-        self.SetAutoLayout(1)
+        super().__init__(parent)
+        self.setStyleSheet("background-color: white;")
 
-        # Counter for projects loaded in current GUI
-
-        # Fixed hyperlink items
         tooltip = _("Export InVesalius screen to an image file")
-        link_export_picture = hl.HyperLinkCtrl(self, -1, _("Export picture..."))
-        link_export_picture.SetUnderlines(False, False, False)
-        link_export_picture.SetBold(True)
-        link_export_picture.SetColours("BLACK", "BLACK", "BLACK")
-        link_export_picture.SetBackgroundColour(self.GetBackgroundColour())
-        link_export_picture.SetToolTip(tooltip)
-        link_export_picture.AutoBrowse(False)
-        link_export_picture.UpdateLink()
-        link_export_picture.Bind(hl.EVT_HYPERLINK_LEFT, self.OnLinkExportPicture)
+        link_export_picture = QPushButton(_("Export picture..."))
+        link_export_picture.setFlat(True)
+        link_export_picture.setStyleSheet(
+            "QPushButton { text-align: left; font-weight: bold; color: black; }"
+        )
+        link_export_picture.setToolTip(tooltip)
+        link_export_picture.clicked.connect(self.OnLinkExportPicture)
 
         tooltip = _("Export 3D surface")
-        link_export_surface = hl.HyperLinkCtrl(self, -1, _("Export 3D surface..."))
-        link_export_surface.SetUnderlines(False, False, False)
-        link_export_surface.SetBold(True)
-        link_export_surface.SetColours("BLACK", "BLACK", "BLACK")
-        link_export_surface.SetBackgroundColour(self.GetBackgroundColour())
-        link_export_surface.SetToolTip(tooltip)
-        link_export_surface.AutoBrowse(False)
-        link_export_surface.UpdateLink()
-        link_export_surface.Bind(hl.EVT_HYPERLINK_LEFT, self.OnLinkExportSurface)
-
-        # tooltip = _("Export 3D mask (voxels)")
-        # link_export_mask = hl.HyperLinkCtrl(self, -1,_("Export mask..."))
-        # link_export_mask.SetUnderlines(False, False, False)
-        # link_export_mask.SetColours("BLACK", "BLACK", "BLACK")
-        # link_export_mask.SetToolTip(tooltip)
-        # link_export_mask.AutoBrowse(False)
-        # link_export_mask.UpdateLink()
-        # link_export_mask.Bind(hl.EVT_HYPERLINK_LEFT,
-        #                      self.OnLinkExportMask)
-
-        # tooltip = "Request rapid prototyping services"
-        # link_request_rp = hl.HyperLinkCtrl(self,-1,"Request rapid prototyping...")
-        # link_request_rp.SetUnderlines(False, False, False)
-        # link_request_rp.SetColours("BLACK", "BLACK", "BLACK")
-        # link_request_rp.SetToolTip(tooltip)
-        # link_request_rp.AutoBrowse(False)
-        # link_request_rp.UpdateLink()
-        # link_request_rp.Bind(hl.EVT_HYPERLINK_LEFT, self.OnLinkRequestRP)
-
-        # tooltip = "Open report tool..."
-        # link_report = hl.HyperLinkCtrl(self,-1,"Open report tool...")
-        # link_report.SetUnderlines(False, False, False)
-        # link_report.SetColours("BLACK", "BLACK", "BLACK")
-        # link_report.SetToolTip(tooltip)
-        # link_report.AutoBrowse(False)
-        # link_report.UpdateLink()
-        # link_report.Bind(hl.EVT_HYPERLINK_LEFT, self.OnLinkReport)
-
-        # Image(s) for buttons
-        BMP_EXPORT_SURFACE = (
-            wx.Bitmap(
-                os.path.join(inv_paths.ICON_DIR, "surface_export_original.png"), wx.BITMAP_TYPE_PNG
-            )
-            .ConvertToImage()
-            .Rescale(25, 25)
-            .ConvertToBitmap()
+        link_export_surface = QPushButton(_("Export 3D surface..."))
+        link_export_surface.setFlat(True)
+        link_export_surface.setStyleSheet(
+            "QPushButton { text-align: left; font-weight: bold; color: black; }"
         )
-        BMP_TAKE_PICTURE = (
-            wx.Bitmap(
-                os.path.join(inv_paths.ICON_DIR, "tool_photo_original.png"), wx.BITMAP_TYPE_PNG
-            )
-            .ConvertToImage()
-            .Rescale(25, 25)
-            .ConvertToBitmap()
-        )
+        link_export_surface.setToolTip(tooltip)
+        link_export_surface.clicked.connect(self.OnLinkExportSurface)
 
-        # Buttons related to hyperlinks
-        button_style = pbtn.PB_STYLE_SQUARE | pbtn.PB_STYLE_DEFAULT
+        BMP_EXPORT_SURFACE = QPixmap(
+            os.path.join(inv_paths.ICON_DIR, "surface_export_original.png")
+        ).scaled(25, 25, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        BMP_TAKE_PICTURE = QPixmap(
+            os.path.join(inv_paths.ICON_DIR, "tool_photo_original.png")
+        ).scaled(25, 25, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
-        button_picture = pbtn.PlateButton(
-            self, BTN_PICTURE, "", BMP_TAKE_PICTURE, style=button_style
-        )
-        button_picture.SetBackgroundColour(self.GetBackgroundColour())
+        button_picture = QPushButton("")
+        button_picture.setIcon(QIcon(BMP_TAKE_PICTURE))
+        button_picture.setFlat(True)
+        button_picture.clicked.connect(self.OnLinkExportPicture)
         self.button_picture = button_picture
 
-        button_surface = pbtn.PlateButton(
-            self, BTN_SURFACE, "", BMP_EXPORT_SURFACE, style=button_style
-        )
-        button_surface.SetBackgroundColour(self.GetBackgroundColour())
-        # button_mask = pbtn.PlateButton(self, BTN_MASK, "",
-        #                                BMP_EXPORT_MASK,
-        #                                style=button_style)
-        # button_request_rp = pbtn.PlateButton(self, BTN_REQUEST_RP, "",
-        #                                    BMP_IMPORT, style=button_style)
-        # button_report = pbtn.PlateButton(self, BTN_REPORT, "",
-        #                                 BMP_IMPORT,
-        #                                 style=button_style)
+        button_surface = QPushButton("")
+        button_surface.setIcon(QIcon(BMP_EXPORT_SURFACE))
+        button_surface.setFlat(True)
+        button_surface.clicked.connect(self.OnLinkExportSurface)
 
-        # When using PlaneButton, it is necessary to bind events from parent win
-        self.Bind(wx.EVT_BUTTON, self.OnButton)
+        fixed_layout = QGridLayout()
+        fixed_layout.setHorizontalSpacing(2)
+        fixed_layout.setVerticalSpacing(0)
+        fixed_layout.setColumnStretch(0, 1)
+        fixed_layout.addWidget(link_export_picture, 0, 0)
+        fixed_layout.addWidget(button_picture, 0, 1)
+        fixed_layout.addWidget(link_export_surface, 1, 0)
+        fixed_layout.addWidget(button_surface, 1, 1)
 
-        # Tags and grid sizer for fixed items
-        flag_link = wx.EXPAND | wx.GROW | wx.LEFT | wx.TOP
-        flag_button = wx.EXPAND | wx.GROW
+        main_layout = QVBoxLayout(self)
+        main_layout.addLayout(fixed_layout)
 
-        fixed_sizer = wx.FlexGridSizer(rows=2, cols=2, hgap=2, vgap=0)
-        fixed_sizer.AddGrowableCol(0, 1)
-        fixed_sizer.AddMany(
-            [
-                (link_export_picture, 1, flag_link, 3),
-                (button_picture, 0, flag_button),
-                (link_export_surface, 1, flag_link, 3),
-                (button_surface, 0, flag_button),
-            ]
-        )
-        # (link_export_mask, 1, flag_link, 3),
-        # (button_mask, 0, flag_button)])
-        # (link_report, 0, flag_link, 3),
-        # (button_report, 0, flag_button),
-        # (link_request_rp, 1, flag_link, 3),
-        # (button_request_rp, 0, flag_button)])
-
-        # Add line sizers into main sizer
-        main_sizer = wx.BoxSizer(wx.VERTICAL)
-        main_sizer.Add(fixed_sizer, 0, wx.GROW | wx.EXPAND)
-
-        # Update main sizer and panel layout
-        self.SetSizer(main_sizer)
-        self.Fit()
-        self.sizer = main_sizer
         self.__init_menu()
 
     def __init_menu(self):
-        menu = wx.Menu()
+        menu = QMenu(self)
         self.id_to_name = {
             const.AXIAL: _("Axial slice"),
             const.CORONAL: _("Coronal slice"),
@@ -258,51 +179,50 @@ class InnerTaskPanel(wx.Panel):
             const.VOLUME: _("Volume"),
         }
 
-        for id in self.id_to_name:
-            menu.Append(id, self.id_to_name[id])
+        for id_val in self.id_to_name:
+            action = menu.addAction(self.id_to_name[id_val])
+            action.setData(id_val)
 
         self.menu_picture = menu
-        menu.Bind(wx.EVT_MENU, self.OnMenuPicture)
+        menu.triggered.connect(self.OnMenuPicture)
 
-    def OnMenuPicture(self, evt):
-        id = evt.GetId()
-        value = dlgs.ExportPicture(self.id_to_name[id])
+    def OnMenuPicture(self, action):
+        id_val = action.data()
+        value = dlgs.ExportPicture(self.id_to_name[id_val])
         if value:
             filename, filetype = value
             Publisher.sendMessage(
-                "Export picture to file", orientation=id, filename=filename, filetype=filetype
+                "Export picture to file", orientation=id_val, filename=filename, filetype=filetype
             )
 
-    def OnLinkExportPicture(self, evt=None):
-        self.button_picture.PopupMenu(self.menu_picture)
+    def OnLinkExportPicture(self):
+        pos = self.button_picture.mapToGlobal(self.button_picture.rect().bottomLeft())
+        self.menu_picture.exec_(pos)
 
-    def OnLinkExportMask(self, evt=None):
+    def OnLinkExportMask(self):
         project = proj.Project()
         if sys.platform == "win32":
             project_name = project.name
         else:
             project_name = project.name + ".vti"
 
-        dlg = wx.FileDialog(
-            None,
-            "Save mask as...",  # title
-            "",  # last used directory
-            project_name,  # filename
-            WILDCARD_SAVE_MASK,
-            wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
-        )
-        dlg.SetFilterIndex(0)  # default is VTI
+        dlg = QFileDialog(None, "Save mask as...", "")
+        dlg.setAcceptMode(QFileDialog.AcceptSave)
+        dlg.setNameFilters([WILDCARD_SAVE_MASK])
+        dlg.selectFile(project_name)
 
-        if dlg.ShowModal() == wx.ID_OK:
-            filename = dlg.GetPath()
-            extension = "vti"
-            if sys.platform != "win32":
-                if filename.split(".")[-1] != extension:
-                    filename = filename + "." + extension
-            filetype = const.FILETYPE_IMAGEDATA
-            Publisher.sendMessage("Export mask to file", filename=filename, filetype=filetype)
+        if dlg.exec() == QFileDialog.Accepted:
+            selected_files = dlg.selectedFiles()
+            if selected_files:
+                filename = selected_files[0]
+                extension = "vti"
+                if sys.platform != "win32":
+                    if filename.split(".")[-1] != extension:
+                        filename = filename + "." + extension
+                filetype = const.FILETYPE_IMAGEDATA
+                Publisher.sendMessage("Export mask to file", filename=filename, filetype=filetype)
 
-    def OnLinkExportSurface(self, evt=None):
+    def OnLinkExportSurface(self):
         "OnLinkExportSurface"
         project = proj.Project()
         n_surface = 0
@@ -321,48 +241,56 @@ class InnerTaskPanel(wx.Panel):
             last_directory = session.GetConfig("last_directory_3d_surface", "")
 
             dlg_message = _("Save 3D surface as...")
-            dlg_style = wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT
 
             convert_to_world = False
             if Slice().has_affine():
-                dlg = dlgs.FileSelectionDialog(
-                    title=dlg_message, default_dir=last_directory, wildcard=WILDCARD_SAVE_3D
-                )
-                conversion_radio_box = wx.RadioBox(
-                    dlg,
-                    -1,
-                    _("Export in"),
-                    choices=const.SURFACE_SPACE_CHOICES,
-                    style=wx.RA_SPECIFY_ROWS,
-                )
-                dlg.sizer.Hide(0)
-                dlg.sizer.Add(conversion_radio_box, 0, wx.LEFT)
-                dlg.sizer.Layout()
-                dlg.FitSizers()
+                space_dlg = QDialog(self)
+                space_dlg.setWindowTitle(_("Export in"))
+                space_layout = QVBoxLayout(space_dlg)
 
-                if dlg.ShowModal() == wx.ID_OK:
-                    convert_to_world = (
-                        conversion_radio_box.GetSelection() == const.SURFACE_SPACE_WORLD
-                    )
+                group = QGroupBox(_("Export in"))
+                group_layout = QVBoxLayout(group)
+                radio_buttons = []
+                for i, choice in enumerate(const.SURFACE_SPACE_CHOICES):
+                    rb = QRadioButton(choice)
+                    if i == 0:
+                        rb.setChecked(True)
+                    radio_buttons.append(rb)
+                    group_layout.addWidget(rb)
+
+                btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+                btn_box.accepted.connect(space_dlg.accept)
+                btn_box.rejected.connect(space_dlg.reject)
+
+                space_layout.addWidget(group)
+                space_layout.addWidget(btn_box)
+
+                if space_dlg.exec() == QDialog.Accepted:
+                    selection = 0
+                    for i, rb in enumerate(radio_buttons):
+                        if rb.isChecked():
+                            selection = i
+                            break
+                    convert_to_world = selection == const.SURFACE_SPACE_WORLD
                 else:
-                    dlg.Destroy()
                     return
-                dlg.Destroy()
 
-            dlg = wx.FileDialog(
-                None,
-                dlg_message,  # title
-                last_directory,  # last used directory
-                project_name,  # filename
-                WILDCARD_SAVE_3D,
-                dlg_style,
-            )
-            dlg.SetFilterIndex(3)  # default is STL
+            dlg = QFileDialog(None, dlg_message, last_directory)
+            dlg.setAcceptMode(QFileDialog.AcceptSave)
+            dlg.setNameFilters(WILDCARD_SAVE_3D_FILTERS)
+            dlg.selectNameFilter(WILDCARD_SAVE_3D_FILTERS[3])
+            dlg.selectFile(project_name)
 
-            if dlg.ShowModal() == wx.ID_OK:
-                filetype_index = dlg.GetFilterIndex()
+            if dlg.exec() == QFileDialog.Accepted:
+                selected_filter = dlg.selectedNameFilter()
+                filetype_index = (
+                    WILDCARD_SAVE_3D_FILTERS.index(selected_filter)
+                    if selected_filter in WILDCARD_SAVE_3D_FILTERS
+                    else 3
+                )
                 filetype = INDEX_TO_TYPE_3D[filetype_index]
-                filename = dlg.GetPath()
+                selected_files = dlg.selectedFiles()
+                filename = selected_files[0] if selected_files else ""
                 extension = INDEX_TO_EXTENSION[filetype_index]
                 if sys.platform != "win32":
                     if filename.split(".")[-1] != extension:
@@ -379,32 +307,14 @@ class InnerTaskPanel(wx.Panel):
                     convert_to_world=convert_to_world,
                 )
         else:
-            dlg = wx.MessageDialog(
+            QMessageBox.information(
                 None,
-                _("You need to create a surface and make it ") + _("visible before exporting it."),
                 "InVesalius 3",
-                wx.OK | wx.ICON_INFORMATION,
+                _("You need to create a surface and make it ") + _("visible before exporting it."),
             )
-            try:
-                dlg.ShowModal()
-            finally:
-                dlg.Destroy()
 
-    def OnLinkRequestRP(self, evt=None):
+    def OnLinkRequestRP(self):
         pass
 
-    def OnLinkReport(self, evt=None):
+    def OnLinkReport(self):
         pass
-
-    def OnButton(self, evt):
-        id = evt.GetId()
-        if id == BTN_PICTURE:
-            self.OnLinkExportPicture()
-        elif id == BTN_SURFACE:
-            self.OnLinkExportSurface()
-        elif id == BTN_REPORT:
-            self.OnLinkReport()
-        elif id == BTN_REQUEST_RP:
-            self.OnLinkRequestRP()
-        else:  # id == BTN_MASK:
-            self.OnLinkExportMask()

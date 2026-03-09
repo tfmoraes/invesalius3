@@ -27,7 +27,12 @@ from datetime import datetime
 from functools import wraps
 from typing import Callable, Dict, List
 
-import wx
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 import invesalius.constants as const
 from invesalius import inv_paths
@@ -53,9 +58,8 @@ class ConsoleLogHandler(logging.StreamHandler):
 
     def emit(self, record):
         msg = self.format(record)
-        # stream = self.stream
         if invLogger._config["console_logging"] == 1:
-            self.textctrl.WriteText(msg + "\n")
+            self.textctrl.append(msg)
             self.flush()
 
 
@@ -64,27 +68,26 @@ class ConsoleRedirectText:
         self.out = textctrl
 
     def write(self, string):
-        self.out.WriteText(string)
+        self.out.append(string)
 
     def flush(self):
         pass
 
 
-class ConsoleLogPanel(wx.Panel):
+class ConsoleLogPanel(QWidget):
     def __init__(self, parent, logger):
-        wx.Panel.__init__(self, parent)
+        super().__init__(parent)
 
-        logText = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.HSCROLL)
+        logText = QTextEdit(self)
+        logText.setReadOnly(True)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(logText, 1, wx.EXPAND | wx.ALL, 5)
-
-        self.SetSizer(sizer)
+        sizer = QVBoxLayout(self)
+        sizer.addWidget(logText)
+        self.setLayout(sizer)
         self._parent = parent
 
         redir = ConsoleRedirectText(logText)
         sys.stdout = redir
-        # sys.stderr = redir
 
         self._logger = logger
         txtHandler = ConsoleLogHandler(logText)
@@ -92,30 +95,30 @@ class ConsoleLogPanel(wx.Panel):
 
     def onClose(self, event):
         self._logger.info("ConsoleLogPanel window close selected.")
-        self._parent.Iconify()
+        self._parent.showMinimized()
 
 
-class ConsoleLogFrame(wx.Frame):
+class ConsoleLogFrame(QWidget):
     def __init__(self, logger):
-        wx.Frame.__init__(
-            self,
-            None,
-            title="Log Console",
-            style=wx.DEFAULT_FRAME_STYLE & (~wx.CLOSE_BOX) & (~wx.MAXIMIZE_BOX),
+        super().__init__(None)
+        self.setWindowTitle("Log Console")
+        self.setWindowFlags(
+            self.windowFlags() & ~Qt.WindowCloseButtonHint & ~Qt.WindowMaximizeButtonHint
         )
+        layout = QVBoxLayout(self)
         self._panel = ConsoleLogPanel(self, logger)
-        self.Bind(wx.EVT_CLOSE, self.onClose)
-        self.Show()
+        layout.addWidget(self._panel)
+        self.setLayout(layout)
+        self.show()
 
-    # To be tested
-    def onClose(self, event):
+    def closeEvent(self, event):
         self._logger.info("ConsoleLogFrame window close selected.")
-        self.Hide()
+        self.hide()
+        event.ignore()
 
 
 class InvesaliusLogger:  # metaclass=Singleton):
     def __init__(self):
-        # create logger
         self._logger = logging.getLogger(__name__)
 
         self._frame = None
@@ -127,7 +130,6 @@ class InvesaliusLogger:  # metaclass=Singleton):
             "console_logging": 0,
             "console_logging_level": 0,
             "base_logging_level": logging.DEBUG,
-            #'logging_format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             "logging_format": "%(asctime)s - %(levelname)s - %(message)s",
         }
         self.ReadConfigFile()
@@ -169,7 +171,6 @@ class InvesaliusLogger:  # metaclass=Singleton):
             print("Error in _read_config_from_json:", e1)
 
     def getLogger(self, lname=__name__):
-        # logger = logging.getLogger(lname)
         return self._logger
 
     def logMessage(self, level, msg):
@@ -193,13 +194,11 @@ class InvesaliusLogger:  # metaclass=Singleton):
         logging_file = os.path.abspath(logging_file)
         print("logging_file:", logging_file)
         console_logging = self._config["console_logging"]
-        # console_logging_level = self._config["console_logging_level"]
 
         self._logger.setLevel(self._config["base_logging_level"])
 
         if (self._frame is None) & (console_logging != 0):
             print("Initiating console logging ...")
-            # self._frame = ConsoleLogFrame(self.getLogger())
 
             formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
             ch = logging.StreamHandler(sys.stderr)
@@ -218,16 +217,13 @@ class InvesaliusLogger:  # metaclass=Singleton):
         self.logMessage("info", msg)
 
         if file_logging:
-            # print('file_logging called ...')
             self._logger.info("file_logging called ...")
             file_logging_level = getattr(
                 logging, const.LOGGING_LEVEL_TYPES[file_logging_level].upper(), None
             )
 
-            # create formatter
             formatter = logging.Formatter(self._config["logging_format"])
 
-            # create file handler
             if logging_file:
                 addFileHandler = True
                 for handler in self._logger.handlers:
@@ -240,7 +236,6 @@ class InvesaliusLogger:  # metaclass=Singleton):
                                 == os.path.normcase(os.path.abspath(handler.baseFilename))
                             )
                         ):
-                            # os.path.samefile(logging_file,handler.baseFilename): #it doesn't seem to work
                             handler.setLevel(file_logging_level)
                             addFileHandler = False
                             msg = f"No change in log file name {logging_file}."
@@ -270,14 +265,12 @@ class InvesaliusLogger:  # metaclass=Singleton):
             if isinstance(handler, logging.FileHandler):
                 msg = f"Removed file handler {handler.baseFilename}"
                 self._logger.info(msg)
-                # handler.flush()
                 self._logger.removeHandler(handler)
 
     def closeConsoleLogging(self):
         for handler in self._logger.handlers:
             if isinstance(handler, logging.StreamHandler):
                 self._logger.info("Removed stream handler")
-                # handler.flush()
                 self._logger.removeHandler(handler)
         if self._frame is not None:
             self._frame = None
@@ -305,14 +298,11 @@ def call_tracking_decorator(function: Callable[[str], None]):
 
 
 def error_handling_decorator01(func: Callable[[str], None]):
-    @wraps(
-        func
-    )  # adds the functionality of copying over the function name, docstring, arguments list, etc.
+    @wraps(func)
     def wrapper_function(*args, **kwargs):
         try:
             msg = f"Function {func.__name__} called"
             invLogger._logger.info(msg)
-            # print(f"{func.__name__} called")
             func(*args, **kwargs)
         except Exception as e:
             invLogger._logger.error(f"Exception {e} encountered in Function {func.__name__} call")
@@ -349,18 +339,13 @@ def error_handling_decorator03(errorList: Dict[str, str]):
             keys = [key for key in errorList]
             print("keys:", keys)
             values = [errorList[key] for key in errorList]
-            # keys, values = zip(*errorList.items())
             invLogger._logger.error(keys)
             invLogger._logger.error(values)
             try:
                 func(*args, **kwargs)
-            except (TypeError, ZeroDivisionError) as e:  # keys as e: #
+            except (TypeError, ZeroDivisionError) as e:
                 invLogger._logger.error(f"Exception {e} found in {func.__name__} call")
-                # print('e:',e, type(e).__name__) #, e.__str__, e.args)
                 exec(errorList[type(e).__name__])
-            # else:
-            # invLogger._logger.error(f"{func.__name__} ran successfully.")
-            # pass
 
         return wrapper
 
@@ -374,7 +359,7 @@ def get_decorator(errors=(Exception,), default_value=""):
             try:
                 return func(*args, **kwargs)
             except errors:
-                print("Got error! ")  # , repr(e)
+                print("Got error! ")
                 return default_value
 
         return new_func
@@ -385,6 +370,5 @@ def get_decorator(errors=(Exception,), default_value=""):
 #####################################################################################
 
 invLogger = InvesaliusLogger()
-# invLogger.configureLogging()
 
 #####################################################################################

@@ -20,7 +20,7 @@
 from enum import Enum
 
 import numpy as np
-import wx
+from PySide6.QtWidgets import QDialog, QMessageBox
 
 import invesalius.data.coregistration as dcr
 import invesalius.gui.dialogs as dlg
@@ -134,25 +134,22 @@ class Robot(metaclass=Singleton):
     def RegisterRobot(self):
         Publisher.sendMessage("End busy cursor")
         if not self.is_robot_connected:
-            wx.MessageBox(_("Unable to connect to the robot."), _("InVesalius 3"))
+            QMessageBox.information(None, _("InVesalius 3"), _("Unable to connect to the robot."))
             return
 
         if not self.tracker.tracker_connected:
-            wx.MessageBox(_("Tracker is not connect."), _("InVesalius 3"))
+            QMessageBox.information(None, _("InVesalius 3"), _("Tracker is not connect."))
             return
         self.robot_coregistration_dialog = dlg.RobotCoregistrationDialog(
             robot=self, tracker=self.tracker
         )
 
         # Show dialog and store relevant output values.
-        status = self.robot_coregistration_dialog.ShowModal()
+        status = self.robot_coregistration_dialog.exec()
         matrix_tracker_to_robot = self.robot_coregistration_dialog.GetValue()
 
-        # Destroy the dialog.
-        self.robot_coregistration_dialog.Destroy()
-
-        if status != wx.ID_OK:
-            wx.MessageBox(_("Unable to connect to the robot."), _("InVesalius 3"))
+        if status != QDialog.DialogCode.Accepted:
+            QMessageBox.information(None, _("InVesalius 3"), _("Unable to connect to the robot."))
             return False
 
         self.matrix_tracker_to_robot = matrix_tracker_to_robot
@@ -161,7 +158,7 @@ class Robot(metaclass=Singleton):
 
     def AbortRobotConfiguration(self):
         if self.robot_coregistration_dialog:
-            self.robot_coregistration_dialog.Destroy()
+            self.robot_coregistration_dialog.close()
 
     def IsConnected(self):
         return self.is_robot_connected

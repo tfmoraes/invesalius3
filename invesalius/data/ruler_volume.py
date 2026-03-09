@@ -10,9 +10,12 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 import vtkmodules.all as vtk
-import wx
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QApplication
 
 import invesalius.constants as const
+
+FONTSIZE_SMALL = 8
 
 E_SHAPED = TOP_OR_LEFT = 0
 C_SHAPED = BOTTOM_OR_RIGHT = 1
@@ -28,14 +31,14 @@ class RulerVolume(ABC):
         children (array): Array of children of Ruler([] for now)
         viewer_slice (invesalius.data.viewer_slice.Viewer): Viewer which the ruler should be drawn
         slice_data (invesalius.data.slice_data.SliceData): SliceData object associated with Viewer
-        interactor (wxVTKRenderWindowInteractor): wxVTKRenderWindowInteractor object associated with Viewer
+        interactor (QVTKRenderWindowInteractor): QVTKRenderWindowInteractor object associated with Viewer
 
       Methods:
         GetCameraDirection(): Returns the camera up direction and the camera direction
         GetViewPortHeight(): Returns the height of the viewport in millimeters
         GetWindowSize(): Return the window size of viewer slice in pixels
         GetPixelSize(): Return the height/width represented by a pixel in viewer slice in millimeters
-        GetFont(font_size): Returns a wx.Font object for a given font size
+        GetFont(font_size): Returns a QFont object for a given font size
         GetTextSize(text, font_size): Return the size(width and height) of the bounding box containing
                                       specified text with the specified font size
         GetLeftTextProperties(): Returns properties of left text on viewer slice.
@@ -89,17 +92,17 @@ class RulerVolume(ABC):
 
     def GetFont(self, font_size):
         """
-        Returns a wx.Font object for a given font size
+        Returns a QFont object for a given font size
 
         Args:
-            font_size (int): Predefined in wx, eg:- wx.FONTSIZE_SMALL, wx.FONTSIZE_MEDIUM
+            font_size (int): Point size for the font
 
         Returns:
-            wx.Font object
+            QFont object
         """
-        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-        font.SetSymbolicSize(font_size)
-        font.Scale(self.viewer_volume.GetContentScaleFactor())
+        font = QFont(QApplication.font())
+        font.setPointSize(font_size)
+        font.setPointSizeF(font.pointSizeF() * self.viewer_volume.devicePixelRatioF())
         return font
 
     def GetTextSize(self, text, font_size):
@@ -108,7 +111,7 @@ class RulerVolume(ABC):
 
         Args:
             text (string): text to be displayed
-            font_size (int): Predefined in wx, eg:- wx.FONTSIZE_SMALL, wx.FONTSIZE_MEDIUM
+            font_size (int): Point size for the font
 
         Returns:
             tuple: (width as a proportion of viewport width, height as a proportion of viewport height)
@@ -203,7 +206,7 @@ class RulerVolume(ABC):
         Called when the ruler has to drawn on the canvas.
 
         Args:
-            gc (wx.GraphicsContext): GraphicContext the ruler has to be drawn on
+            gc: Graphics context the ruler has to be drawn on
             canvas (CanvasRendererCTX): The CanvasRendererCTX object associated with the gc
 
         Returns:
@@ -230,7 +233,7 @@ class GenericLeftRulerVolume(RulerVolume):
         scale_text_padding (float): Top and bottom padding of the measurement text(eg:- 120 mm)
         center_mark (float): The length of the middle line segment as a proportion to the viewport size
         edge_mark (float): The length of the up and bottom line segments as proportions to the viewport size
-        font_size (int): Predefined in wx, eg:- wx.FONTSIZE_SMALL, wx.FONTSIZE_MEDIUM
+        font_size (int): Point size for the font
         colour (tuple): Colour of the lines and text of the ruler, (red_value/255, green_value/255, blue_value/255)
         ruler_scale_step (int): The step size the ruler's length should be rounded to in millimeters
                                 If 5mm, then ruler will change length in multiples of 5mm such as 120mm, 125mm, 130mm
@@ -246,7 +249,7 @@ class GenericLeftRulerVolume(RulerVolume):
         self.scale_text_padding = 0.005
         self.center_mark = 0.01
         self.edge_mark = 0.02
-        self.font_size = wx.FONTSIZE_SMALL
+        self.font_size = FONTSIZE_SMALL
         self.colour = (1, 1, 1)
         self.ruler_scale_step = [
             (5000, 1000, 100, 0),

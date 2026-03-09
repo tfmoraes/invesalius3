@@ -21,7 +21,7 @@
 import time
 
 import socketio
-import wx
+from PySide6.QtCore import QTimer
 
 from invesalius.pubsub import pub as Publisher
 
@@ -50,9 +50,9 @@ class RemoteControl:
         Publisher.sendMessage_no_hook(topicName=topic, **data)
 
     def _to_neuronavigation_wrapper(self, msg):
-        # wx.CallAfter wrapping is needed to make messages that update WxPython UI work properly, as the
-        # Socket.IO listener runs inside a thread. (See WxPython and thread-safety for more information.)
-        wx.CallAfter(self._to_neuronavigation, msg)
+        # QTimer.singleShot wrapping is needed to make messages that update the Qt UI work properly, as the
+        # Socket.IO listener runs inside a thread. (See Qt and thread-safety for more information.)
+        QTimer.singleShot(0, lambda: self._to_neuronavigation(msg))
 
     def connect(self):
         self._sio = socketio.Client()
