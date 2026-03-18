@@ -28,7 +28,7 @@ from vtkmodules.vtkInteractionStyle import (
     vtkInteractorStyleRubberBandZoom,
     vtkInteractorStyleTrackballCamera,
 )
-from vtkmodules.vtkRenderingCore import vtkCellPicker, vtkPointPicker, vtkPropPicker
+from vtkmodules.vtkRenderingCore import vtkCellPicker, vtkCoordinate, vtkPointPicker, vtkPropPicker
 
 import invesalius.constants as const
 import invesalius.data.slice_ as slc
@@ -800,6 +800,11 @@ class Mask3DEditorInteractorStyle(DefaultInteractorStyle):
         if not self.has_set_mask_preview:
             Publisher.sendMessage("Render volume viewer")
 
+        # Capture the mask snapshot AFTER enabling the 3D preview, which runs
+        # do_threshold_to_all_slices and modifies the mask. This ensures
+        # ClearPolygons restores the correct post-threshold mask state.
+        self.mask_data = slc.Slice().current_mask.matrix.copy()
+
     def CleanUp(self):
         """Clean up is called when the interactor style is removed or changed.
 
@@ -827,6 +832,35 @@ class Mask3DEditorInteractorStyle(DefaultInteractorStyle):
 
         Publisher.sendMessage("Update viewer caption", viewer_name="Volume", caption="Volume")
         self.viewer.UpdateCanvas()
+
+    def _display_to_world_focal_plane(
+        self, display_x: float, display_y: float
+    ) -> Tuple[float, float, float]:
+        """Convert display coordinates to world coordinates on the camera focal plane.
+        Projects the given 2D display position onto the plane perpendicular to the
+        camera view direction passing through the focal point. This allows polygon
+        points to be stored in world space, so they remain aligned with the volume
+        when the window is resized, zoomed, or panned.
+
+        Args:
+            display_x: X position in display (pixel) coordinates.
+            display_y: Y position in display (pixel) coordinates.
+
+        Returns:
+            Tuple with (x, y, z) world coordinates on the focal plane.
+        """
+        renderer = self.viewer.ren
+        focal_point = renderer.GetActiveCamera().GetFocalPoint()
+        # Find the depth value of the focal point in display coordinates
+        renderer.SetWorldPoint(*focal_point, 1.0)
+        renderer.WorldToDisplay()
+        focal_depth = renderer.GetDisplayPoint()[2]
+        # Unproject the 2D mouse position at the focal plane depth
+        renderer.SetDisplayPoint(display_x, display_y, focal_depth)
+        renderer.DisplayToWorld()
+        world_point = renderer.GetWorldPoint()
+        w = world_point[3]
+        return (world_point[0] / w, world_point[1] / w, world_point[2] / w)
 
     def SetEditMode(self, mode: int):
         """Set edit mode for the style.
@@ -901,10 +935,14 @@ class Mask3DEditorInteractorStyle(DefaultInteractorStyle):
     def OnScrollForward(self, obj, evt):
         if self.viewer.interactor.GetShiftKey():
             super().OnScrollForward(obj, evt)
+        else:
+            self.OnMouseWheelForward()
 
     def OnScrollBackward(self, obj, evt):
         if self.viewer.interactor.GetShiftKey():
             super().OnScrollBackward(obj, evt)
+        else:
+            self.OnMouseWheelBackward()
 
     def OnInsertPolygonPoint(self, evt):
         """Insert a point in the polygon.
@@ -916,8 +954,9 @@ class Mask3DEditorInteractorStyle(DefaultInteractorStyle):
         if len(self.m3e_list) == 0 or self.m3e_list[-1].complete:
             self.init_new_polygon()
 
+        world_point = self._display_to_world_focal_plane(mouse_x, mouse_y)
         current_masker = self.m3e_list[-1]
-        current_masker.insert_point((mouse_x, mouse_y))
+        current_masker.insert_point((mouse_x, mouse_y), world_point)
         self.viewer.UpdateCanvas()
 
     def OnInsertPolygon(self, evt):
@@ -973,22 +1012,23 @@ class Mask3DEditorInteractorStyle(DefaultInteractorStyle):
         self.update_views(_mat)
 
     def get_filters(self) -> List[npt.NDArray]:
-        """Create a boolean mask filter based on the polygon points and viewer size."""
+        """Create a boolean mask filter based on the polygon points and viewer size.
+
+        Since polygon points are stored with parallel world coordinates,
+        they are projected back to display coordinates using the current
+        camera before generating the mask.
+        """
         w, h = self.resolution
-
-        # Get scale factor (necessary for Mac HighDPI displays where physical
-        # mouse coords are scaled by 2x but viewer resolution is logical w,h)
-        import wx
-
-        scale = wx.GetApp().GetTopWindow().GetContentScaleFactor()
-
-        # polygon2mask((w, h), points_as_xy): treats (x, y) as (row, col) in a (w, h) array.
-        # After the .T in CutMaskFromPolygons the result is (h, w) which the Rust code reads as
-        # shape (h, w) and indexes as mask[py][px] — correctly matching VTK screen coordinates.
-        filters = [
-            polygon2mask((w, h), [(x / scale, y / scale) for x, y in poly_canvas.polygon.points])
-            for poly_canvas in self.m3e_list
-        ]
+        renderer = self.viewer.ren
+        coord = vtkCoordinate()
+        filters = []
+        for poly_canvas in self.m3e_list:
+            display_points = []
+            for world_pt in poly_canvas._world_points:
+                coord.SetValue(world_pt)
+                px, py = coord.GetComputedDoubleDisplayValue(renderer)
+                display_points.append((px, py))
+            filters.append(polygon2mask((w, h), display_points))
         return filters
 
     def CutMaskFromPolygons(self):
@@ -1035,6 +1075,7 @@ class Mask3DEditorInteractorStyle(DefaultInteractorStyle):
             return
 
         depth = near + (far - near) * self.depth_val
+        print(f"\n\n\n\n{self.world_to_screen.flags=}\n{self.world_to_camera_coordinates.flags=}\n")
 
         try:
             wts = self.world_to_screen
