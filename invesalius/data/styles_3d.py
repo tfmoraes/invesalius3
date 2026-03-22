@@ -18,7 +18,8 @@
 # --------------------------------------------------------------------------
 
 
-from typing import TYPE_CHECKING, List, Literal, Tuple
+import time
+from typing import TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
@@ -521,6 +522,90 @@ class LinearMeasureInteractorStyle(DefaultInteractorStyle):
             self.left_pressed = True
 
 
+class CurvedMeasureInteractorStyle(LinearMeasureInteractorStyle):
+    """
+    Interactor style responsible for geodesic (curved) measurements by clicking
+    two points on a 3D surface in the volume viewer.
+    """
+
+    def __init__(self, viewer):
+        super().__init__(viewer)
+        self.state_code = const.STATE_MEASURE_CURVED_LINEAR
+        self._type = const.CURVED_LINEAR
+        self._last_click_time = 0
+        self._click_debounce = 0.2  # 200ms debounce
+
+    def SetUp(self):
+        super().SetUp()
+        # Unbind default DClick Focus and bind our Finalize
+        self.viewer.interactor.Unbind(wx.EVT_LEFT_DCLICK)
+        self.viewer.interactor.Bind(wx.EVT_LEFT_DCLICK, self.OnFinalizeCurved)
+        Publisher.sendMessage("Toggle toolbar item", _id=self.state_code, value=True)
+
+    def CleanUp(self):
+        self.viewer.interactor.Unbind(wx.EVT_LEFT_DCLICK)
+        # Restore default DClick Focus
+        self.viewer.interactor.Bind(wx.EVT_LEFT_DCLICK, self.SetCameraFocus)
+        super().CleanUp()
+        Publisher.sendMessage("Toggle toolbar item", _id=self.state_code, value=False)
+
+    def OnFinalizeCurved(self, evt):
+        """Finalize multi-point curved measurement on double-click."""
+        multi = ses.Session().GetConfig("geodesic_multi_point", False)
+        if multi:
+            Publisher.sendMessage("Finalize measurement")
+            # LOCK OUT any immediate trailing click events for 300ms
+            self._last_click_time = time.time() + 0.3
+            self.viewer.interactor.Render()
+        evt.Skip()
+
+    def OnInsertLinearMeasurePoint(self, obj, evt):
+        # Prevent adding points on the second click of a double-click
+        if self.viewer.interactor.GetRepeatCount() > 0:
+            return
+
+        # Debounce to prevent ghost clicks (e.g. from trackpad jitter or rapid events)
+        current_time = time.time()
+        if (current_time - self._last_click_time) < 0.25:  # 250ms debounce
+            return
+        self._last_click_time = current_time
+
+        x, y = self.viewer.get_vtk_mouse_position()
+        self.measure_picker.Pick(x, y, 0, self.viewer.ren)
+        x, y, z = self.measure_picker.GetPickPosition()
+        actor = self.measure_picker.GetActor()
+
+        # ONLY add points if we hit a surface mesh (not marker spheres or line tubes)
+        is_surface = False
+        for surface in self.viewer.surface_geometry.surfaces:
+            if surface["original"]["actor"] == actor:
+                is_surface = True
+                break
+
+        if actor and is_surface:
+            self.left_pressed = False
+            polydata = actor.GetMapper().GetInput()
+            Publisher.sendMessage(
+                "Add measurement point",
+                position=(x, y, z),
+                type=self._type,
+                location=const.SURFACE,
+                radius=self._radius,
+                polydata=polydata,
+            )
+            # Explicitly render so the new point marker appears immediately
+            Publisher.sendMessage("Render volume viewer")
+        else:
+            # Allow rotation by clicking on the background
+            self.left_pressed = True
+
+    def OnMouseMove(self, evt, obj):
+        if self.left_pressed:
+            # Only allow rotation, DON'T call OnLeftButtonDown()
+            # which would trigger recursive clicks in this interactor style.
+            evt.Rotate()
+
+
 class AngularMeasureInteractorStyle(DefaultInteractorStyle):
     """
     Interactor style responsible for angular measurements by clicking consecutive points in the volume viewer.
@@ -735,7 +820,7 @@ class Mask3DEditorInteractorStyle(DefaultInteractorStyle):
         # Initialise resolution from the current viewer widget size so that
         # CutMaskFromPolygons always has a valid aspect ratio even before the
         # first "Receive volume viewer size" message arrives (fixes #1086).
-        self.resolution: Tuple[int, int] = tuple(viewer.GetSize())
+        self.resolution: tuple[int, int] = tuple(viewer.GetSize())
 
         self._bind_events()
         Publisher.subscribe(self.ClearPolygons, "M3E clear polygons")
@@ -836,7 +921,7 @@ class Mask3DEditorInteractorStyle(DefaultInteractorStyle):
 
     def _display_to_world_focal_plane(
         self, display_x: float, display_y: float
-    ) -> Tuple[float, float, float]:
+    ) -> tuple[float, float, float]:
         """Convert display coordinates to world coordinates on the camera focal plane.
         Projects the given 2D display position onto the plane perpendicular to the
         camera view direction passing through the focal point. This allows polygon
@@ -998,7 +1083,7 @@ class Mask3DEditorInteractorStyle(DefaultInteractorStyle):
         MV = vtkarray_to_numpy(MV)
         self.world_to_camera_coordinates = MV @ inv_Y_matrix
 
-    def ReceiveVolumeViewerSize(self, size: Tuple[int, int]):
+    def ReceiveVolumeViewerSize(self, size: tuple[int, int]):
         """Receive the size of the volume viewer through pubsub.
 
         Args:
@@ -1012,7 +1097,7 @@ class Mask3DEditorInteractorStyle(DefaultInteractorStyle):
         _mat = self.mask_data[1:, 1:, 1:].copy()
         self.update_views(_mat)
 
-    def get_filters(self) -> List[npt.NDArray]:
+    def get_filters(self) -> list[npt.NDArray]:
         """Create a boolean mask filter based on the polygon points and viewer size.
 
         Since polygon points are stored with parallel world coordinates,
@@ -1175,6 +1260,7 @@ class Styles:
         const.STATE_SPIN: SpinInteractorStyle,
         const.STATE_WL: WWWLInteractorStyle,
         const.STATE_MEASURE_DISTANCE: LinearMeasureInteractorStyle,
+        const.STATE_MEASURE_CURVED_LINEAR: CurvedMeasureInteractorStyle,
         const.STATE_MEASURE_ANGLE: AngularMeasureInteractorStyle,
         const.STATE_MEASURE_ANNOTATION: AnnotationInteractorStyle,
         const.VOLUME_STATE_SEED: SeedInteractorStyle,

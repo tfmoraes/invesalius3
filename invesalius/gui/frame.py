@@ -41,7 +41,6 @@ import invesalius.gui.preferences as preferences
 #  import invesalius.gui.import_network_panel as imp_net
 import invesalius.project as prj
 import invesalius.session as ses
-import invesalius.utils as utils
 from invesalius import inv_paths
 from invesalius.data.slice_ import Slice
 from invesalius.gui import project_properties
@@ -2082,6 +2081,7 @@ class ObjectToolBar(AuiToolBar):
             const.STATE_MEASURE_DENSITY_ELLIPSE,
             const.STATE_MEASURE_DENSITY_POLYGON,
             const.STATE_MEASURE_ANNOTATION,
+            const.STATE_MEASURE_CURVED_LINEAR,
             # const.STATE_ANNOTATE
         ]
         self.__init_items()
@@ -2194,6 +2194,14 @@ class ObjectToolBar(AuiToolBar):
             kind=wx.ITEM_CHECK,
         )
         self.AddTool(
+            const.STATE_MEASURE_CURVED_LINEAR,
+            "",
+            BMP_DISTANCE,
+            wx.NullBitmap,
+            short_help_string=_("Measure curved distance on surface"),
+            kind=wx.ITEM_CHECK,
+        )
+        self.AddTool(
             const.STATE_MEASURE_ANGLE,
             "",
             BMP_ANGLE,
@@ -2228,6 +2236,7 @@ class ObjectToolBar(AuiToolBar):
             short_help_string=_("Add annotation"),
             kind=wx.ITEM_CHECK,
         )
+
         # self.AddLabelTool(const.STATE_ANNOTATE,
         #                "",
         #                shortHelp = _("Add annotation"),
@@ -2296,6 +2305,22 @@ class ObjectToolBar(AuiToolBar):
             or (id == const.STATE_MEASURE_ANNOTATION)
         ):
             Publisher.sendMessage("Fold measure task")
+
+        if state:
+            if id == const.STATE_MEASURE_CURVED_LINEAR:
+                choices = [_("Two points"), _("Multi-points")]
+                current_multi = ses.Session().GetConfig("geodesic_multi_point", False)
+                dlg = wx.SingleChoiceDialog(
+                    self, _("Select curved measurement mode:"), _("Curved Ruler"), choices
+                )
+                dlg.SetSelection(1 if current_multi else 0)
+                if dlg.ShowModal() == wx.ID_OK:
+                    multi = dlg.GetSelection() == 1
+                    ses.Session().SetConfig("geodesic_multi_point", multi)
+                else:
+                    self.ToggleTool(id, False)
+                    state = False
+                dlg.Destroy()
 
         if state:
             Publisher.sendMessage("Enable style", style=id)

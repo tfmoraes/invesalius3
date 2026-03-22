@@ -22,7 +22,6 @@ import os
 import tempfile
 import time
 from concurrent import futures
-from typing import Optional
 
 import numpy as np
 import wx
@@ -776,6 +775,14 @@ class LinearMeasureInteractorStyle(DefaultInteractorStyle):
         Publisher.sendMessage("Remove incomplete measurements")
 
     def OnInsertMeasurePoint(self, obj, evt):
+        if self._type == const.CURVED_LINEAR:
+            from invesalius.gui.utils import show_warning
+
+            show_warning(
+                _("Curved Ruler"), _("This measurement can only be performed on the 3D surface.")
+            )
+            return
+
         slice_number = self.slice_data.number
         x, y, z = self._get_pos_clicked()
         mx, my = self.GetMousePosition()
@@ -791,6 +798,11 @@ class LinearMeasureInteractorStyle(DefaultInteractorStyle):
                 self.creating = None
                 self.viewer.scroll_enabled = True
             else:
+                prop = self.picker.GetViewProp()
+                polydata = None
+                if prop and hasattr(prop, "GetMapper") and prop.GetMapper():
+                    polydata = prop.GetMapper().GetInput()
+
                 Publisher.sendMessage(
                     "Add measurement point",
                     position=(x, y, z),
@@ -798,6 +810,7 @@ class LinearMeasureInteractorStyle(DefaultInteractorStyle):
                     location=ORIENTATIONS[self.orientation],
                     slice_number=slice_number,
                     radius=self.radius,
+                    polydata=polydata,
                 )
                 n = len(m.points) - 1
                 self.creating = n, m, mr
@@ -810,8 +823,12 @@ class LinearMeasureInteractorStyle(DefaultInteractorStyle):
             self.selected = selected
             self.viewer.scroll_enabled = False
         else:
-            if self.picker.GetViewProp():
-                # renderer = self.viewer.slice_data.renderer
+            prop = self.picker.GetViewProp()
+            if prop:
+                polydata = None
+                if hasattr(prop, "GetMapper") and prop.GetMapper():
+                    polydata = prop.GetMapper().GetInput()
+
                 Publisher.sendMessage(
                     "Add measurement point",
                     position=(x, y, z),
@@ -819,6 +836,7 @@ class LinearMeasureInteractorStyle(DefaultInteractorStyle):
                     location=ORIENTATIONS[self.orientation],
                     slice_number=slice_number,
                     radius=self.radius,
+                    polydata=polydata,
                 )
                 Publisher.sendMessage(
                     "Add measurement point",
@@ -827,6 +845,7 @@ class LinearMeasureInteractorStyle(DefaultInteractorStyle):
                     location=ORIENTATIONS[self.orientation],
                     slice_number=slice_number,
                     radius=self.radius,
+                    polydata=polydata,
                 )
 
                 try:
@@ -926,6 +945,39 @@ class LinearMeasureInteractorStyle(DefaultInteractorStyle):
                         if dist <= max_dist:
                             return (n, m, mr)
         return None
+
+
+class CurvedMeasureInteractorStyle(LinearMeasureInteractorStyle):
+    def __init__(self, viewer):
+        super().__init__(viewer)
+        self.state_code = const.STATE_MEASURE_CURVED_LINEAR
+        self._type = const.CURVED_LINEAR
+
+    def _bind_events(self):
+        super()._bind_events()
+        # Bind double-click to finalize multi-point geodesic measurement
+        self.viewer.interactor.Bind(wx.EVT_LEFT_DCLICK, self.OnFinalizeCurved)
+
+    def SetUp(self):
+        super().SetUp()
+        # In 3D view, we want to pick surfaces
+        if self.orientation == "VOLUME":
+            for actor in self.viewer.slice_data.surface_actors:
+                self.picker.AddPickList(self.viewer.slice_data.surface_actors[actor])
+            self.picker.PickFromListOn()
+
+    def CleanUp(self):
+        self.viewer.interactor.Unbind(wx.EVT_LEFT_DCLICK)
+        super().CleanUp()
+
+    def OnFinalizeCurved(self, evt):
+        """Finalize multi-point curved measurement on double-click."""
+        multi = ses.Session().GetConfig("geodesic_multi_point", False)
+        if multi and self.creating:
+            Publisher.sendMessage("Finalize measurement")
+            self.creating = None
+            self.viewer.scroll_enabled = True
+        evt.Skip()
 
 
 class AngularMeasureInteractorStyle(LinearMeasureInteractorStyle):
@@ -2803,8 +2855,8 @@ class FFillSegmentationConfig(metaclass=utils.Singleton):
         self.con_2d = 4
         self.con_3d = 6
 
-        self.t0: Optional[int] = None
-        self.t1: Optional[int] = None
+        self.t0: int | None = None
+        self.t1: int | None = None
 
         self.fill_value = 254
 
@@ -3064,6 +3116,8 @@ class Styles:
         const.STATE_MEASURE_DENSITY_ELLIPSE: DensityMeasureEllipseStyle,
         const.STATE_MEASURE_DENSITY_POLYGON: DensityMeasurePolygonStyle,
         const.STATE_MEASURE_ANNOTATION: AnnotationInteractorStyle,
+        const.STATE_MEASURE_ANNOTATION: AnnotationInteractorStyle,
+        const.STATE_MEASURE_CURVED_LINEAR: CurvedMeasureInteractorStyle,
         const.STATE_NAVIGATION: NavigationInteractorStyle,
         const.STATE_PAN: PanMoveInteractorStyle,
         const.STATE_SPIN: SpinInteractorStyle,
