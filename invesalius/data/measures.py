@@ -464,11 +464,19 @@ class MeasurementManager:
             else:
                 m.points.append((x, y, z))
         elif npoint == 2:
-            mr.SetPoint3(x, y, z)
-            if len(m.points) > 2:
-                m.points[2] = x, y, z
-            else:
-                m.points.append((x, y, z))
+            # Only AngularMeasure has 3 points
+            if hasattr(mr, "SetPoint3"):
+                mr.SetPoint3(x, y, z)
+                if len(m.points) > 2:
+                    m.points[2] = x, y, z
+                else:
+                    m.points.append((x, y, z))
+
+        # Re-add actors to renderer after SetPoint removes and recreates them
+        if mr.IsComplete():
+            actors = mr.GetActors()
+            if m.location == const.SURFACE:
+                Publisher.sendMessage("Add actors " + str(const.SURFACE), actors=actors)
 
         m.value = mr.GetValue()
 
@@ -494,6 +502,12 @@ class MeasurementManager:
             type_=type_,
             value=value,
         )
+
+        # Trigger render to update the visual display
+        if m.location == const.SURFACE:
+            Publisher.sendMessage("Render volume viewer")
+        else:
+            Publisher.sendMessage("Redraw canvas")
 
     def _change_name(self, index, name):
         self.measures[index][0].name = name
@@ -1005,6 +1019,46 @@ class GeodesicMeasure(LinearMeasure):
     def SetSurface(self, polydata):
         self.surface_polydata = polydata
 
+    def SetPoint1(self, x, y, z):
+        """Override to properly update geodesic measurement endpoint."""
+        if len(self.points) == 0:
+            self.points.append((x, y, z))
+            self.point_actor1 = self.representation.GetRepresentation(x, y, z)
+            self.point_actors = [self.point_actor1]
+        else:
+            # Update the point position
+            self.points[0] = (x, y, z)
+            # Remove old actors
+            self.Remove()
+            # Recreate point actors
+            self.point_actor1 = self.representation.GetRepresentation(*self.points[0])
+            self.point_actors = [self.point_actor1]
+            if len(self.points) >= 2:
+                self.point_actor2 = self.representation.GetRepresentation(*self.points[1])
+                self.point_actors.append(self.point_actor2)
+                # Recompute geodesic path
+                wx.CallAfter(self._compute_and_publish_path)
+
+    def SetPoint2(self, x, y, z):
+        """Override to properly update geodesic measurement endpoint."""
+        if len(self.points) == 1:
+            self.points.append((x, y, z))
+            self.point_actor2 = self.representation.GetRepresentation(x, y, z)
+            self.point_actors.append(self.point_actor2)
+            # Recompute geodesic path
+            wx.CallAfter(self._compute_and_publish_path)
+        else:
+            # Update the point position
+            self.points[1] = (x, y, z)
+            # Remove old actors
+            self.Remove()
+            # Recreate point actors
+            self.point_actor1 = self.representation.GetRepresentation(*self.points[0])
+            self.point_actor2 = self.representation.GetRepresentation(*self.points[1])
+            self.point_actors = [self.point_actor1, self.point_actor2]
+            # Recompute geodesic path
+            wx.CallAfter(self._compute_and_publish_path)
+
     def AddPoint(self, x, y, z):
         """Override to support multi-point geodesic measurements."""
         if not ses.Session().GetConfig("geodesic_multi_point", False):
@@ -1044,30 +1098,34 @@ class GeodesicMeasure(LinearMeasure):
     def _compute_and_publish_path(self):
         """Called by wx.CallAfter after point_actor2 has been rendered.
         Computes the geodesic path, then pushes the line + text actors."""
-        # BEFORE computing new ones, remove OLD actors if they exist
-        old_actors = []
-        if self.line_actor:
-            old_actors.append(self.line_actor)
-        if self.text_actor:
-            old_actors.append(self.text_actor)
+        try:
+            # BEFORE computing new ones, remove OLD actors if they exist
+            old_actors = []
+            if self.line_actor:
+                old_actors.append(self.line_actor)
+            if self.text_actor:
+                old_actors.append(self.text_actor)
 
-        if old_actors:
-            Publisher.sendMessage("Remove actors " + str(const.SURFACE), actors=old_actors)
+            if old_actors:
+                Publisher.sendMessage("Remove actors " + str(const.SURFACE), actors=old_actors)
 
-        self._draw_line()
-        self._draw_text()
-        self._path_computed = True  # now IsComplete() returns True
+            self._draw_line()
+            self._draw_text()
+            self._path_computed = True  # now IsComplete() returns True
 
-        path_actors = []
-        if self.line_actor:
-            path_actors.append(self.line_actor)
-        if self.text_actor:
-            path_actors.append(self.text_actor)
+            path_actors = []
+            if self.line_actor:
+                path_actors.append(self.line_actor)
+            if self.text_actor:
+                path_actors.append(self.text_actor)
 
-        if path_actors:
-            Publisher.sendMessage("Add actors " + str(const.SURFACE), actors=path_actors)
+            if path_actors:
+                Publisher.sendMessage("Add actors " + str(const.SURFACE), actors=path_actors)
 
-        Publisher.sendMessage("Render volume viewer")
+            Publisher.sendMessage("Render volume viewer")
+        finally:
+            # Always restore cursor, even if computation fails
+            Publisher.sendMessage("End busy cursor")
 
     def _draw_line(self):
         if not self.surface_polydata:
