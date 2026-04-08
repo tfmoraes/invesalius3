@@ -2135,6 +2135,9 @@ class ObjectToolBar(AuiToolBar):
         path = os.path.join(d, "measure_line_original.png")
         BMP_DISTANCE = wx.Bitmap(str(path), wx.BITMAP_TYPE_PNG)
 
+        path = os.path.join(d, "measure_curve_original.png")
+        BMP_CURVED_DISTANCE = wx.Bitmap(str(path), wx.BITMAP_TYPE_PNG)
+
         path = os.path.join(d, "measure_angle_original.png")
         BMP_ANGLE = wx.Bitmap(str(path), wx.BITMAP_TYPE_PNG)
 
@@ -2199,7 +2202,7 @@ class ObjectToolBar(AuiToolBar):
         self.AddTool(
             const.STATE_MEASURE_CURVED_LINEAR,
             "",
-            BMP_DISTANCE,
+            BMP_CURVED_DISTANCE,
             wx.NullBitmap,
             short_help_string=_("Measure curved distance on surface"),
             kind=wx.ITEM_CHECK,
