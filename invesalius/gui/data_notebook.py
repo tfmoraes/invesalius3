@@ -70,6 +70,10 @@ LOCATION = {
 
 # Panel that initializes notebook and related tabs
 class NotebookPanel(wx.Panel):
+    MASK_PAGE_INDEX = 0
+    SURFACE_PAGE_INDEX = 1
+    MEASURE_PAGE_INDEX = 2
+
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
 
@@ -85,7 +89,7 @@ class NotebookPanel(wx.Panel):
         book.AddPage(MeasurePage(book), _("Measures"))
         # book.AddPage(AnnotationsListCtrlPanel(book), _("Notes"))
 
-        book.SetSelection(0)
+        book.SetSelection(self.MASK_PAGE_INDEX)
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(book, 0, wx.EXPAND)
@@ -93,6 +97,7 @@ class NotebookPanel(wx.Panel):
 
         book.Refresh()
         self.book = book
+        self.navigation_on = False
 
         self.__bind_events()
 
@@ -102,24 +107,34 @@ class NotebookPanel(wx.Panel):
         Publisher.subscribe(self._FoldMeasure, "Fold measure task")
         Publisher.subscribe(self._FoldMask, "Fold mask task")
         Publisher.subscribe(self._FoldMask, "Fold mask page")
+        Publisher.subscribe(self._OnNavigationStatus, "Navigation status")
 
     def _FoldSurface(self):
         """
         Fold surface notebook page.
         """
-        self.book.SetSelection(1)
+        self.book.SetSelection(self.SURFACE_PAGE_INDEX)
 
     def _FoldMeasure(self):
         """
         Fold measure notebook page.
         """
-        self.book.SetSelection(2)
+        self.book.SetSelection(self.MEASURE_PAGE_INDEX)
 
     def _FoldMask(self):
         """
         Fold mask notebook page.
         """
-        self.book.SetSelection(0)
+        if self.navigation_on:
+            self.book.SetSelection(self.SURFACE_PAGE_INDEX)
+            return
+        self.book.SetSelection(self.MASK_PAGE_INDEX)
+
+    def _OnNavigationStatus(self, nav_status, vis_status):
+        self.navigation_on = bool(nav_status)
+        self.book.GetPage(self.MASK_PAGE_INDEX).Enable(not self.navigation_on)
+        if self.navigation_on:
+            self.book.SetSelection(self.SURFACE_PAGE_INDEX)
 
 
 class MeasurePage(wx.Panel):
