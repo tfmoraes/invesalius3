@@ -360,10 +360,10 @@ class VolumeToolPanel(wx.Panel):
 
         # SSAO BUTTON - Icons for enabled/disabled states
         BMP_SSAO_DISABLED = wx.Bitmap(
-            str(inv_paths.ICON_DIR.joinpath("surface_export.png")), wx.BITMAP_TYPE_PNG
+            str(inv_paths.ICON_DIR.joinpath("ssao_icon_off.png")), wx.BITMAP_TYPE_PNG
         )
         BMP_SSAO_ENABLED = wx.Bitmap(
-            str(inv_paths.ICON_DIR.joinpath("3D_glasses_original.png")), wx.BITMAP_TYPE_PNG
+            str(inv_paths.ICON_DIR.joinpath("ssao_icon_on.png")), wx.BITMAP_TYPE_PNG
         )
 
         # Scale icons to 24x24
