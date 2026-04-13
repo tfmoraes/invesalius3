@@ -478,18 +478,11 @@ class ButtonControlPanel(wx.Panel):
             os.path.join(inv_paths.ICON_DIR, "data_duplicate.png"), wx.BITMAP_TYPE_PNG
         )
         BMP_IMPORT = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "object_add.png"), wx.BITMAP_TYPE_PNG
+            os.path.join(inv_paths.ICON_DIR, "mask_import_original_min.png"), wx.BITMAP_TYPE_PNG
         )
-        export_icon_path = os.path.join(inv_paths.ICON_DIR, "surface_export.png")
-        image = wx.Image(export_icon_path, wx.BITMAP_TYPE_PNG)
-        if not image.HasAlpha():
-            image.InitAlpha()
-        # Scale rigidly to 22x22 to match exactly with the 'object_add.png' import icon size.
-        # This prevents PlateButton from clipping transparent corners of large images.
-        image = image.Scale(22, 22, wx.IMAGE_QUALITY_HIGH)
-        BMP_EXPORT = image.ConvertToBitmap()
-        if not BMP_EXPORT.IsOk():
-            print("Failed to load export icon:", export_icon_path)
+        BMP_EXPORT = wx.Bitmap(
+            os.path.join(inv_paths.ICON_DIR, "mask_export_original_min.png"), wx.BITMAP_TYPE_PNG
+        )
 
         # Plate buttons based on previous bitmaps
         button_style = pbtn.PB_STYLE_SQUARE | pbtn.PB_STYLE_DEFAULT
