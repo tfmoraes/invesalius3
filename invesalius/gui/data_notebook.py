@@ -1327,9 +1327,10 @@ class SurfaceButtonControlPanel(wx.Panel):
         BMP_DUPLICATE = wx.Bitmap(
             os.path.join(inv_paths.ICON_DIR, "data_duplicate.png"), wx.BITMAP_TYPE_PNG
         )
-        BMP_OPEN = wx.Bitmap(os.path.join(inv_paths.ICON_DIR, "load_mesh.png"), wx.BITMAP_TYPE_PNG)
+        BMP_OPEN = wx.Bitmap(os.path.join(inv_paths.ICON_DIR, "surface_import_original_min.png"), wx.BITMAP_TYPE_PNG)
+
         BMP_EXPORT = wx.Bitmap(
-            os.path.join(inv_paths.ICON_DIR, "surface_export.png"), wx.BITMAP_TYPE_PNG
+            os.path.join(inv_paths.ICON_DIR, "surface_export_original_min.png"), wx.BITMAP_TYPE_PNG
         )
 
         # Plate buttons based on previous bitmaps
