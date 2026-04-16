@@ -114,8 +114,10 @@ if sys.platform == "win32":
 
         _has_win32api = True
     except ImportError:
+        win32api = None
         _has_win32api = False
 else:
+    win32api = None
     _has_win32api = False
 
 PROP_MEASURE = 0.8
@@ -3064,7 +3066,12 @@ class Viewer(wx.Panel):
             actor.Modified()
             ren.ResetCameraClippingRange()
 
-            self.SetViewAngle(const.VOL_FRONT)
+            proj = prj.Project()
+            modality = str(getattr(proj, "modality", "CT")).upper()
+            if modality in ["MRI", "MR"]:
+                self.SetViewAngle(const.VOL_BACK)
+            else:
+                self.SetViewAngle(const.VOL_FRONT)
             self.view_angle = 1
         else:
             # Force actor to update its bounds before repositioning
@@ -3140,7 +3147,13 @@ class Viewer(wx.Panel):
             volume.Modified()
             self.ren.ResetCameraClippingRange()
 
-            self.SetViewAngle(const.VOL_FRONT)
+            proj = prj.Project()
+            modality = str(getattr(proj, "modality", "CT")).upper()
+            if modality in ["MRI", "MR"]:
+                self.SetViewAngle(const.VOL_BACK)
+            else:
+                self.SetViewAngle(const.VOL_FRONT)
+            self.view_angle = 1
         else:
             # Force volume to update its bounds before repositioning
             volume.Modified()
@@ -3175,7 +3188,12 @@ class Viewer(wx.Panel):
 
         if flag:
             if not self.view_angle:
-                self.SetViewAngle(const.VOL_FRONT)
+                proj = prj.Project()
+                modality = str(getattr(proj, "modality", "CT")).upper()
+                if modality in ["MRI", "MR"]:
+                    self.SetViewAngle(const.VOL_BACK)
+                else:
+                    self.SetViewAngle(const.VOL_FRONT)
                 self.view_angle = 1
 
             # Match the parallel projection used by AddSurface/LoadVolume so that
