@@ -1018,10 +1018,14 @@ class LinearMeasure:
         self.renderer = renderer
 
     def SetVisibility(self, v):
-        self.point_actor1.SetVisibility(v)
-        self.point_actor2.SetVisibility(v)
-        self.line_actor.SetVisibility(v)
-        self.text_actor.SetVisibility(v)
+        if self.point_actor1:
+            self.point_actor1.SetVisibility(v)
+        if self.point_actor2:
+            self.point_actor2.SetVisibility(v)
+        if self.line_actor:
+            self.line_actor.SetVisibility(v)
+        if self.text_actor:
+            self.text_actor.SetVisibility(v)
 
     def GetActors(self):
         """
@@ -1719,11 +1723,16 @@ class AngularMeasure:
             return 0.0
 
     def SetVisibility(self, v):
-        self.point_actor1.SetVisibility(v)
-        self.point_actor2.SetVisibility(v)
-        self.point_actor3.SetVisibility(v)
-        self.line_actor.SetVisibility(v)
-        self.text_actor.SetVisibility(v)
+        if self.point_actor1:
+            self.point_actor1.SetVisibility(v)
+        if self.point_actor2:
+            self.point_actor2.SetVisibility(v)
+        if self.point_actor3:
+            self.point_actor3.SetVisibility(v)
+        if self.line_actor:
+            self.line_actor.SetVisibility(v)
+        if self.text_actor:
+            self.text_actor.SetVisibility(v)
 
     def GetActors(self):
         """
