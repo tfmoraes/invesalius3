@@ -938,14 +938,10 @@ class MasksListCtrlPanel(InvListCtrl):
 
         image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_invisible.png"))
         bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
         self.imagelist.Add(bitmap)
 
         image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_visible.png"))
         bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
         self.imagelist.Add(bitmap)
 
         self.SetImageList(self.imagelist, wx.IMAGE_LIST_SMALL)
@@ -2005,14 +2001,10 @@ class SurfacesListCtrlPanel(InvListCtrl):
 
         image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_invisible.png"))
         bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
         self.imagelist.Add(bitmap)
 
         image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_visible.png"))
         bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
         self.imagelist.Add(bitmap)
 
         self.SetImageList(self.imagelist, wx.IMAGE_LIST_SMALL)
@@ -2353,14 +2345,10 @@ class MeasuresListCtrlPanel(InvListCtrl):
 
         image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_invisible.png"))
         bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
         self.imagelist.Add(bitmap)
 
         image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_visible.png"))
         bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
         self.imagelist.Add(bitmap)
 
         self.SetImageList(self.imagelist, wx.IMAGE_LIST_SMALL)
@@ -2576,20 +2564,14 @@ class AnnotationsListCtrlPanel(wx.ListCtrl):
 
         image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_visible.png"))
         bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
         img_check = self.imagelist.Add(bitmap)  # noqa: F841
 
         image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_invisible.png"))
         bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
         img_null = self.imagelist.Add(bitmap)  # noqa: F841
 
         image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_colour.png"))
         bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
         self.img_colour = self.imagelist.Add(bitmap)
 
         self.SetImageList(self.imagelist, wx.IMAGE_LIST_SMALL)
@@ -2706,14 +2688,10 @@ class ImagePage(wx.Panel):
         self.imagelist = wx.ImageList(16, 16)
         image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_invisible.png"))
         bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
         self.imagelist.Add(bitmap)
 
         image = wx.Image(os.path.join(inv_paths.ICON_DIR, "object_visible.png"))
         bitmap = wx.Bitmap(image.Scale(16, 16))
-        bitmap.SetWidth(16)
-        bitmap.SetHeight(16)
         self.imagelist.Add(bitmap)
 
         self.list_ctrl.SetImageList(self.imagelist, wx.IMAGE_LIST_SMALL)

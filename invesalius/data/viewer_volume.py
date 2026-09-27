@@ -754,7 +754,7 @@ class Viewer(wx.Panel):
             if actor is None:
                 continue
             if isinstance(actor, vtkActor2D):
-                self.ren.AddActor2D(actor)
+                self.ren.AddActor(actor)
             else:
                 self.ren.AddActor(actor)
 
@@ -1507,7 +1507,7 @@ class Viewer(wx.Panel):
 
             self.UpdateRender()
 
-        except (ImportError, AttributeError):
+        except ImportError, AttributeError:
             pass
 
     def _DisableSSAO(self):

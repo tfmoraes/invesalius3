@@ -27,7 +27,7 @@ from vtkmodules.vtkCommonDataModel import vtkPolyData, vtkSelection, vtkSelectio
 from vtkmodules.vtkFiltersCore import (
     vtkAppendPolyData,
     vtkCleanPolyData,
-    vtkIdFilter,
+    vtkGenerateIds,
     vtkMassProperties,
     vtkPolyDataConnectivityFilter,
     vtkQuadricDecimation,
@@ -326,7 +326,7 @@ def HasNonVisibleFaces(
     v = pos - fp
     mag = np.linalg.norm(v)
 
-    id_filter = vtkIdFilter()
+    id_filter = vtkGenerateIds()
     id_filter.SetInputData(polydata)
     id_filter.PointIdsOn()
     id_filter.Update()
@@ -391,7 +391,7 @@ def RemoveNonVisibleFaces(
     mag = np.linalg.norm(v)
     vn = v / mag
 
-    id_filter = vtkIdFilter()
+    id_filter = vtkGenerateIds()
     id_filter.SetInputData(polydata)
     id_filter.PointIdsOn()
     id_filter.Update()

@@ -10,61 +10,58 @@ keywords = [
   "neuronavigation",
 ]
 dependencies = [
-    "h5py==3.11.0",
-    "imageio==2.34.2",
-    "lib3mf==2.3.2",
-    "matplotlib==3.9.0",
-    "nibabel==5.2.1",
-    "numpy==1.26.4",
+    "h5py>=3.11.0",
+    "imageio>=2.34.2",
+    "lib3mf>=2.3.2",
+    "matplotlib>=3.9.0",
+    "nibabel>=5.2.1",
+    "numpy>=1.26.4",
     "onnx>=1.17.0",
-    "onnxruntime-gpu==1.23.0 ; sys_platform == 'win32' or sys_platform == 'linux'",
+    "onnxruntime-gpu>=1.23.0 ; sys_platform == 'win32' or sys_platform == 'linux'",
     "onnxruntime ; sys_platform == 'darwin'",
-    "optitrack ; python_full_version == '3.8.*' and sys_platform == 'win32'",
+    # "optitrack ; python_full_version == '3.8.*' and sys_platform == 'win32'",
     "pandas>=2.3.3",
-    "pillow==10.3.0",
-    "psutil==6.0.0",
-    "polhemus==0.0.3; sys_platform == 'win32'",
-    "polhemusFT==0.0.3; sys_platform == 'win32'",
-    "pyacvd==0.2.11",
-    "pyclaron ; python_full_version == '3.8.*' and sys_platform == 'win32'",
-    "pypubsub==4.0.3",
-    "pypolaris==0.0.8; sys_platform == 'win32'",
-    "pyserial==3.5",
+    "pillow>=10.3.0",
+    "psutil>=6.0.0",
+    "pyacvd>=0.2.11",
+    # "pyclaron ; python_full_version == '3.8.*' and sys_platform == 'win32'",
+    "pypubsub>=4.0.3",
+    # "pypolaris>=0.0.8; sys_platform == 'win32'",
+    "pyserial>=3.5",
     "python-gdcm~=3.0.24",
     "requests>=2.32.3",
-    "scikit-image==0.24.0",
-    "scipy==1.14.0",
-    "setuptools>=65,<68", # Constrained to <68 for wxPython 4.2.2 compatibility (copy_file signature issue) 
-    "setuptools-scm<8",
-    "tinygrad==0.10.2",
+    "scikit-image>=0.24.0",
+    "scipy>=1.14.0",
+    "tinygrad>=0.10.2",
     "torch>=2.3.1",
-    "vtk==9.3.0",
-    "pynetdicom==2.0.2",
-    "pydicom==2.4.5",
-    "wxpython==4.2.5",
+    "vtk>=9.3.0",
+    "pynetdicom>=2.0.2",
+    "pydicom>=2.4.5",
+    "wxpython>=4.2.5",
+    "filetype>=1.2.0",
 ]
 license = { file = "LICENSE.txt" }
 readme = { file = "README.md", content-type = "text/markdown" }
-requires-python = "==3.12.*"
+requires-python = "==3.14.*"
 
 
-[dependency-groups]
-dev = [
-    "aioconsole==0.7.1",
-    "mido==1.2.10",
-    "mypy==1.10.1",
-    "nest-asyncio==1.6.0",
-    "pre-commit~=3.7.1",
-    "python-rtmidi==1.5.8",
-    "python-socketio[client]==5.11.3",
-    "requests==2.32.3",
-    "ruff~=0.5.0",
-    "scikit-learn==1.5.0",
-    "uvicorn[standard]==0.30.1",
-    "maturin>=1.0,<2.0",
-    "pytest==8.3.5",
-    "pytest-mock==3.14.0",
-]
+# [dependency-groups]
+# dev = [
+#     "aioconsole==0.7.1",
+#     "mido==1.2.10",
+#     "mypy==1.10.1",
+#     "nest-asyncio==1.6.0",
+#     "pre-commit~=3.7.1",
+#     "python-rtmidi==1.5.8",
+#     "python-socketio[client]==5.11.3",
+#     "requests==2.32.3",
+#     "ruff~=0.5.0",
+#     "scikit-learn==1.5.0",
+#     "uvicorn[standard]==0.30.1",
+#     "maturin>=1.0,<2.0",
+#     "pytest==8.3.5",
+#     "pytest-mock==3.14.0",
+# ]
 
 
 [project.gui-scripts]
@@ -75,22 +72,22 @@ installer = [
     "pyinstaller>=6.12.0",
 ]
 
-[tool.uv.sources]
-torch = [
-  { index = "pytorch-cpu", marker = "sys_platform == 'darwin'"},
-  { index = "pytorch-cu118", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
-]
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
-
-[[tool.uv.index]]
-#To maintain compatibility with older GPUs.
-name = "pytorch-cu118"
-url = "https://download.pytorch.org/whl/cu118"
-explicit = true
+# [tool.uv.sources]
+# torch = [
+#   { index = "pytorch-cpu", marker = "sys_platform == 'darwin'"},
+#   { index = "pytorch-cu118", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
+# ]
+#
+# [[tool.uv.index]]
+# name = "pytorch-cpu"
+# url = "https://download.pytorch.org/whl/cpu"
+# explicit = true
+#
+# [[tool.uv.index]]
+# #To maintain compatibility with older GPUs.
+# name = "pytorch-cu118"
+# url = "https://download.pytorch.org/whl/cu118"
+# explicit = true
 
 
 [build-system]

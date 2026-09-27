@@ -168,7 +168,7 @@ class CanvasRendererCTX:
         self.actor.SetMapper(self.mapper)
         self.actor.GetProperty().SetOpacity(0.99)
 
-        self.canvas_renderer.AddActor2D(self.actor)
+        self.canvas_renderer.AddActor(self.actor)
 
         self.rgb = np.zeros((h, w, 3), dtype=np.uint8)
         self.alpha = np.zeros((h, w, 1), dtype=np.uint8)

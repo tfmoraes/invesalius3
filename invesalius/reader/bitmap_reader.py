@@ -16,12 +16,12 @@
 #    PARTICULAR. Consulte a Licenca Publica Geral GNU para obter mais
 #    detalhes.
 # --------------------------------------------------------------------------
-import imghdr
 import os
 import re
 import sys
 import tempfile
 
+import filetype
 import numpy
 import wx
 from imageio import imread
@@ -459,7 +459,7 @@ def VtkErrorToPy(obj, evt):
 def VerifyDataType(filepath):
     try:
         filepath = utils.decode(filepath, const.FS_ENCODE)
-        t = imghdr.what(filepath)
+        t = filetype.guess(filepath)
         if t:
             return t
         else:
